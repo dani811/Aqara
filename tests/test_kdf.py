@@ -51,9 +51,7 @@ def test_compute_sign_matches_documented_formula_with_token() -> None:
         "tok-123",
         '{"deviceId":"dev-1"}',
     )
-    preimage = (
-        f"Appid={appid}&Nonce={nonce}&Time={time_}&Token={token}&{body}&{FAKE_APPKEY}"
-    )
+    preimage = f"Appid={appid}&Nonce={nonce}&Time={time_}&Token={token}&{body}&{FAKE_APPKEY}"
     expected = hashlib.md5(preimage.encode("utf-8")).hexdigest()
     got = compute_sign(
         appid=appid, nonce=nonce, time=time_, token=token, body=body, appkey=FAKE_APPKEY
@@ -64,9 +62,7 @@ def test_compute_sign_matches_documented_formula_with_token() -> None:
 def test_compute_sign_omits_token_field_when_empty() -> None:
     # On login there is no token: the whole `Token=` segment is dropped.
     appid, nonce, time_, body = ("app-id", "ABCDEF0123456789", "1700000000000", "{}")
-    preimage_no_token = (
-        f"Appid={appid}&Nonce={nonce}&Time={time_}&{body}&{FAKE_APPKEY}"
-    )
+    preimage_no_token = f"Appid={appid}&Nonce={nonce}&Time={time_}&{body}&{FAKE_APPKEY}"
     expected = hashlib.md5(preimage_no_token.encode("utf-8")).hexdigest()
     got = compute_sign(
         appid=appid, nonce=nonce, time=time_, token="", body=body, appkey=FAKE_APPKEY
@@ -85,9 +81,7 @@ def test_hkdf_sha256_rfc5869_test_case_1() -> None:
     salt = bytes.fromhex("000102030405060708090a0b0c")
     info = bytes.fromhex("f0f1f2f3f4f5f6f7f8f9")
     expected_okm = bytes.fromhex(
-        "3cb25f25faacd57a90434f64d0362f2a"
-        "2d2d0a90cf1a5a4c5db02d56ecc4c5bf"
-        "34007208d5b887185865"
+        "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
     )
     assert hkdf_sha256(ikm, salt=salt, info=info, length=42) == expected_okm
 

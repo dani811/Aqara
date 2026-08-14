@@ -5,6 +5,7 @@ Bumble. Bumble puede emparejar (bonding), a diferencia de macOS CoreBluetooth.
 Flujo: auth cloud con firma local -> intercambio BLE de claves -> verify cloud ->
 sesion AES-CCM -> comando cifrado (LOCK=1f031f / UNLOCK=200320).
 """
+
 from __future__ import annotations
 
 import asyncio

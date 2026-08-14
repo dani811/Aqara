@@ -11,7 +11,8 @@ The library is fully migrated to Spec-Driven Development and green:
   implement), each merged to `develop` via `--no-ff`.
 - Feature 006 (`fix/tls-verification`) closes the high-priority security debt.
 - Tooling (`tools/`) and documentation migrated.
-- Gates: `ruff check` clean · `mypy --strict` clean · 70 unit tests · 0 secrets.
+- Gates: `ruff check` + `ruff format --check` clean · `mypy --strict` clean ·
+  70 unit tests · 0 secrets.
 
 ## Resolved
 
@@ -52,29 +53,35 @@ correctness, and are fixed in `docs/analyze-remediation`:
   002") and, more importantly, the assumption that TLS was "out of scope" —
   the premise that let the 006 defect through review. Both corrected in place.
 
-The two remaining coverage gaps are recorded as pending item 3 below.
+The two remaining coverage gaps are recorded as pending item 2 below.
+
+### ✅ Formatter gate (`chore/ruff-format`)
+
+`ruff check` was clean but `ruff format --check .` flagged 7 files it would
+reformat — a discrepancy that predated feature 006 (verified against a clean
+`develop`); the migration had recorded the gate as green from a different
+formatter run.
+
+Fixed mechanically. Two things were done deliberately rather than blindly:
+
+- `session.py`'s CRC-16 table is fenced with `# fmt: off` / `# fmt: on` so it
+  keeps its captured 16-per-row shape. Left to the formatter it became 256
+  single-value lines — noise that would hide tampering in a table that is frozen
+  protocol data (Article V).
+- The result was proven behaviour-preserving by comparing the **AST** of every
+  reformatted Python file against its pre-change version (all identical) and
+  re-checking the CRC table's hash. Whitespace only.
 
 ## Pending work
 
-### 1. `ruff format --check` fails on 7 pre-existing files
-
-**Priority: low.** `ruff check` is clean, but `ruff format --check .` reports 7
-files it would reformat — `aqara_u200_ble/{kdf,scanner,session}.py`,
-`tools/{bumble_lock,run_hook}.py`, `docs/tutorials/end-to-end-unlock.md`, and
-`tests/test_kdf.py`'s older blocks. These predate feature 006 (verified against
-a clean `develop`); the migration recorded the gate as green using a different
-formatter run. Fix on a `chore/*` branch with a single mechanical
-`ruff format .` — deliberately *not* mixed into a security fix, and worth a
-skim of `session.py`'s CRC table diff, which is frozen crypto data.
-
-### 2. Push `develop` to the remote
+### 1. Push `develop` to the remote
 
 All work is local. Push `develop` to `github.com/dani811/Aqara` (and optionally
 the merged branches) when ready to publish.
 
-### 3. Two uncovered requirements from the 001–005 analysis
+### 2. Two uncovered requirements from the 001–005 analysis
 
-**Priority: low.** `/speckit-analyze` (see Resolved below) found two functional
+**Priority: low.** `/speckit-analyze` (see Resolved above) found two functional
 requirements that were implemented but never given a task, and one of them has no
 test:
 
@@ -87,7 +94,7 @@ test:
 Small enough to fold into the next feature touching those modules rather than
 justifying their own branch.
 
-### 4. Branch pruning (optional)
+### 3. Branch pruning (optional)
 
 The merged `feature/001…005`, `chore/*`, and `docs/*` branches can be deleted for
 a tidier list; their history is preserved in `develop`. `archive/manual-migration`
