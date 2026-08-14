@@ -109,6 +109,51 @@ def test_encrypt_login_password_has_rsa1024_shape() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Service-level error codes (feature 001, FR-008)
+#
+# The cloud answers HTTP 200 with a non-zero `code` for auth, signature, and
+# ownership failures. Those must reach the caller distinguishably from a
+# transport failure — otherwise "expired token" looks like "network down".
+# ---------------------------------------------------------------------------
+
+
+def test_service_error_code_is_surfaced_with_its_details() -> None:
+    payload = {
+        "code": 108,
+        "message": "token expired",
+        "msgDetails": "re-login required",
+        "result": None,
+    }
+    with pytest.raises(RuntimeError) as excinfo:
+        kdf._unwrap_aqara_result(payload, endpoint="/dev/bluetooth/login/assure/verify")
+
+    message = str(excinfo.value)
+    assert "108" in message
+    assert "token expired" in message
+    assert "/dev/bluetooth/login/assure/verify" in message
+    # Distinguishable from the transport-failure wording (FR-008).
+    assert "failed to contact" not in message
+
+
+@pytest.mark.parametrize("code", [0, "0", None])
+def test_success_codes_unwrap_the_result(code: object) -> None:
+    payload = {"code": code, "result": {"sessionKey": "fake"}}
+    assert kdf._unwrap_aqara_result(payload, endpoint="/x") == {"sessionKey": "fake"}
+
+
+def test_payload_without_result_is_returned_whole() -> None:
+    # Some endpoints answer flat, with no `result` envelope.
+    payload = {"code": 0, "macAddress": "fake", "ltmk": "fake"}
+    assert kdf._unwrap_aqara_result(payload, endpoint="/x") == payload
+
+
+def test_missing_code_field_is_not_an_error() -> None:
+    # Absence of `code` means the endpoint does not use the envelope at all.
+    payload = {"result": {"cloudPublicKey": "fake"}}
+    assert kdf._unwrap_aqara_result(payload, endpoint="/x") == {"cloudPublicKey": "fake"}
+
+
+# ---------------------------------------------------------------------------
 # TLS policy for cloud requests (feature 006)
 #
 # These assert the *policy*, never a connection: no socket is opened anywhere
