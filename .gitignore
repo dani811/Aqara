@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Secrets & personal captures — NEVER commit. Real credentials and device data
+# live only in a local, git-ignored .env / captures/ tree.
+# ─────────────────────────────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+secrets/
+**/credentials.json
+**/auth*.json
+**/token*.txt
+**/*token*.json
+
+# Raw radio / HCI / bug-report captures (may embed keys, MACs, personal data)
+captures/
+evidence/raw/
+*.btsnoop
+*.pcap
+*.pcapng
+bugreport*.zip
+btsnoop*.log
+*_hci.log
+
+# Frida / device session logs
+*.frida.log
+runlogs/
+scratch/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Python
+# ─────────────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+wheels/
+.venv/
+venv/
+env/
+.tox/
+.nox/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Android / native build artifacts
+# ─────────────────────────────────────────────────────────────────────────────
+*.apk
+*.idsig
+*.so
+*.dex
+*.bundle
+.gradle/
+android-probe/build/
+android-probe/.gradle/
+local.properties
+*.keystore
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OS / editor
+# ─────────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
