@@ -30,10 +30,34 @@ Cloud calls verify the server's certificate. If one fails with
 TLS certificate verification failed for https://rpc-ger.aqara.com/…
 ```
 
-then either this machine's CA store is broken — common on a fresh macOS Python,
-fixed by running `/Applications/Python\ 3.x/Install\ Certificates.command` or
-`pip install --upgrade certifi` — or the connection is genuinely being
-intercepted.
+then either this machine's CA store is broken — or the connection is genuinely
+being intercepted.
+
+The broken-store case is the common one, and it is worth confirming rather than
+guessing. Ask Python where it looks for certificates:
+
+```bash
+python -c "import ssl; print(ssl.get_default_verify_paths())"
+```
+
+A python.org framework build points at
+`/Library/Frameworks/Python.framework/Versions/3.x/etc/openssl/cert.pem`. If
+that file **does not exist**, the installer's `Install Certificates.command` was
+never run and Python has no root certificates at all — every HTTPS call fails,
+not just Aqara's. (Verified on this project's own machine, 2026-08-14: no
+`cert.pem`, which is the original reason certificate verification had been
+switched off in the code.)
+
+Two fixes, in order of preference:
+
+```bash
+# 1. Run the installer's own script (permanent, system-wide for that Python):
+/Applications/Python\ 3.x/Install\ Certificates.command
+
+# 2. Or point OpenSSL at certifi's bundle (per-environment):
+pip install certifi
+echo "SSL_CERT_FILE=$(python -c 'import certifi; print(certifi.where())')" >> .env
+```
 
 Only if you have ruled the second out, and only on a network you trust, you can
 skip the check for a run:
