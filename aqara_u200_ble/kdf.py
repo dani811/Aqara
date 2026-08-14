@@ -444,6 +444,38 @@ _TRANSPORT_HEADERS = frozenset(
     )
 )
 
+# Transport security (feature 006). Cloud calls carry the material that opens a
+# physical door, so certificates are verified by default. The opt-out exists for
+# machines whose CA store is unusable (a fresh macOS Python install); it is an
+# environment switch, never a parameter, so no call site can hard-code it.
+_INSECURE_TLS_ENV = "U200_INSECURE_TLS"
+# Fail-safe parsing: only these disable verification. A typo keeps it enabled.
+_TRUTHY_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def _tls_context() -> ssl.SSLContext:
+    """Build the TLS context for a cloud request.
+
+    Verifies the certificate chain against the platform trust store and checks
+    the hostname. Setting ``U200_INSECURE_TLS`` to ``1``/``true``/``yes``/``on``
+    disables both and prints a warning — it removes protection against
+    machine-in-the-middle interception and must never be used on an untrusted
+    network.
+    """
+
+    context = ssl.create_default_context()
+    if os.environ.get(_INSECURE_TLS_ENV, "").strip().lower() in _TRUTHY_ENV_VALUES:
+        print(
+            f"[U200] WARNING: TLS certificate verification is DISABLED "
+            f"({_INSECURE_TLS_ENV}); this connection is not protected against "
+            f"interception.",
+            file=sys.stderr,
+        )
+        # Order matters: CPython rejects CERT_NONE while check_hostname is on.
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+    return context
+
 
 def _post_json(
     url: str,
@@ -488,11 +520,7 @@ def _post_json(
         request_headers["Accept-Encoding"] = "identity"
     request = urlrequest.Request(url, data=data, headers=request_headers, method="POST")
     try:
-        # Create SSL context that does NOT verify certificates
-        # This is TEMPORARY for development/testing on macOS where certs are not properly installed
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
+        ssl_context = _tls_context()
         with urlrequest.urlopen(request, timeout=timeout, context=ssl_context) as response:
             raw = response.read()
             enc = response.headers.get("Content-Encoding", "").lower()
@@ -519,6 +547,15 @@ def _post_json(
             body = raw.decode("utf-8", "replace")
         raise RuntimeError(f"{url} returned HTTP {exc.code}: {body[:200]}") from exc
     except urlerror.URLError as exc:
+        # urlopen wraps a certificate failure in URLError.reason. Say what failed
+        # and what the deliberate override is, instead of a bare ssl traceback.
+        if isinstance(exc.reason, ssl.SSLCertVerificationError):
+            raise RuntimeError(
+                f"TLS certificate verification failed for {url}: {exc.reason}. "
+                f"Either this machine's trust store is misconfigured or the "
+                f"connection is being intercepted. If you accept the risk, set "
+                f"{_INSECURE_TLS_ENV}=1 to skip verification."
+            ) from exc
         raise RuntimeError(f"failed to contact {url}: {exc.reason}") from exc
     except TimeoutError as exc:
         raise RuntimeError(f"timeout contacting {url}") from exc

@@ -10,6 +10,9 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import ssl
+from typing import Any
+from urllib import error as urlerror
 
 import pytest
 
@@ -20,7 +23,12 @@ from aqara_u200_ble import (
     compute_sign,
     encrypt_login_password,
     hkdf_sha256,
+    kdf,
 )
+
+# The TLS opt-out flag under test (feature 006). Kept as a literal here so the
+# test pins the documented name, not whatever the module happens to call it.
+INSECURE_TLS_ENV = "U200_INSECURE_TLS"
 
 # A throwaway 32-char appkey-shaped fixture. NOT a real key.
 FAKE_APPKEY = "0123456789abcdef0123456789abcdef"
@@ -104,3 +112,118 @@ def test_encrypt_login_password_has_rsa1024_shape() -> None:
     assert len(raw) == 128
     # Non-deterministic padding: two encryptions differ.
     assert encrypt_login_password("hunter2") != out
+
+
+# ---------------------------------------------------------------------------
+# TLS policy for cloud requests (feature 006)
+#
+# These assert the *policy*, never a connection: no socket is opened anywhere
+# below (Principle V). The material these requests carry opens a physical door,
+# so the default must verify the server's identity.
+# ---------------------------------------------------------------------------
+
+
+def _fake_signer(path_rel: str | None, body: str) -> dict[str, str]:
+    """Stand-in for the runtime signer: returns already-signed fake headers."""
+
+    return {"Appid": "fake-appid", "Sign": "fake-sign", "Time": "0"}
+
+
+def test_tls_context_verifies_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(INSECURE_TLS_ENV, raising=False)
+    context = kdf._tls_context()
+    assert context.check_hostname is True
+    assert context.verify_mode is ssl.CERT_REQUIRED
+
+
+def test_tls_context_emits_no_warning_by_default(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv(INSECURE_TLS_ENV, raising=False)
+    kdf._tls_context()
+    assert capsys.readouterr().err == ""
+
+
+def test_tls_context_opt_out_disables_verification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(INSECURE_TLS_ENV, "1")
+    context = kdf._tls_context()
+    assert context.check_hostname is False
+    assert context.verify_mode is ssl.CERT_NONE
+
+
+@pytest.mark.parametrize("value", ["1", "true", "TRUE", "  yes  ", "on", "On"])
+def test_tls_context_opt_out_accepts_documented_values(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv(INSECURE_TLS_ENV, value)
+    assert kdf._tls_context().verify_mode is ssl.CERT_NONE
+
+
+@pytest.mark.parametrize("value", ["", "0", "false", "no", "off", "maybe", "  "])
+def test_tls_context_falsey_values_stay_secure(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    # Fail-safe parsing: anything not explicitly affirmative — including a typo —
+    # keeps verification on. The inverse would turn a slip into a silent hole.
+    monkeypatch.setenv(INSECURE_TLS_ENV, value)
+    context = kdf._tls_context()
+    assert context.check_hostname is True
+    assert context.verify_mode is ssl.CERT_REQUIRED
+
+
+def test_tls_context_opt_out_warns(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv(INSECURE_TLS_ENV, "1")
+    kdf._tls_context()
+    err = capsys.readouterr().err
+    assert INSECURE_TLS_ENV in err
+    assert "verification" in err.lower()
+
+
+def test_certificate_failure_message_names_the_flag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # urlopen surfaces a certificate failure as URLError(reason=SSLCertVerificationError).
+    # The user must learn what failed and what their deliberate override is.
+    def _raise_cert_error(*args: Any, **kwargs: Any) -> None:
+        raise urlerror.URLError(
+            ssl.SSLCertVerificationError("certificate verify failed: self-signed")
+        )
+
+    monkeypatch.delenv(INSECURE_TLS_ENV, raising=False)
+    monkeypatch.setattr(kdf.urlrequest, "urlopen", _raise_cert_error)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        kdf._post_json(
+            "https://example.invalid/dev/bluetooth/login/assure/verify",
+            {"deviceId": "fake"},
+            signer=_fake_signer,
+        )
+
+    message = str(excinfo.value)
+    assert "example.invalid" in message
+    assert "certificate" in message.lower()
+    assert INSECURE_TLS_ENV in message
+
+
+def test_non_certificate_url_errors_are_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A plain connection failure must keep its original wording: the new advice
+    # only applies to verification failures.
+    def _raise_url_error(*args: Any, **kwargs: Any) -> None:
+        raise urlerror.URLError("Connection refused")
+
+    monkeypatch.setattr(kdf.urlrequest, "urlopen", _raise_url_error)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        kdf._post_json(
+            "https://example.invalid/dev/bluetooth/login/assure/verify",
+            {"deviceId": "fake"},
+            signer=_fake_signer,
+        )
+
+    message = str(excinfo.value)
+    assert "failed to contact" in message
+    assert INSECURE_TLS_ENV not in message

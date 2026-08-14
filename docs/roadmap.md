@@ -9,25 +9,39 @@ The library is fully migrated to Spec-Driven Development and green:
 
 - Constitution v1.0.0 + features 001–005 (specify → clarify → plan → tasks →
   implement), each merged to `develop` via `--no-ff`.
+- Feature 006 (`fix/tls-verification`) closes the high-priority security debt.
 - Tooling (`tools/`) and documentation migrated.
-- Gates: `ruff` clean · `mypy --strict` clean · 51 unit tests · 0 secrets.
+- Gates: `ruff check` clean · `mypy --strict` clean · 70 unit tests · 0 secrets.
+
+## Resolved
+
+### ✅ Security debt — TLS verification (feature 006)
+
+The cloud client disabled certificate and hostname verification unconditionally
+("TEMPORARY for development/testing on macOS"), a real MITM risk on every call —
+including the `verify` response that carries the door-opening session material.
+It had been migrated **verbatim** under the "no logic change" rule, so the fix
+was a deliberate behavior change on its own branch.
+
+Now: verification is on by default from a single policy factory
+(`kdf._tls_context`), the insecure path survives only as the explicit,
+per-request-warned `U200_INSECURE_TLS` opt-out (fail-safe parsing), and a
+certificate failure raises an error naming both plausible causes and the flag.
+See [`specs/006-tls-verification/`](../specs/006-tls-verification/spec.md) and
+[cloud-api.md](protocol/cloud-api.md#transport-security).
 
 ## Pending work
 
-### 1. Security debt — TLS verification disabled (fix/tls-verification)
+### 1. `ruff format --check` fails on 7 pre-existing files
 
-**Priority: high.** The cloud client disables TLS certificate verification:
-
-- [`aqara_u200_ble/kdf.py:494`](../aqara_u200_ble/kdf.py#L494) —
-  `ssl_context.check_hostname = False`
-- [`aqara_u200_ble/kdf.py:495`](../aqara_u200_ble/kdf.py#L495) —
-  `ssl_context.verify_mode = ssl.CERT_NONE`
-
-The inline comment marks it "TEMPORARY for development/testing on macOS". It is a
-real MITM risk. It was migrated **verbatim** (the "no logic change" rule), so
-fixing it is a behavior change and belongs on its own `fix/tls-verification`
-branch: restore default verification, allow an explicit opt-out only via an
-environment flag, and add a test.
+**Priority: low.** `ruff check` is clean, but `ruff format --check .` reports 7
+files it would reformat — `aqara_u200_ble/{kdf,scanner,session}.py`,
+`tools/{bumble_lock,run_hook}.py`, `docs/tutorials/end-to-end-unlock.md`, and
+`tests/test_kdf.py`'s older blocks. These predate feature 006 (verified against
+a clean `develop`); the migration recorded the gate as green using a different
+formatter run. Fix on a `chore/*` branch with a single mechanical
+`ruff format .` — deliberately *not* mixed into a security fix, and worth a
+skim of `session.py`'s CRC table diff, which is frozen crypto data.
 
 ### 2. Push `develop` to the remote
 
