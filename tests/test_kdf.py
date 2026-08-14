@@ -1,0 +1,106 @@
+"""Pure-logic unit tests for the cloud KDF client (feature 001).
+
+These tests pin the *observable behaviour* of the reverse-engineered crypto so
+any accidental drift is caught (Constitution Principle II). They never touch the
+network (Principle V) and contain no real secrets (Principle I) — every value
+here is a throwaway fixture.
+"""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+
+import pytest
+
+from aqara_u200_ble import (
+    aes128gcm_decrypt_body,
+    aes128gcm_encrypt_body,
+    compute_nonce,
+    compute_sign,
+    encrypt_login_password,
+    hkdf_sha256,
+)
+
+# A throwaway 32-char appkey-shaped fixture. NOT a real key.
+FAKE_APPKEY = "0123456789abcdef0123456789abcdef"
+
+
+def test_compute_nonce_is_uppercase_md5_of_request_id() -> None:
+    request_id = "b1d2c3-req-0001"
+    expected = hashlib.md5(request_id.encode("utf-8")).hexdigest().upper()
+    assert compute_nonce(request_id) == expected
+    # Uppercase invariant: no lowercase hex digits leak through.
+    assert compute_nonce(request_id) == compute_nonce(request_id).upper()
+
+
+def test_compute_sign_matches_documented_formula_with_token() -> None:
+    # Sign = MD5("Appid=..&Nonce=..&Time=..&Token=..&{body}&{appkey}")
+    appid, nonce, time_, token, body = (
+        "app-id",
+        "ABCDEF0123456789",
+        "1700000000000",
+        "tok-123",
+        '{"deviceId":"dev-1"}',
+    )
+    preimage = (
+        f"Appid={appid}&Nonce={nonce}&Time={time_}&Token={token}&{body}&{FAKE_APPKEY}"
+    )
+    expected = hashlib.md5(preimage.encode("utf-8")).hexdigest()
+    got = compute_sign(
+        appid=appid, nonce=nonce, time=time_, token=token, body=body, appkey=FAKE_APPKEY
+    )
+    assert got == expected
+
+
+def test_compute_sign_omits_token_field_when_empty() -> None:
+    # On login there is no token: the whole `Token=` segment is dropped.
+    appid, nonce, time_, body = ("app-id", "ABCDEF0123456789", "1700000000000", "{}")
+    preimage_no_token = (
+        f"Appid={appid}&Nonce={nonce}&Time={time_}&{body}&{FAKE_APPKEY}"
+    )
+    expected = hashlib.md5(preimage_no_token.encode("utf-8")).hexdigest()
+    got = compute_sign(
+        appid=appid, nonce=nonce, time=time_, token="", body=body, appkey=FAKE_APPKEY
+    )
+    assert got == expected
+    # And it must differ from the token-present variant.
+    with_token = compute_sign(
+        appid=appid, nonce=nonce, time=time_, token="x", body=body, appkey=FAKE_APPKEY
+    )
+    assert got != with_token
+
+
+def test_hkdf_sha256_rfc5869_test_case_1() -> None:
+    # RFC 5869, Appendix A.1
+    ikm = bytes.fromhex("0b" * 22)
+    salt = bytes.fromhex("000102030405060708090a0b0c")
+    info = bytes.fromhex("f0f1f2f3f4f5f6f7f8f9")
+    expected_okm = bytes.fromhex(
+        "3cb25f25faacd57a90434f64d0362f2a"
+        "2d2d0a90cf1a5a4c5db02d56ecc4c5bf"
+        "34007208d5b887185865"
+    )
+    assert hkdf_sha256(ikm, salt=salt, info=info, length=42) == expected_okm
+
+
+def test_aes128gcm_body_roundtrip() -> None:
+    plaintext = b'{"account":"user","password":"redacted"}'
+    blob = aes128gcm_encrypt_body(plaintext, FAKE_APPKEY)
+    # Wire shape: three base64 segments joined by '-'.
+    assert blob.count("-") == 2
+    assert aes128gcm_decrypt_body(blob, FAKE_APPKEY) == plaintext
+
+
+def test_aes128gcm_decrypt_rejects_malformed_blob() -> None:
+    with pytest.raises(ValueError):
+        aes128gcm_decrypt_body("only-two", FAKE_APPKEY)
+
+
+def test_encrypt_login_password_has_rsa1024_shape() -> None:
+    # RSA-1024 PKCS#1 v1.5 ciphertext is exactly 128 bytes, base64-encoded.
+    out = encrypt_login_password("hunter2")
+    raw = base64.b64decode(out)
+    assert len(raw) == 128
+    # Non-deterministic padding: two encryptions differ.
+    assert encrypt_login_password("hunter2") != out

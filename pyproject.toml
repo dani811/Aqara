@@ -1,0 +1,135 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Project metadata (PEP 621)
+# ─────────────────────────────────────────────────────────────────────────────
+[project]
+name = "aqara-u200-ble"
+version = "0.2.0"
+description = "Autonomous BLE control library for the Aqara U200 smart lock — cloud KDF, auth handshake and AES-CCM control channel, reimplemented in pure Python."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "dani811", email = "22160062+dani811@users.noreply.github.com" }]
+maintainers = [{ name = "dani811", email = "22160062+dani811@users.noreply.github.com" }]
+keywords = [
+    "aqara",
+    "u200",
+    "smart-lock",
+    "bluetooth",
+    "ble",
+    "reverse-engineering",
+    "home-automation",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Home Automation",
+    "Topic :: Security :: Cryptography",
+    "Typing :: Typed",
+]
+
+# `cryptography` is a hard runtime dependency: the login (AES-128-GCM / RSA)
+# and the control channel (AES-CCM) both rely on it. The HTTP layer uses only
+# the standard library (urllib), so there is no `requests` dependency.
+dependencies = ["cryptography>=43.0.0"]
+
+[project.optional-dependencies]
+# BLE transports. `bleak` for macOS/Linux/Windows native controllers, `bumble`
+# for the ESP32-S3 HCI controller path (see aqara_u200_ble.bumble_transport).
+ble = ["bleak>=0.22"]
+bumble = ["bumble>=0.0.200"]
+# Everything needed to develop, lint, type-check and test the library.
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pytest>=8.0",
+    "build>=1.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/danieljusdado/aqara-u200-ble"
+Repository = "https://github.com/danieljusdado/aqara-u200-ble"
+Issues = "https://github.com/danieljusdado/aqara-u200-ble/issues"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Packaging (flat layout — kept on purpose: the tools/ scripts import the
+# package via `sys.path.insert(parents[1])`, which a src/ layout would break).
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.setuptools]
+packages = ["aqara_u200_ble"]
+
+[tool.setuptools.package-data]
+# PEP 561: ship the py.typed marker so downstream type checkers pick up hints.
+aqara_u200_ble = ["py.typed"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Ruff — linter + formatter
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["aqara_u200_ble", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific rules
+    "PL",   # pylint
+]
+ignore = [
+    "PLR2004", # magic value in comparison — protocol constants are inherently magic
+    "PLR0913", # too many arguments — the cloud/BLE flows genuinely take many
+    "PLR0917", # too many positional arguments — same reason as PLR0913
+    "PLR0915", # too many statements — the handshake is a long linear sequence
+    "PLR0912", # too many branches — the HTTP/response decode path is linear-but-wide
+    "E501",    # line length handled by the formatter, not enforced hard
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLR2004", "S101"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["aqara_u200_ble"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# mypy — static typing
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+show_error_codes = true
+pretty = true
+
+# Third-party BLE stacks ship without complete type stubs.
+[[tool.mypy.overrides]]
+module = ["bleak.*", "bumble.*"]
+ignore_missing_imports = true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# pytest
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
