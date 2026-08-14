@@ -359,9 +359,12 @@ def login(
       1. `password` = RSA-1024 PKCS#1 v1.5 base64 (encryptType:2).
       2. El body JSON entero -> AES-128-GCM (Content-Encoding: x-aes128gcm),
          con clave = appkey[:16] y nonce = HKDF(salt, appkey).
-    IMPORTANTE: la peticion se FIRMA con un token valido existente (`sign_token`)
-    sobre el BLOB cifrado; el servidor rechaza la firma con token vacio.  Es
-    decir, se re-loguea con un token bootstrap (~10 dias) para obtener uno fresco.
+    Es una peticion NO AUTENTICADA: sin `sign_token` no se envian Token, UserId
+    ni Requestid, y el campo `Token=` se OMITE del preimage del Sign (ver
+    `make_local_signer` y `compute_sign`).  Con la clave RSA del login resuelta
+    (2026-08-12) basta cuenta+contrasena: no hace falta ningun token previo.
+    `sign_token`/`user_id` siguen aceptandose por si una region exige firmar la
+    peticion con una sesion viva, pero el camino normal es dejarlos vacios.
     Devuelve el dict `result` (incluye el nuevo token) + clave 'token'.
     """
     body = {

@@ -14,16 +14,18 @@ kinds: **runners** (talk to the lock) and **capture hooks** (observe the app).
 | Tool | What it does |
 | --- | --- |
 | [`bumble_lock.py`](bumble_lock.py) | Full autonomous flow via an ESP32-S3 HCI controller + Bumble: cloud auth → BLE handshake (with the CRC fix) → verify → AES-CCM control. Config from `.env`. |
-| [`refresh_token.py`](refresh_token.py) | Mints a fresh cloud token from your account password (prompted, never stored) and rewrites `AQARA_TOKEN` in `.env`. Needs a still-valid token to sign with — see the caveat below. |
+| [`refresh_token.py`](refresh_token.py) | Mints a fresh cloud token from your account password (prompted, never stored) and rewrites `AQARA_TOKEN` in `.env`. No previous token needed. |
 | [`run_hook.py`](run_hook.py) | Thin launcher for Frida capture scripts against the instrumented app. |
 
-> **Token lifetime, the hard part.** Aqara invalidates a token the moment the
-> account logs in anywhere else — the app on your phone will do it — regardless
-> of the `exp` claim. The cloud then answers `code=108, Token has expired` on a
-> token whose date is still days away. `refresh_token.py` re-logs in to get a
-> new one, but `/user/guard-code/login` is itself **signed with an existing
-> token**, so it only works while the stored one is still alive. Once it is
-> dead, the only way back is capturing a fresh token from the app (below).
+> **Token lifetime.** Aqara invalidates a token the moment the account logs in
+> anywhere else — the app on your phone will do it — regardless of the `exp`
+> claim, so the cloud answers `code=108, Token has expired` on a token whose
+> date is still days away. That is not a dead end: `/user/guard-code/login` is an
+> **unauthenticated** request (no Token/UserId/Requestid headers, and `Token=`
+> omitted from the signature preimage), so `refresh_token.py` mints a new token
+> from account + password alone. The Frida capture below is only needed to
+> bootstrap the *other* values — `Appid`, `Appkey`, `ClientId`, `PhoneId`, and
+> the device DID.
 
 ## Capture hooks (Frida)
 
