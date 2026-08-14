@@ -32,3 +32,28 @@ password with RSA and the body with AES-128-GCM (`kdf.encrypt_login_password`,
 
 > Tokens are invalidated when the account logs in elsewhere. Capture yours
 > fresh (see the tutorials) and put it in `.env` — never in code.
+
+## Transport security
+
+Every cloud call verifies the server's TLS certificate chain against the
+platform trust store **and** its hostname. This matters more here than in an
+average HTTP client: the `verify` response carries the session material that
+opens a physical door, so an unauthenticated channel would let anyone on the
+path impersonate the cloud.
+
+One escape hatch exists, for machines whose CA store is unusable:
+
+| Variable | Effect |
+| --- | --- |
+| `U200_INSECURE_TLS=1` (or `true`/`yes`/`on`) | Disables certificate and hostname checks, printing a warning to stderr on every request |
+| unset, empty, `0`, `false`, anything else | Verification enforced (the default) |
+
+Parsing is fail-safe: only an explicit affirmative disables the check, so a typo
+cannot silently downgrade the connection. When verification fails, the raised
+`RuntimeError` names both plausible causes — a broken local trust store or an
+intercepted connection — and the flag.
+
+> **History**: this verification was disabled unconditionally until feature 006
+> ([spec](../../specs/006-tls-verification/spec.md)); the code had been migrated
+> verbatim from the reverse-engineering phase, where the check had been switched
+> off to work around a macOS trust-store problem.
