@@ -30,6 +30,30 @@ certificate failure raises an error naming both plausible causes and the flag.
 See [`specs/006-tls-verification/`](../specs/006-tls-verification/spec.md) and
 [cloud-api.md](protocol/cloud-api.md#transport-security).
 
+### ✅ Formal Spec Kit analysis (`/speckit-analyze`)
+
+The five migrated features were produced by following each `SKILL.md` by hand,
+because the skills had been installed mid-session and the loader never registered
+them. In a fresh session they do register, and `/speckit-analyze` has now run
+over 001–005 (and over 006, before it was implemented).
+
+Result: **0 critical findings, 0 constitution conflicts, 0 unresolved
+clarification markers**; 36 of 38 functional requirements had explicit task
+coverage, and the test suite turned out to be *broader* than the tasks asked for
+(nine tests no task requested). The findings were about traceability, not
+correctness, and are fixed in `docs/analyze-remediation`:
+
+- all 81 tasks across 001–005 were still `[ ]` despite being implemented and
+  merged — now marked done;
+- 21 tasks named tests that never existed under that name (`test_build_unlock` vs
+  `test_build_unlock_payload_and_prefix`, …) — now aligned, so a `pytest -k`
+  copied from `tasks.md` actually runs;
+- spec 001 carried stale cross-references (calling the BLE handshake "feature
+  002") and, more importantly, the assumption that TLS was "out of scope" —
+  the premise that let the 006 defect through review. Both corrected in place.
+
+The two remaining coverage gaps are recorded as pending item 3 below.
+
 ## Pending work
 
 ### 1. `ruff format --check` fails on 7 pre-existing files
@@ -48,15 +72,20 @@ skim of `session.py`'s CRC table diff, which is frozen crypto data.
 All work is local. Push `develop` to `github.com/dani811/Aqara` (and optionally
 the merged branches) when ready to publish.
 
-### 3. Formal Spec Kit analysis (`/speckit-analyze`)
+### 3. Two uncovered requirements from the 001–005 analysis
 
-The five features were produced by executing each `SKILL.md`'s steps manually,
-because the skills were installed mid-session and the loader did not register
-them. In a **fresh session** with the repo open, the `/speckit-*` skills load at
-startup; run `/speckit-analyze` over the five features for the formal
-spec↔plan↔tasks↔constitution consistency report (and optionally
-`/speckit-checklist`). See [tools/](../tools/README.md) is unrelated; this is the
-`.claude/skills/speckit-*` set.
+**Priority: low.** `/speckit-analyze` (see Resolved below) found two functional
+requirements that were implemented but never given a task, and one of them has no
+test:
+
+- **001 FR-008** — surfacing service-level error codes. Implemented in
+  `kdf._unwrap_aqara_result`; **no test**. Worth one, since a misread error code
+  is how a cloud change would first show up.
+- **004 FR-003** — the backward-compatible `token` argument. Tested
+  (`test_app_token_argument_is_ignored`), only the task is missing.
+
+Small enough to fold into the next feature touching those modules rather than
+justifying their own branch.
 
 ### 4. Branch pruning (optional)
 

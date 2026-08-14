@@ -159,8 +159,8 @@ and `U200_INSECURE_TLS`.
 - [X] T022 Secret scan the diff (Principle I) — no credentials, MACs, or IDs.
   Clean: the only matches are pre-existing `.env.example` placeholders and the
   throwaway `FAKE_APPKEY` test fixture.
-- [ ] T023 Merge into `develop` with `--no-ff` (Principle VI) — awaiting the
-  maintainer's go-ahead; the branch is committed and green.
+- [X] T023 Merge into `develop` with `--no-ff` (Principle VI) — merged as
+  `9537aae`; suite green after the merge (70 tests).
 
 ---
 
