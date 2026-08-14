@@ -8,7 +8,7 @@ Every session must pass this handshake before any command works. The central
 writes the cloud's ephemeral public key (`0610`), the lock replies with its own
 public key, and the central sends the verify proof (`0710`).
 
-## The wall, and the discovery
+## The CRC wall
 
 For a long time the central sent a **random** value in header bytes 7–8 (assumed
 to be an "app token"). The lock answered every time with `status 01` and an empty
