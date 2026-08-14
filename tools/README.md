@@ -26,12 +26,21 @@ kinds: **runners** (talk to the lock) and **capture hooks** (observe the app).
 > from account + password alone. The Frida capture below is only needed to
 > bootstrap the *other* values — `Appid`, `Appkey`, `ClientId`, `PhoneId`, and
 > the device DID.
+>
+> **History (2026-08-14).** This path returned `code=810` for every credential
+> for a while, because `encrypt_login_password` RSA-encrypted the raw password
+> when the server expects `RSA(MD5(password))` (lowercase hex). The `810` — same
+> code the cloud gives a wrong password *or* an unregistered account — was
+> mistaken for "the envelope is right, only the password is wrong". Fixed once
+> the RE note's own finding (`docs/login-cuenta.md` §2) was actually applied;
+> now verified end-to-end (`code=0`, real JWT).
 
 ## Capture hooks (Frida)
 
 | Tool | What it captures |
 | --- | --- |
 | [`capture_publickey_flow.js`](capture_publickey_flow.js) | The `/publickey` + `/verify` HTTP flow and the `ff07`/`ff08` frames — how you capture your own `.env` values and confirm the handshake. |
+| [`capture_login_flow.js`](capture_login_flow.js) | A real **account login** from the app: the plaintext that enters the RSA, the login URL/headers/body, and any digest of a short string. Kept as the reference capture for the login envelope (it confirmed the RSA input is `MD5(password)` hex). |
 
 ## The instrumentation stack (what was used)
 

@@ -126,12 +126,16 @@ def hkdf_sha256(
 #   rpc-ger.aqara.com → European/German server (area=EU)
 # Full URL format: {base_url}/{path}
 # Captured example: https://rpc-ger.aqara.com/app/v1.0/lumi/dev/bluetooth/login/assure/publickey
+# Probed 2026-08-14 with a real login POST: EU and KR reach Aqara's application
+# layer (they answer the `code=` envelope); US and CN answer an nginx HTTP 500,
+# so those two inferred hostnames are WRONG or do not serve this path. RU is
+# still untested. Do not treat the unverified ones as usable.
 REGION_BASE_URLS: dict[str, str] = {
     "EU": "https://rpc-ger.aqara.com/app/v1.0/lumi",  # confirmed from auth4.log
-    "US": "https://rpc-us.aqara.com/app/v1.0/lumi",  # inferred pattern
-    "CN": "https://rpc.aqara.com/app/v1.0/lumi",  # inferred pattern
-    "KR": "https://rpc-kr.aqara.com/app/v1.0/lumi",  # inferred pattern
-    "RU": "https://rpc-ru.aqara.com/app/v1.0/lumi",  # inferred pattern
+    "US": "https://rpc-us.aqara.com/app/v1.0/lumi",  # WRONG: nginx 500 (2026-08-14)
+    "CN": "https://rpc.aqara.com/app/v1.0/lumi",  # WRONG: nginx 500 (2026-08-14)
+    "KR": "https://rpc-kr.aqara.com/app/v1.0/lumi",  # reaches the app layer (2026-08-14)
+    "RU": "https://rpc-ru.aqara.com/app/v1.0/lumi",  # inferred pattern, untested
 }
 
 # API paths (relative; append to base URL)
@@ -270,10 +274,17 @@ def make_local_signer(
 # (tools/capture_rsaspi2.js). Clave anterior (extraida estaticamente del dex /
 # libdatajar.so) daba code=500 "Service impl error" -> NO era la del login.
 # Esta SI es correcta: verificado end-to-end contra el servidor real con una
-# contrasena deliberadamente falsa -> code=810 "Password incorrect" (el server
-# descifro bien y comparo, solo fallo por la contrasena, como se esperaba) en
-# vez del 500 de antes. Login 100% autonomo ya no depende de reenviar un
-# ciphertext capturado.
+# contrasena deliberadamente falsa -> code=810 "Password incorrect" en vez del
+# 500 de antes.
+#
+# CORRECCION 2026-08-14: ese 810 se interpreto como "el sobre es correcto, solo
+# fallaba la contrasena". NO lo demuestra. Una cuenta inexistente
+# (no-existe-...@example.invalid) devuelve exactamente el mismo 810, y tambien
+# lo devuelven credenciales validas verificadas en la app oficial. O sea que el
+# 810 es la respuesta a todo y no discrimina. Lo unico que si se puede afirmar
+# es que esta clave hace que el servidor llegue a COMPARAR (antes ni eso: 500),
+# lo que la hace mejor candidata que la anterior -- pero no confirmada. Ver el
+# docstring de login().
 _LOGIN_RSA_PUBKEY_DER_B64 = (
     "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCG46slB57013JJs4Vvj5cVyMpR9b+B2F+YJU6"
     "qhBEYbiEmIdWpFPpOuBikDs2FcPS19MiWq1IrmxJtkICGurqImRUt4lP688IWlEmqHfSxSRf2+a"
@@ -284,11 +295,30 @@ _PATH_LOGIN = "/user/guard-code/login"
 
 
 def encrypt_login_password(password: str) -> str:
-    """Cifra la contrasena con la RSA-1024 del login (PKCS#1 v1.5) -> base64."""
+    """Cifra la contrasena para el login de cuenta -> base64.
+
+    El plaintext del RSA NO es la contrasena en crudo: es el MD5 de la
+    contrasena en HEX MINUSCULA (32 chars ASCII), y ESO es lo que se cifra con
+    la RSA-1024 (PKCS#1 v1.5).
+
+        password_field = base64( RSA_PKCS1v15( MD5(password).hexdigest() ) )
+
+    Confirmado por captura Frida de `Cipher.doFinal` en la app real
+    (alg=RSA/ECB/PKCS1Padding): para una contrasena de prueba, la entrada al RSA
+    es su MD5 en hex minuscula (32 chars ASCII), no la contrasena en crudo, y la
+    salida es el campo `password` del body. Ver docs/protocol/cloud-api.md.
+
+    Historia del bug: hasta 2026-08-14 esta funcion cifraba la contrasena en
+    crudo, por lo que el servidor descifraba, comparaba contra el MD5 esperado y
+    devolvia `code=810` SIEMPRE -- con cualquier credencial, incluidas las
+    validas. El doc de RE ya recogia el MD5 (login-cuenta.md §2), pero el codigo
+    nunca lo aplico.
+    """
     pub = load_der_public_key(base64.b64decode(_LOGIN_RSA_PUBKEY_DER_B64))
     if not isinstance(pub, rsa.RSAPublicKey):  # pragma: no cover - key is RSA-1024
         raise TypeError("login public key is not RSA")
-    ct = pub.encrypt(password.encode("utf-8"), _pad.PKCS1v15())
+    password_md5 = hashlib.md5(password.encode("utf-8")).hexdigest()
+    ct = pub.encrypt(password_md5.encode("ascii"), _pad.PKCS1v15())
     return base64.b64encode(ct).decode("ascii")
 
 
@@ -361,11 +391,19 @@ def login(
          con clave = appkey[:16] y nonce = HKDF(salt, appkey).
     Es una peticion NO AUTENTICADA: sin `sign_token` no se envian Token, UserId
     ni Requestid, y el campo `Token=` se OMITE del preimage del Sign (ver
-    `make_local_signer` y `compute_sign`).  Con la clave RSA del login resuelta
-    (2026-08-12) basta cuenta+contrasena: no hace falta ningun token previo.
-    `sign_token`/`user_id` siguen aceptandose por si una region exige firmar la
-    peticion con una sesion viva, pero el camino normal es dejarlos vacios.
+    `make_local_signer` y `compute_sign`).
+    `sign_token`/`user_id` se aceptan por si una region exige firmar la peticion
+    con una sesion viva.
     Devuelve el dict `result` (incluye el nuevo token) + clave 'token'.
+
+    ESTADO (2026-08-14): FUNCIONA, verificado end-to-end contra el servidor EU
+    real -> `code=0` + JWT valido con cuenta+contrasena, sin token previo ni
+    movil.  El bug que lo bloqueaba estaba en `encrypt_login_password`: cifraba
+    la contrasena EN CRUDO, cuando el plaintext del RSA es MD5(password) en hex
+    minuscula (ver esa funcion).  Por eso el servidor contestaba `code=810`
+    SIEMPRE -- con cualquier credencial, incluidas las validas -- y ese 810 se
+    habia confundido con "envoltorio correcto, contrasena mala" (una cuenta
+    inexistente devuelve el mismo 810, asi que no distinguia nada).
     """
     body = {
         "account": account,
