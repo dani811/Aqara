@@ -23,10 +23,15 @@ close). These were captured live from the app's `encryptAESCCM` input (feature
 LOCK/UNLOCK before feature 009 were **never** the real actuators — the lock is
 silent to them — and are retained in code only as clearly-marked legacy.
 
-> **Replay caveat.** Byte 2 is a per-command counter and the last two bytes are a
-> trailer (`b917` / `3a12`) whose algorithm is unresolved. One command per fresh
-> session works; a general builder is follow-on work (see
-> `specs/009-lock-open-spike`).
+### Command builder
+
+The frame is `74 <dir:1> <seq:2 LE> <trailer:2 LE>` where `dir` is `01` open /
+`00` close and the trailer is **additive** (not a CRC): `trailer = base_dir + seq`,
+`base_open = 0x17b8`, `base_close = 0x1238`. Cracked from nine live captures
+(the trailer increments by 1 with the sequence). `build_operate_frame(open, seq)`
+synthesises any command; `UNLOCK`/`LOCK` are the `seq=1` case. The lock ignores
+the sequence across sessions, so `seq=1` per fresh session is fine. The bases were
+derived from one device and may be device-specific. See `specs/009-lock-open-spike`.
 
 Each operation is sent encrypted:
 `control_write = write_prefix + AES-CCM(sessionKey, nonce, payload)` (the crypto is

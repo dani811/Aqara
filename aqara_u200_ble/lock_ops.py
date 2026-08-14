@@ -12,15 +12,15 @@ They start with `0x74` (`BLE_OPEN_LOCK`); the 2nd byte is the direction
 were **never** the real actuators — the lock is silent to them — and are kept
 below only as clearly-marked legacy, not used by any alias.
 
-**Replay caveat.** These are captured payloads, replayed verbatim. We re-encrypt
-them with our *own* fresh session key/nonce (so the AES-CCM is genuinely ours),
-but we do not yet synthesise them: the 3rd byte looks like a per-command counter
-(`01` seen on open, `02` on the next close) and the last two bytes are a trailer
-(`b917` / `3a12`) whose algorithm is unresolved — no standard CRC-16 reproduces
-both pairs. One command per fresh session works (the counter appears to reset per
-session); multiple commands in one session, or a lock with strict cross-session
-replay protection, would need the counter+trailer reversed. See
-specs/009-lock-open-spike.
+**Command builder (trailer cracked, feature 009).** The frame is
+``74 <dir> <seq:2 LE> <trailer:2 LE>`` where ``dir`` is ``01`` open / ``00``
+close, ``seq`` is a 2-byte little-endian sequence, and the trailer is
+**additive, not a CRC**: ``trailer = base_dir + seq`` (``base_open = 0x17b8``,
+``base_close = 0x1238``). Cracked from nine live captures across a run of
+presses — the trailer increments by exactly 1 with the sequence, which rules out
+a CRC. ``build_operate_frame`` synthesises any command; ``UNLOCK`` / ``LOCK`` are
+the ``seq=1`` case. The bases were derived from one device and could be
+device-specific (unconfirmed on a second lock).
 """
 
 from __future__ import annotations
@@ -44,10 +44,10 @@ class LockOperation(str, Enum):
 
     # Keepalive / status poll frame. The counter rotates; 2f012f is one sample.
     KEEPALIVE = "2f012f"
-    # OPEN the lock — real captured command (BLE_OPEN_LOCK, dir 0x01). Replay.
+    # OPEN the lock — build_operate_frame(open=True, seq=1). Confirmed live.
     UNLOCK = "74010100b917"
-    # CLOSE the lock — real captured command (BLE_OPEN_LOCK, dir 0x00). Replay.
-    LOCK = "740002003a12"
+    # CLOSE the lock — build_operate_frame(open=False, seq=1).
+    LOCK = "740001003912"
     # Extended state payload observed around control-page interactions.
     STATE_SNAPSHOT = "334e74746a201c00003049"
     # LEGACY, NON-FUNCTIONAL: shipped as LOCK/UNLOCK before feature 009 but the
@@ -55,6 +55,31 @@ class LockOperation(str, Enum):
     # provenance only; no alias maps here.
     LEGACY_UNVERIFIED_1F031F = "1f031f"
     LEGACY_UNVERIFIED_200320 = "200320"
+
+
+# Operate-command builder (feature 009). frame = 74 <dir> <seq:2 LE> <trailer:2 LE>
+# with trailer = base_dir + seq (additive, not a CRC). Bases derived from live
+# captures on one device; may be device-specific.
+_OPERATE_OPCODE = 0x74
+_OPERATE_BASE = {True: 0x17B8, False: 0x1238}  # open / close
+
+
+def build_operate_frame(*, open: bool, seq: int = 1) -> bytes:
+    """Synthesise the plaintext for an open/close command with any sequence.
+
+    ``open=True`` opens the bolt, ``open=False`` closes it. ``seq`` is the 2-byte
+    little-endian sequence number (the lock does not validate it across sessions,
+    so ``seq=1`` per fresh session is fine). The trailer is ``base_dir + seq``.
+    """
+    if not 0 <= seq <= 0xFFFF:
+        raise ValueError("seq must fit in 2 bytes (0..65535)")
+    direction = 0x01 if open else 0x00
+    trailer = (_OPERATE_BASE[open] + seq) & 0xFFFF
+    return (
+        bytes([_OPERATE_OPCODE, direction])
+        + seq.to_bytes(2, "little")
+        + trailer.to_bytes(2, "little")
+    )
 
 
 def normalize_lock_operation(value: LockOperation | str) -> LockOperation:

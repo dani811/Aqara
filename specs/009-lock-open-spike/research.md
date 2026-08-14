@@ -104,21 +104,28 @@ The offline NO-GO was overturned by going through the app:
    the app must not hold the single BLE connection, and actuation needs the
    owner's session (the test account handshakes but does not actuate).
 
-### What is NOT resolved (replay caveat)
+### Robustness and the trailer — both resolved (2026-08-14)
 
-The commands are **replayed**, not synthesised: byte 2 is a per-command counter
-(`01` open, `02` on the next close) and the last two bytes are a trailer
-(`b917` / `3a12`) whose algorithm is unknown — a full CRC-16 sweep matched
-neither pair.
+**Robustness.** CLOSE (`740002003a12`, seq `02`) then OPEN (`74010100b917`,
+seq `01`) in two *separate* fresh sessions both actuated the bolt and both
+replied `74007706` — seq went `02` then `01` across sessions and both were
+accepted. The lock does **not** validate the sequence across sessions.
 
-**Robustness confirmed (2026-08-14).** Running CLOSE (`740002003a12`, counter
-`02`) and then OPEN (`74010100b917`, counter `01`) in two *separate* fresh
-sessions both actuated the bolt and both replied `74007706` — the counter went
-`02` then `01` across sessions and both were accepted. So the lock does **not**
-validate the counter across sessions, and replaying a fixed captured payload
-per fresh session is reliable for one command at a time. A general builder
-(arbitrary counter, multiple commands in one session) would still need the
-counter+trailer reversed — the follow-on to this spike.
+**Trailer cracked (Finding 5).** A run of ~8 app presses (open/close alternating;
+"retract bolt" turned out to be just another open) captured nine
+`(direction, seq, frame)` samples. The frame is:
+
+```text
+74 <dir:1> <seq:2 LE> <trailer:2 LE>     dir = 01 open / 00 close
+trailer = base_dir + seq                 base_open = 0x17b8, base_close = 0x1238
+```
+
+The trailer increments by exactly 1 with the sequence (`b917, ba17, bc17, …`),
+which rules out a CRC — it is **additive**. `build_operate_frame(open, seq)`
+reproduces all nine captures and synthesises any command, so this is a real
+builder, not replay. The bases were derived from one device and may be
+device-specific (unconfirmed on a second lock). Sequence choice is free because
+the lock ignores it across sessions, so `seq=1` per fresh session is fine.
 
 ## Safety
 

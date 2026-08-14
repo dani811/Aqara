@@ -18,6 +18,7 @@ from aqara_u200_ble import (
     normalize_lock_operation,
     send_lock_operation,
 )
+from aqara_u200_ble.lock_ops import build_operate_frame
 
 
 class FakeTransport:
@@ -45,8 +46,39 @@ def test_unlock_and_lock_share_opcode_but_differ_in_direction() -> None:
     # Same 0x74 operate opcode; byte 1 is the direction (01 open / 00 close).
     assert unlock.payload[0] == 0x74 and lock.payload[0] == 0x74
     assert unlock.payload[1] == 0x01 and lock.payload[1] == 0x00
-    assert lock.payload == bytes.fromhex("740002003a12")
+    assert lock.payload == bytes.fromhex("740001003912")
     assert lock.payload != unlock.payload
+
+
+# Nine live-captured (dir, seq, frame) samples; the builder must reproduce them.
+_OPERATE_SAMPLES = [
+    (True, 1, "74010100b917"),
+    (True, 2, "74010200ba17"),
+    (True, 4, "74010400bc17"),
+    (True, 6, "74010600be17"),
+    (True, 7, "74010700bf17"),
+    (False, 1, "740001003912"),
+    (False, 2, "740002003a12"),
+    (False, 3, "740003003b12"),
+    (False, 5, "740005003d12"),
+]
+
+
+@pytest.mark.parametrize(("is_open", "seq", "frame"), _OPERATE_SAMPLES)
+def test_build_operate_frame_reproduces_captures(is_open: bool, seq: int, frame: str) -> None:
+    # The trailer is additive (base_dir + seq), not a CRC — pinned against real
+    # captures so a regression to a wrong trailer is caught.
+    assert build_operate_frame(open=is_open, seq=seq).hex() == frame
+
+
+def test_build_operate_frame_defaults_to_seq_1_and_matches_enum() -> None:
+    assert build_operate_frame(open=True).hex() == LockOperation.UNLOCK.value
+    assert build_operate_frame(open=False).hex() == LockOperation.LOCK.value
+
+
+def test_build_operate_frame_rejects_out_of_range_seq() -> None:
+    with pytest.raises(ValueError):
+        build_operate_frame(open=True, seq=0x10000)
 
 
 def test_keepalive_uses_prefix_01() -> None:
