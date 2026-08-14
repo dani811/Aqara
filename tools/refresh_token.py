@@ -6,11 +6,14 @@ else, regardless of the `exp` claim — so a token that looks valid for days can
 be dead already (the cloud answers `code=108, Token has expired`). This tool
 re-logs in to get a fresh one.
 
-**It needs a working token to sign the login request.** That is the cloud's
-design, not a bug here: `/user/guard-code/login` is signed with an existing
-token (`sign_token`), and the server rejects an empty one. If your stored token
-is not merely expired but *invalidated*, this will fail too, and the only way
-back is capturing a fresh token from the app (docs/tutorials/02-capture-credentials.md).
+Account + password is enough: `/user/guard-code/login` is an **unauthenticated**
+request. Without a token the client sends no Token/UserId/Requestid headers and
+omits the `Token=` field from the signature preimage, which is exactly what
+`make_local_signer` does when handed an empty token. So a dead stored token does
+not block a refresh — that is the whole point of this tool.
+
+If a region ever did require signing with a live session, `--sign-with-stored`
+retries using the token currently in `.env`.
 
 The password is read with `getpass`: it is never echoed, never stored, never
 written to `.env`, and never passed as an argument (where it would land in your
@@ -19,7 +22,8 @@ shell history and in `ps`).
 Usage:
 
     set -a; . ./.env; set +a
-    python tools/refresh_token.py            # prompts for account + password
+    python tools/refresh_token.py                  # prompts for account + password
+    python tools/refresh_token.py --sign-with-stored   # fallback: sign with the stored token
 """
 
 from __future__ import annotations
@@ -92,9 +96,15 @@ def _store_token(token: str) -> None:
 
 
 def main() -> int:
-    stored_token = _env("AQARA_TOKEN")
+    sign_with_stored = "--sign-with-stored" in sys.argv[1:]
+    stored_token = os.environ.get("AQARA_TOKEN", "")
     claims = _jwt_claims(stored_token)
-    print(f"[*] stored token: {_describe(stored_token)}")
+    if stored_token:
+        print(f"[*] stored token: {_describe(stored_token)}")
+    print(
+        "[*] login mode: "
+        + ("signed with the stored token" if sign_with_stored else "unauthenticated (normal)")
+    )
 
     default_account = str(claims.get("account", ""))
     prompt = f"Aqara account [{default_account}]: " if default_account else "Aqara account: "
@@ -118,20 +128,24 @@ def main() -> int:
             region=os.environ.get("AQARA_REGION", "EU"),
             area=os.environ.get("AQARA_REGION", "EU"),
             guard_code=guard_code,
-            # The cloud signs this request with the *existing* token. A dead one
-            # is worth trying: the endpoint may only check the signature.
-            sign_token=stored_token,
-            user_id=_env("AQARA_USER_ID"),
+            # Empty by default: login is unauthenticated, and passing a dead
+            # token would put a `Token=` field back into the signature preimage.
+            sign_token=stored_token if sign_with_stored else "",
+            user_id=os.environ.get("AQARA_USER_ID", "") if sign_with_stored else "",
         )
     except RuntimeError as exc:
         message = str(exc)
         print(f"[FAIL] {message}", file=sys.stderr)
-        if "108" in message or "expired" in message.lower():
+        if "810" in message or "assword" in message:
             print(
-                "\nThe stored token is not just expired, it was invalidated (Aqara "
-                "kills a token when the account logs in elsewhere), and the login "
-                "endpoint needs a live one to sign with. Capture a fresh token from "
-                "the app instead: docs/tutorials/02-capture-credentials.md",
+                "\nThe cloud decrypted the password and rejected it: wrong password.",
+                file=sys.stderr,
+            )
+        elif "108" in message or "expired" in message.lower():
+            print(
+                "\nThe login endpoint itself answered 108. Retry with "
+                "--sign-with-stored, and if that also fails capture a fresh token "
+                "from the app: docs/tutorials/02-capture-credentials.md",
                 file=sys.stderr,
             )
         return 1
