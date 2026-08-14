@@ -14,7 +14,16 @@ kinds: **runners** (talk to the lock) and **capture hooks** (observe the app).
 | Tool | What it does |
 | --- | --- |
 | [`bumble_lock.py`](bumble_lock.py) | Full autonomous flow via an ESP32-S3 HCI controller + Bumble: cloud auth → BLE handshake (with the CRC fix) → verify → AES-CCM control. Config from `.env`. |
+| [`refresh_token.py`](refresh_token.py) | Mints a fresh cloud token from your account password (prompted, never stored) and rewrites `AQARA_TOKEN` in `.env`. Needs a still-valid token to sign with — see the caveat below. |
 | [`run_hook.py`](run_hook.py) | Thin launcher for Frida capture scripts against the instrumented app. |
+
+> **Token lifetime, the hard part.** Aqara invalidates a token the moment the
+> account logs in anywhere else — the app on your phone will do it — regardless
+> of the `exp` claim. The cloud then answers `code=108, Token has expired` on a
+> token whose date is still days away. `refresh_token.py` re-logs in to get a
+> new one, but `/user/guard-code/login` is itself **signed with an existing
+> token**, so it only works while the stored one is still alive. Once it is
+> dead, the only way back is capturing a fresh token from the app (below).
 
 ## Capture hooks (Frida)
 
