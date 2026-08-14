@@ -9,10 +9,11 @@ The library is fully migrated to Spec-Driven Development and green:
 
 - Constitution v1.0.0 + features 001–005 (specify → clarify → plan → tasks →
   implement), each merged to `develop` via `--no-ff`.
-- Feature 006 (`fix/tls-verification`) closes the high-priority security debt.
+- Feature 006 (`fix/tls-verification`) closes the high-priority security debt;
+  feature 007 puts the unlock choreography under test.
 - Tooling (`tools/`) and documentation migrated.
 - Gates: `ruff check` + `ruff format --check` clean · `mypy --strict` clean ·
-  76 unit tests · 0 secrets.
+  91 unit tests · 0 secrets.
 
 ## Resolved
 
@@ -104,10 +105,14 @@ is intentionally kept as the reverse-engineering backup.
 
 ## Known limitations (by design)
 
-- **Live BLE flow is not unit-tested.** `run_authenticated_lock_operation` and the
-  passive scan need real hardware and optional backends; they are validated live,
-  not in unit tests (Constitution Principle V). Unit tests cover the pure logic
-  (CRC, framing, fragmentation, AES-CCM, signing, lookup).
+- **The radio is not unit-tested — the choreography now is.** Narrowed by feature
+  007. `run_authenticated_lock_operation`'s *sequence* (notification order, the
+  public-key and verify frames, tolerance of the lock's empty ACKs, the encrypted
+  control write, subscription cleanup) is asserted against a scripted stand-in
+  lock in `tests/test_session_flow.py`, with no radio and no network. What stays
+  hardware-only is whether a **real** U200 accepts that sequence — timing, the
+  radio, and the lock's firmware. Only the live tutorial run is evidence of that.
+  The passive scan remains untested for the same reason.
 - **Only the EU region is confirmed.** Other regional endpoints follow the same
   URL pattern but are unverified (see
   [spec 001, Assumptions](../specs/001-cloud-kdf-login/spec.md)).
