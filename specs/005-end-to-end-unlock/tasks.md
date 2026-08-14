@@ -21,12 +21,12 @@ and `bumble_transport.py` unchanged, plus the composition into a live flow.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm both modules import without optional backends (`bleak` lazy in
+- [X] T001 Confirm both modules import without optional backends (`bleak` lazy in
   `scanner`, `bumble` under `TYPE_CHECKING` in `bumble_transport`); no new hard deps.
 
 ## Phase 2: Foundational
 
-- [ ] T002 Migrate `scanner.py` unchanged: `AQARA_COMPANY_ID`, `EXPECTED_NAME`, and
+- [X] T002 Migrate `scanner.py` unchanged: `AQARA_COMPANY_ID`, `EXPECTED_NAME`, and
   the passive `scan` coroutine (lazy `bleak` with a clear error if absent).
 
 **Checkpoint**: Discovery constants/import available.
@@ -37,16 +37,16 @@ and `bumble_transport.py` unchanged, plus the composition into a live flow.
 
 ### Tests for User Story 2
 
-- [ ] T003 [P] [US2] `tests/test_transport.py::test_find_by_short_uuid` — a fake
+- [X] T003 [P] [US2] `tests/test_transport.py::test_find_by_short_uuid_resolves_auth_char` — a fake
   peer with the auth characteristic → `_find("...ff07...")` returns it.
-- [ ] T004 [P] [US2] `tests/test_transport.py::test_find_missing_raises` — absent
+- [X] T004 [P] [US2] `tests/test_transport.py::test_find_missing_characteristic_raises` — absent
   characteristic → `KeyError`.
-- [ ] T005 [P] [US2] `tests/test_transport.py::test_find_by_uuid16` — a 16-bit
+- [X] T005 [P] [US2] `tests/test_transport.py::test_find_by_uuid16_resolves_standard_char` — a 16-bit
   characteristic is resolved by its 16-bit UUID.
 
 ### Implementation for User Story 2
 
-- [ ] T006 [US2] Migrate `bumble_transport.py` unchanged: `BumbleGattAdapter` with
+- [X] T006 [US2] Migrate `bumble_transport.py` unchanged: `BumbleGattAdapter` with
   `_find`/`_find_by_uuid16`, `write_gatt_char`, `start_notify`/`stop_notify`,
   `read_by_type`/`write_by_type`, and the timeout-bounded `get_remote_le_features`,
   `request_mtu`, `set_data_length`, `update_connection_parameters`.
@@ -59,12 +59,12 @@ and `bumble_transport.py` unchanged, plus the composition into a live flow.
 
 ### Tests for User Story 1
 
-- [ ] T007 [P] [US1] `tests/test_transport.py::test_scanner_constants` —
+- [X] T007 [P] [US1] `tests/test_transport.py::test_scanner_constants` —
   `AQARA_COMPANY_ID == 0x0B27`, `EXPECTED_NAME == "DoorLocker"`.
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] (covered by T002 migration) — verify `scan` performs no writes.
+- [X] T008 [US1] (covered by T002 migration) — verify `scan` performs no writes.
 
 **Checkpoint**: US1 + US2 verified.
 
@@ -74,26 +74,26 @@ and `bumble_transport.py` unchanged, plus the composition into a live flow.
 
 ### Tests for User Story 3
 
-- [ ] T009 [P] [US3] `tests/test_package_api.py::test_public_api_complete` — every
+- [X] T009 [P] [US3] `tests/test_package_api.py::test_every_public_name_is_importable` — every
   name in `__all__` is importable; the package imports with no optional backend.
 
 ### Implementation for User Story 3
 
-- [ ] T010 [US3] Extend `aqara_u200_ble/__init__.py` to export `scan` and
+- [X] T010 [US3] Extend `aqara_u200_ble/__init__.py` to export `scan` and
   `BumbleGattAdapter`; the end-to-end entrypoint `run_authenticated_lock_operation`
   is already exported (feature 004).
-- [ ] T011 [US3] (live, not unit-tested) The composed flow — discover → connect via
+- [X] T011 [US3] (live, not unit-tested) The composed flow — discover → connect via
   a transport → handshake → dispatch unlock — is validated against a real lock.
 
 **Checkpoint**: End-to-end path assembled; live unlock confirmed.
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T012 [P] Author `docs/tutorials/end-to-end-unlock.md`: run the full autonomous
+- [X] T012 [P] Author `docs/tutorials/end-to-end-unlock.md`: run the full autonomous
   unlock from zero (credentials from `.env`, transport choice, dispatch).
-- [ ] T013 Secret-hygiene sweep: no credential/MAC/capture in the two modules,
+- [X] T013 Secret-hygiene sweep: no credential/MAC/capture in the two modules,
   tests, or docs (Principle I).
-- [ ] T014 [P] `ruff check` + `mypy --strict` clean; `pytest` green (no network).
+- [X] T014 [P] `ruff check` + `mypy --strict` clean; `pytest` green (no network).
   Behavior-preserving style/type cleanups only, pinned by the tests (Principle II).
 
 ## Dependencies & Execution Order

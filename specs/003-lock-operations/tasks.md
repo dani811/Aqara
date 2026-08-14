@@ -19,14 +19,14 @@ and `volume.py` unchanged, plus their pytest suites.
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm both modules are stdlib-only except `volume.py`'s import of
+- [X] T001 Confirm both modules are stdlib-only except `volume.py`'s import of
   `aqara_u200_ble.protocol.ControlRequest` (feature 002); no new dependencies.
 
 ## Phase 2: Foundational
 
-- [ ] T002 Migrate `lock_ops.py` unchanged: `LockOperation` enum, the
+- [X] T002 Migrate `lock_ops.py` unchanged: `LockOperation` enum, the
   `SessionOperationTransport` port, and `LockOperationWrite` dataclass.
-- [ ] T003 Migrate `volume.py` unchanged: `VoiceVolumePreset` enum, the
+- [X] T003 Migrate `volume.py` unchanged: `VoiceVolumePreset` enum, the
   `ControlWriteTransport` port, `VoiceVolumeWrite` dataclass, and the captured
   `_VOICE_VOLUME_REQUESTS` map.
 
@@ -38,16 +38,16 @@ and `volume.py` unchanged, plus their pytest suites.
 
 ### Tests for User Story 1
 
-- [ ] T004 [P] [US1] `tests/test_lock_ops.py::test_build_unlock` — "unlock" →
+- [X] T004 [P] [US1] `tests/test_lock_ops.py::test_build_unlock_payload_and_prefix` — "unlock" →
   payload `200320`, prefix `0x03`.
-- [ ] T005 [P] [US1] `tests/test_lock_ops.py::test_lock_distinct_from_unlock` —
+- [X] T005 [P] [US1] `tests/test_lock_ops.py::test_lock_is_distinct_from_unlock` —
   "lock" → `1f031f`, and lock payload ≠ unlock payload.
-- [ ] T006 [P] [US1] `tests/test_lock_ops.py::test_alias_and_case_insensitive` —
+- [X] T006 [P] [US1] `tests/test_lock_ops.py::test_alias_and_case_insensitive` —
   "Desbloquear", "abrir", "UNLOCK" all normalize to UNLOCK; unknown raises.
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] Migrate `normalize_lock_operation` and
+- [X] T007 [US1] Migrate `normalize_lock_operation` and
   `build_lock_operation_write` (payload + prefix map) into `lock_ops.py` —
   unchanged.
 
@@ -59,12 +59,12 @@ and `volume.py` unchanged, plus their pytest suites.
 
 ### Tests for User Story 2
 
-- [ ] T008 [P] [US2] `tests/test_lock_ops.py::test_send_dispatches_payload` — a
+- [X] T008 [P] [US2] `tests/test_lock_ops.py::test_send_dispatches_exact_payload` — a
   fake transport receives exactly the built payload; the returned write matches.
 
 ### Implementation for User Story 2
 
-- [ ] T009 [US2] Migrate `send_lock_operation` into `lock_ops.py` — unchanged.
+- [X] T009 [US2] Migrate `send_lock_operation` into `lock_ops.py` — unchanged.
 
 **Checkpoint**: US1 AND US2 verified.
 
@@ -74,14 +74,14 @@ and `volume.py` unchanged, plus their pytest suites.
 
 ### Tests for User Story 3
 
-- [ ] T010 [P] [US3] `tests/test_volume.py::test_build_high_volume_bytes` — "high"
+- [X] T010 [P] [US3] `tests/test_volume.py::test_build_high_volume_serializes_to_captured_bytes` — "high"
   serializes to the captured control request bytes.
-- [ ] T011 [P] [US3] `tests/test_volume.py::test_set_volume_dispatches` — a fake
+- [X] T011 [P] [US3] `tests/test_volume.py::test_set_volume_dispatches_exact_bytes` — a fake
   transport receives exactly those bytes; unsupported preset raises.
 
 ### Implementation for User Story 3
 
-- [ ] T012 [US3] Migrate `normalize_voice_volume_preset`,
+- [X] T012 [US3] Migrate `normalize_voice_volume_preset`,
   `build_voice_volume_write`, `write_voice_volume`, `set_voice_volume` into
   `volume.py` — unchanged.
 
@@ -89,16 +89,16 @@ and `volume.py` unchanged, plus their pytest suites.
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T013 Extend `aqara_u200_ble/__init__.py` to export the operations surface
+- [X] T013 Extend `aqara_u200_ble/__init__.py` to export the operations surface
   (`LockOperation`, `LockOperationWrite`, `build_lock_operation_write`,
   `normalize_lock_operation`, `send_lock_operation`, `VoiceVolumePreset`,
   `VoiceVolumeWrite`, `build_voice_volume_write`, `normalize_voice_volume_preset`,
   `write_voice_volume`, `set_voice_volume`).
-- [ ] T014 [P] Author `docs/protocol/operations.md`: operation payload map
+- [X] T014 [P] Author `docs/protocol/operations.md`: operation payload map
   (lock/unlock/keepalive/state) and the voice-volume requests.
-- [ ] T015 Secret-hygiene sweep: confirm no credential/personal capture in the two
+- [X] T015 Secret-hygiene sweep: confirm no credential/personal capture in the two
   modules, tests, or docs (Principle I).
-- [ ] T016 [P] `ruff check` + `mypy --strict` clean; `pytest` green (no network).
+- [X] T016 [P] `ruff check` + `mypy --strict` clean; `pytest` green (no network).
 
 ## Dependencies & Execution Order
 

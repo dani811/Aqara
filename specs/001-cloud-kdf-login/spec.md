@@ -87,12 +87,12 @@ login envelope itself is correct.
 
 ### User Story 3 - Complete the key exchange into session material (Priority: P2)
 
-After the lock has produced its own ephemeral public key over BLE (feature 002),
+After the lock has produced its own ephemeral public key over BLE (feature 004),
 the integrator submits it to the cloud and receives the derived session material
 that secures all subsequent lock communication.
 
 **Why this priority**: This closes the key-agreement loop and yields the keys the
-control channel (feature 003) consumes. It is P2 only because it depends on the
+control channel (feature 002) consumes. It is P2 only because it depends on the
 BLE handshake having produced the lock's public key first.
 
 **Independent Test**: Given a device public key from a live handshake, request
@@ -189,7 +189,13 @@ shape (session key, nonce, verify data).
 - Deriving session material locally from long-term key material is out of scope:
   it was investigated and abandoned because the derivation depends on a
   server-held secret. The cloud remains the authority for session material.
-- Network transport (TLS, connectivity) is provided by the environment and is out
-  of scope for this feature's logic.
+- ~~Network transport (TLS, connectivity) is provided by the environment and is
+  out of scope for this feature's logic.~~ **Corrected 2026-08-14**: this
+  assumption was wrong, and it is how a real defect passed review. The client
+  does make a transport-security decision — it was constructing an SSL context
+  that verified nothing, exposing this feature's session material to a
+  machine-in-the-middle. Connectivity is the environment's; the *verification
+  policy* is this library's, and it is now specified in
+  [feature 006](../006-tls-verification/spec.md).
 - The BLE handshake that produces the device public key is specified separately
-  (feature 002); this feature covers only the cloud side of the exchange.
+  (feature 004); this feature covers only the cloud side of the exchange.

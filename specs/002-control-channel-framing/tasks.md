@@ -19,12 +19,12 @@ description: "Task list for feature 002 — Control channel framing"
 
 ## Phase 1: Setup
 
-- [ ] T001 Confirm `protocol.py` is a stdlib-only leaf (no internal imports); no
+- [X] T001 Confirm `protocol.py` is a stdlib-only leaf (no internal imports); no
   new dependencies needed in `pyproject.toml`.
 
 ## Phase 2: Foundational
 
-- [ ] T002 Migrate the dataclasses and constants into `aqara_u200_ble/protocol.py`
+- [X] T002 Migrate the dataclasses and constants into `aqara_u200_ble/protocol.py`
   unchanged: `ATTPacket`, `ControlRequest`, the ATT handle constants
   (`AUTH_WRITE`/`AUTH_NOTIFY`/`CONTROL_WRITE`/`CONTROL_NOTIFY`/`BULK_WRITE`/
   `BULK_NOTIFY` and the `ATT_CONTROL_*` aliases).
@@ -37,16 +37,17 @@ description: "Task list for feature 002 — Control channel framing"
 
 ### Tests for User Story 1
 
-- [ ] T003 [P] [US1] `tests/test_protocol.py::test_parses_voice_volume_request` —
+- [X] T003 [P] [US1] `tests/test_protocol.py::test_parses_voice_volume_request` —
   `01d302d13e15d5fddfe4` → kind 0x01, cmd 0xD3, body `02d13e15`, trailer `d5fddfe4`.
-- [ ] T004 [P] [US1] `tests/test_protocol.py::test_parses_keepalive_request` —
+- [X] T004 [P] [US1] `tests/test_protocol.py::test_parses_keepalive_request` —
   `01fe01fc158b3609` → cmd 0xFE, body `01fc`, trailer `158b3609`.
-- [ ] T005 [P] [US1] `tests/test_protocol.py::test_rejects_short_or_bad_prefix` —
+- [X] T005 [P] [US1] `tests/test_protocol.py::test_rejects_too_short_control_request` +
+  `tests/test_protocol.py::test_rejects_unrecognized_prefix` —
   a <7-byte frame and a wrong-prefix frame both raise `ValueError`.
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Migrate `parse_control_request` and `control_command_name`
+- [X] T006 [US1] Migrate `parse_control_request` and `control_command_name`
   (with `_COMMAND_NAMES`) into `protocol.py` — unchanged.
 
 **Checkpoint**: US1 functional — frames decode and bad frames reject.
@@ -57,12 +58,12 @@ description: "Task list for feature 002 — Control channel framing"
 
 ### Tests for User Story 2
 
-- [ ] T007 [P] [US2] `tests/test_protocol.py::test_control_request_roundtrip` —
+- [X] T007 [P] [US2] `tests/test_protocol.py::test_control_request_roundtrip_is_identity` —
   `parse(frame).as_bytes() == frame` for both captured frames.
 
 ### Implementation for User Story 2
 
-- [ ] T008 [US2] Confirm `ControlRequest.as_bytes` is present and is the exact
+- [X] T008 [US2] Confirm `ControlRequest.as_bytes` is present and is the exact
   inverse of `parse_control_request` (migrated with the dataclass in T002).
 
 **Checkpoint**: US1 AND US2 both verified.
@@ -73,27 +74,27 @@ description: "Task list for feature 002 — Control channel framing"
 
 ### Tests for User Story 3
 
-- [ ] T009 [P] [US3] `tests/test_protocol.py::test_valid_crc_accepts_capture` —
+- [X] T009 [P] [US3] `tests/test_protocol.py::test_valid_crc_accepts_captured_block` —
   a captured block plus its `crc_hqx` trailer validates true.
-- [ ] T010 [P] [US3] `tests/test_protocol.py::test_valid_crc_rejects_mutation` —
+- [X] T010 [P] [US3] `tests/test_protocol.py::test_valid_crc_rejects_mutation` —
   flipping one content byte makes it false; a <2-byte input is false.
 
 ### Implementation for User Story 3
 
-- [ ] T011 [US3] Migrate `valid_crc` into `protocol.py` — unchanged.
+- [X] T011 [US3] Migrate `valid_crc` into `protocol.py` — unchanged.
 
 **Checkpoint**: All stories verified.
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T012 Extend `aqara_u200_ble/__init__.py` to export the control-framing
+- [X] T012 Extend `aqara_u200_ble/__init__.py` to export the control-framing
   surface (`ATTPacket`, `ControlRequest`, `parse_control_request`,
   `control_command_name`, `valid_crc`, ATT handle constants).
-- [ ] T013 [P] Author `docs/protocol/control-channel.md`: frame shape
+- [X] T013 [P] Author `docs/protocol/control-channel.md`: frame shape
   (kind/command/body/trailer), command map, and the CRC-HQX vs CRC-16/ARC note.
-- [ ] T014 Secret-hygiene sweep: confirm no secret/capture in `protocol.py`,
+- [X] T014 Secret-hygiene sweep: confirm no secret/capture in `protocol.py`,
   tests, or docs (Principle I).
-- [ ] T015 [P] `ruff check` + `mypy --strict` clean; `pytest` green (no network).
+- [X] T015 [P] `ruff check` + `mypy --strict` clean; `pytest` green (no network).
 
 ## Dependencies & Execution Order
 
