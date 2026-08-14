@@ -4,7 +4,7 @@
 
 **Created**: 2026-08-14
 
-**Status**: Spike (time-boxed investigation; gates the rest of feature 009)
+**Status**: Achieved — the lock was opened autonomously with the captured command `74010100b917` (see research.md, Finding 4). The trailer/counter builder remains follow-on work.
 
 **Input**: User description: "Spike de investigación para el comando de apertura BLE de la cerradura. Determinar la tractabilidad del comando de abrir: extraer y reimplementar el framing del pack de control + el trailer (getMijiaCrc16String), validado contra los 3 frames de control conocidos."
 

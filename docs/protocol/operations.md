@@ -12,14 +12,21 @@ keys, or encrypts — the session (feature 004) supplies the transport.
 
 | Operation | Payload (hex) | Write prefix | Notes |
 |-----------|---------------|--------------|-------|
-| `LOCK` | `1f031f` | `0x03` | Close — confirmed (first captured press) |
-| `UNLOCK` | `200320` | `0x03` | Open — confirmed (second captured press) |
-| `KEEPALIVE` | `2f012f` | `0x01` | Status poll; the middle counter rotates |
+| `UNLOCK` (open) | `74010100b917` | `0x01` | Real captured command — opened the bolt from our own session (feature 009). `0x74` = BLE_OPEN_LOCK, byte 1 `0x01` = open |
+| `LOCK` (close) | `740002003a12` | `0x01` | Real captured command — byte 1 `0x00` = close |
+| `KEEPALIVE` | `2f012f` | `0x01` | Status poll; the leading counter rotates |
 | `STATE_SNAPSHOT` | `334e74746a201c00003049` | `0x01` | Extended state seen around control-page interactions |
 
-The middle byte is the opcode. `1f031f` was historically mislabeled as unlock; it
-is **LOCK**. The `UNLOCK_CANDIDATE` alias is retained pointing at the old value but
-is clearly marked so the two are never confused.
+The actuation opcode is `0x74` and byte 1 is the direction (`01` open / `00`
+close). These were captured live from the app's `encryptAESCCM` input (feature
+009) and replayed successfully. The values `1f031f` / `200320` shipped as
+LOCK/UNLOCK before feature 009 were **never** the real actuators — the lock is
+silent to them — and are retained in code only as clearly-marked legacy.
+
+> **Replay caveat.** Byte 2 is a per-command counter and the last two bytes are a
+> trailer (`b917` / `3a12`) whose algorithm is unresolved. One command per fresh
+> session works; a general builder is follow-on work (see
+> `specs/009-lock-open-spike`).
 
 Each operation is sent encrypted:
 `control_write = write_prefix + AES-CCM(sessionKey, nonce, payload)` (the crypto is

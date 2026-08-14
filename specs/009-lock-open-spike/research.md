@@ -1,9 +1,9 @@
 # Phase 0 Research / Spike Findings: Lock open command
 
-**Verdict: NO-GO for the pure-offline autonomous path.** The AES-CCM layer is
-already solved; the missing piece is the inner control-command **pack** (MiOT
-short-pack + Mijia CRC), which is not available offline and must be captured from
-an instrumented app or a rooted device.
+**Verdict: ACHIEVED — the lock was opened autonomously (2026-08-14).** The
+offline path was a NO-GO (findings 1–3 below), so we instrumented the app with a
+Frida gadget, captured the real open command, and replayed it from our own
+session — the physical lock opened. See Finding 4 (Resolution).
 
 ## What the spike set out to answer
 
@@ -80,7 +80,42 @@ captured command frame, after which `01 74` (open) and `01 e5` (status) build on
 the session that already works. Recommended: (A) with the repackaged/gadget app
 from the original RE setup.
 
+## Finding 4 — Resolution: captured the real command and opened the lock
+
+The offline NO-GO was overturned by going through the app:
+
+1. **Instrumented the app.** The stock Play build has no gadget and the device is
+   unrooted, but a Frida-gadget repack of `base.apk` + split (built earlier,
+   `on_load: wait`, signed with a debug key) was reinstalled. The app freezes on
+   launch until Frida attaches on `127.0.0.1:27042`.
+2. **Captured the real command.** Hooking `AqEdUtils.encryptAESCCM`, one press of
+   Open in the app produced the exact plaintext handed to AES-CCM:
+   - **OPEN  = `74010100b917`** (`0x74` = BLE_OPEN_LOCK, byte 1 `01` = open)
+   - **CLOSE = `740002003a12`** (byte 1 `00` = close)
+   The `1f031f` / `200320` values the repo shipped as LOCK/UNLOCK are **not** the
+   actuators — the lock is silent to them.
+3. **Verified the crypto is ours.** `AESCCM(key, tag_length=4).encrypt(nonce,
+   74010100b917, b"")` reproduces the app's `ff61` ciphertext byte-for-byte, so
+   our `encrypt_control_payload` needs no change — only the right plaintext.
+4. **Opened it autonomously.** From our own ESP32 session (owner account), we
+   re-encrypted `74010100b917` with our fresh session key/nonce (prefix `0x01`)
+   and wrote it to `ff61`. The lock replied `74007706` (the first actuation ack we
+   ever received) and **the physical bolt opened**. Two prerequisites mattered:
+   the app must not hold the single BLE connection, and actuation needs the
+   owner's session (the test account handshakes but does not actuate).
+
+### What is NOT resolved (replay caveat)
+
+The commands are **replayed**, not synthesised: byte 2 is a per-command counter
+(`01` open, `02` on the next close) and the last two bytes are a trailer
+(`b917` / `3a12`) whose algorithm is unknown — a full CRC-16 sweep matched
+neither pair. One command per fresh session works (the counter appears to reset);
+a general builder (arbitrary counter, multiple commands per session, strict
+cross-session replay protection) would need the counter+trailer reversed. This is
+the follow-on to this spike.
+
 ## Safety
 
-No actuation command (`0x74`) was ever constructed; every live frame sent was a
-read-only getter. The bolt was not moved (SC-004 upheld).
+The read-only probes earlier sent only getters. The actuation in Finding 4 was
+explicitly authorised by the owner, who was present and watching; the bolt was
+opened on purpose as the spike's goal.
