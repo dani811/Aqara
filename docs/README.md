@@ -8,6 +8,7 @@
 | [`evidence/`](evidence/README.md) | Sanitised proof behind each protocol claim. |
 | [`journey/`](journey/README.md) | The AI-assisted reverse-engineering story — dead ends and the breakthrough. |
 | [`tools/`](../tools/README.md) | The instrumentation used during RE. |
+| [`roadmap.md`](roadmap.md) | What's done, what's pending (incl. the TLS debt), and known limitations. |
 
 Start with [`architecture.md`](architecture.md), then the
 [protocol reference](protocol/README.md). If you want the *story* of how it
