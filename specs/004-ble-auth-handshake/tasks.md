@@ -103,6 +103,10 @@ unchanged, plus its pytest suite pinning the CRC breakthrough.
 - [X] T015 Secret-hygiene sweep: confirm no session key/nonce/token/personal
   capture in `session.py`, tests, or docs (Principle I).
 - [X] T016 [P] `ruff check` + `mypy --strict` clean; `pytest` green (no network).
+- [X] T017 [P] [US1] Cover FR-003 (backward-compatible `app_token` argument):
+  `tests/test_session.py::test_app_token_argument_is_ignored` — the retained
+  parameter must not affect the built frame, since the field is the body's CRC-16.
+  *(Added 2026-08-14 after `/speckit-analyze` found FR-003 tested but untasked.)*
   Behavior-preserving style/type cleanups only, pinned by the tests (Principle II).
 
 ## Dependencies & Execution Order

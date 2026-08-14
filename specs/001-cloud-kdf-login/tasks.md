@@ -134,6 +134,12 @@ returns session key + nonce + verify data of documented sizes.
   in `kdf.py`, tests, or docs; all sensitive values are parameters (Principle I).
 - [X] T019 [P] `mypy aqara_u200_ble/kdf.py` and `ruff check` pass clean.
 - [X] T020 Run `pytest tests/test_kdf.py` — all pure-logic tests green, no network.
+- [X] T021 [P] Cover FR-008 (service-level error codes): `tests/test_kdf.py::test_service_error_code_is_surfaced_with_its_details`,
+  `::test_success_codes_unwrap_the_result`, `::test_payload_without_result_is_returned_whole`,
+  `::test_missing_code_field_is_not_an_error` — a non-zero `code` must raise with
+  code/message/endpoint and stay distinguishable from a transport failure.
+  *(Added 2026-08-14 after `/speckit-analyze` found FR-008 implemented but untasked
+  and untested.)*
 
 ---
 
@@ -142,7 +148,7 @@ returns session key + nonce + verify data of documented sizes.
 - **Setup (Phase 1)** → **Foundational (Phase 2)** blocks all stories.
 - **US1** and **US2** are both P1 and independent (different call paths); either can
   be the MVP slice. **US3 (P2)** depends conceptually on a live device public key
-  (feature 002) but its cloud code is independent to migrate and unit-scope.
+  (feature 004) but its cloud code is independent to migrate and unit-scope.
 - **Polish (Phase 6)** after stories land.
 
 ### Within Each User Story
@@ -153,7 +159,7 @@ returns session key + nonce + verify data of documented sizes.
 
 ### Parallel Opportunities
 
-- T002/T003 in setup; T006/T007 and T011/T012 test pairs; T017/T019 in polish.
+- T002/T003 in setup; T006/T007 and T011/T012 test pairs; T017/T019/T021 in polish.
 
 ---
 

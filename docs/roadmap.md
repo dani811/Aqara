@@ -12,7 +12,7 @@ The library is fully migrated to Spec-Driven Development and green:
 - Feature 006 (`fix/tls-verification`) closes the high-priority security debt.
 - Tooling (`tools/`) and documentation migrated.
 - Gates: `ruff check` + `ruff format --check` clean · `mypy --strict` clean ·
-  70 unit tests · 0 secrets.
+  76 unit tests · 0 secrets.
 
 ## Resolved
 
@@ -53,7 +53,24 @@ correctness, and are fixed in `docs/analyze-remediation`:
   002") and, more importantly, the assumption that TLS was "out of scope" —
   the premise that let the 006 defect through review. Both corrected in place.
 
-The two remaining coverage gaps are recorded as pending item 2 below.
+The two coverage gaps it found are closed (see below).
+
+### ✅ Coverage gaps from the analysis (`chore/coverage-gaps`)
+
+The two requirements `/speckit-analyze` found implemented but untasked are
+closed:
+
+- **001 FR-008** (service-level error codes) had no test at all — the gap that
+  mattered, since the cloud answers HTTP 200 with a non-zero `code` for expired
+  tokens, bad signatures, and ownership failures. Four tests now pin that a
+  service error raises with its code, message, and endpoint, and that its wording
+  stays distinguishable from a transport failure; plus the success paths
+  (`code` 0/"0"/absent, flat payloads with no `result` envelope).
+- **004 FR-003** (the retained `app_token` argument) was already tested; only the
+  task entry was missing.
+
+No production code changed — the behaviour was already correct, it was simply
+unverified. 76 tests (70 → 76).
 
 ### ✅ Formatter gate (`chore/ruff-format`)
 
@@ -79,22 +96,7 @@ Fixed mechanically. Two things were done deliberately rather than blindly:
 All work is local. Push `develop` to `github.com/dani811/Aqara` (and optionally
 the merged branches) when ready to publish.
 
-### 2. Two uncovered requirements from the 001–005 analysis
-
-**Priority: low.** `/speckit-analyze` (see Resolved above) found two functional
-requirements that were implemented but never given a task, and one of them has no
-test:
-
-- **001 FR-008** — surfacing service-level error codes. Implemented in
-  `kdf._unwrap_aqara_result`; **no test**. Worth one, since a misread error code
-  is how a cloud change would first show up.
-- **004 FR-003** — the backward-compatible `token` argument. Tested
-  (`test_app_token_argument_is_ignored`), only the task is missing.
-
-Small enough to fold into the next feature touching those modules rather than
-justifying their own branch.
-
-### 3. Branch pruning (optional)
+### 2. Branch pruning (optional)
 
 The merged `feature/001…005`, `chore/*`, and `docs/*` branches can be deleted for
 a tidier list; their history is preserved in `develop`. `archive/manual-migration`
