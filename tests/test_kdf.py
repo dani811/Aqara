@@ -15,6 +15,9 @@ from typing import Any
 from urllib import error as urlerror
 
 import pytest
+from cryptography.hazmat.primitives.asymmetric import padding as _pad
+from cryptography.hazmat.primitives.asymmetric import rsa as _rsa
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from aqara_u200_ble import (
     aes128gcm_decrypt_body,
@@ -106,6 +109,35 @@ def test_encrypt_login_password_has_rsa1024_shape() -> None:
     assert len(raw) == 128
     # Non-deterministic padding: two encryptions differ.
     assert encrypt_login_password("hunter2") != out
+
+
+def test_encrypt_login_password_rsa_plaintext_is_md5_hex_lowercase() -> None:
+    # The RSA plaintext is MD5(password) in lowercase hex (32 ASCII chars), NOT
+    # the raw password — the shape confirmed by the app capture (see
+    # docs/protocol/cloud-api.md). A raw-password regression here brings back the
+    # permanent code=810. Uses a throwaway, non-credential password so no real
+    # secret enters the repo (Constitution Principle I).
+    #
+    # We cannot decrypt (no private key), so we prove the transform by decrypting
+    # our own ciphertext with a throwaway RSA key that mirrors the login shape.
+    throwaway_password = "not-a-real-password-000"
+    key = _rsa.generate_private_key(public_exponent=65537, key_size=1024)
+    der = key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
+    monkey_b64 = base64.b64encode(der).decode("ascii")
+
+    saved = kdf._LOGIN_RSA_PUBKEY_DER_B64
+    try:
+        kdf._LOGIN_RSA_PUBKEY_DER_B64 = monkey_b64
+        blob = kdf.encrypt_login_password(throwaway_password)
+    finally:
+        kdf._LOGIN_RSA_PUBKEY_DER_B64 = saved
+
+    plaintext = key.decrypt(base64.b64decode(blob), _pad.PKCS1v15())
+    expected = hashlib.md5(throwaway_password.encode("utf-8")).hexdigest()
+    # The plaintext is the 32-char lowercase-hex MD5, not the raw password bytes.
+    assert plaintext == expected.encode("ascii")
+    assert len(plaintext) == 32
+    assert plaintext != throwaway_password.encode("utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -266,3 +298,134 @@ def test_non_certificate_url_errors_are_unchanged(
     message = str(excinfo.value)
     assert "failed to contact" in message
     assert INSECURE_TLS_ENV not in message
+
+
+# ---------------------------------------------------------------------------
+# Account login (feature 001, User Story 2)
+#
+# STATUS — READ BEFORE TRUSTING THIS PATH: the request built below has never
+# produced a token. Against the real EU server it answers `code=810,
+# "Error de contraseña o cuenta no registrada"` for every input tried,
+# including credentials the official app accepts. A deliberately nonexistent
+# account returns that *same* 810, so the code discriminates nothing and the
+# old "810 instead of 500 proves the envelope is correct" reasoning does not
+# hold. Acceptance Scenario 1 of the spec (correct credentials -> usable
+# token) is UNPROVEN.
+#
+# These tests therefore pin what the client SENDS — they cannot pin what the
+# server accepts. Their job is to make any fix to the request shape visible.
+# ---------------------------------------------------------------------------
+
+LOGIN_KWARGS = {
+    "appid": "fake-appid",
+    "appkey": FAKE_APPKEY,
+    "client_id": "fake-client",
+    "phone_id": "fake-phone",
+}
+
+
+def _capture_login(
+    monkeypatch: pytest.MonkeyPatch, response: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Replace the transport and record exactly what login() would have sent."""
+
+    seen: dict[str, Any] = {}
+
+    def _fake_post(
+        url: str,
+        payload: Any,
+        auth_headers: Any = None,
+        timeout: float = 10,
+        signer: Any = None,
+        path_rel: str | None = None,
+        encrypt_appkey: str | None = None,
+    ) -> dict[str, Any]:
+        seen["url"] = url
+        seen["body"] = payload
+        seen["encrypt_appkey"] = encrypt_appkey
+        # The signer is what decides whether this is an authenticated request.
+        seen["headers"] = signer(path_rel, "{}") if signer is not None else {}
+        return response if response is not None else {"code": 0, "result": {"token": "a.b.c"}}
+
+    monkeypatch.setattr(kdf, "_post_json", _fake_post)
+    return seen
+
+
+def test_login_posts_the_documented_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _capture_login(monkeypatch)
+    kdf.login("user@example.invalid", "hunter2", **LOGIN_KWARGS)
+
+    body = seen["body"]
+    assert body["account"] == "user@example.invalid"
+    assert body["encryptType"] == 2
+    assert body["guardCode"] == ""
+    # The password never travels in clear: it is RSA-1024 ciphertext, and the
+    # plaintext must not appear anywhere in the body.
+    assert len(base64.b64decode(body["password"])) == 128
+    assert "hunter2" not in str(body)
+
+
+def test_login_targets_the_region_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = _capture_login(monkeypatch)
+    kdf.login("u", "p", region="EU", **LOGIN_KWARGS)
+    assert seen["url"] == kdf.REGION_BASE_URLS["EU"] + "/user/guard-code/login"
+
+
+def test_login_body_travels_encrypted(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Content-Encoding: x-aes128gcm — the appkey must reach the transport.
+    seen = _capture_login(monkeypatch)
+    kdf.login("u", "p", **LOGIN_KWARGS)
+    assert seen["encrypt_appkey"] == FAKE_APPKEY
+
+
+def test_login_is_unauthenticated_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    # No previous token needed: no session headers, and compute_sign drops the
+    # whole `Token=` field (pinned by test_compute_sign_omits_token_field_when_empty).
+    seen = _capture_login(monkeypatch)
+    kdf.login("u", "p", **LOGIN_KWARGS)
+
+    headers = seen["headers"]
+    assert "Token" not in headers
+    assert "UserId" not in headers
+    assert "Requestid" not in headers
+    assert headers["Sign"]
+
+
+def test_login_signs_with_a_stored_token_when_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The --sign-with-stored fallback: identity headers come back.
+    seen = _capture_login(monkeypatch)
+    kdf.login("u", "p", sign_token="tok-123", user_id="uid-9", **LOGIN_KWARGS)
+
+    headers = seen["headers"]
+    assert headers["Token"] == "tok-123"
+    assert headers["UserId"] == "uid-9"
+    assert headers["Requestid"]
+
+
+def test_login_returns_the_token_from_the_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    _capture_login(monkeypatch, {"code": 0, "result": {"token": "a.b.c", "userId": "uid-9"}})
+    result = kdf.login("u", "p", **LOGIN_KWARGS)
+    assert result["token"] == "a.b.c"
+    # The rest of the result survives: the caller may need userId (the tools
+    # read AQARA_USER_ID separately, which is only safe while it never changes).
+    assert result["userId"] == "uid-9"
+
+
+def test_login_surfaces_the_810_rejection(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The observed real-server answer. Note the cloud's own wording covers TWO
+    # causes — wrong password OR unregistered account — so callers must not
+    # report it as "wrong password" alone.
+    _capture_login(
+        monkeypatch,
+        {
+            "code": 810,
+            "message": "Error de contraseña o cuenta no registrada.",
+            "msgDetails": "Password incorrect",
+        },
+    )
+    with pytest.raises(RuntimeError) as excinfo:
+        kdf.login("u", "p", **LOGIN_KWARGS)
+
+    message = str(excinfo.value)
+    assert "810" in message
+    assert "/user/guard-code/login" in message

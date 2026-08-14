@@ -10,7 +10,10 @@ Account + password is enough: `/user/guard-code/login` is an **unauthenticated**
 request. Without a token the client sends no Token/UserId/Requestid headers and
 omits the `Token=` field from the signature preimage, which is exactly what
 `make_local_signer` does when handed an empty token. So a dead stored token does
-not block a refresh — that is the whole point of this tool.
+not block a refresh — that is the whole point of this tool. Verified end-to-end
+against the real EU server (2026-08-14): correct credentials return `code=0` and
+a usable JWT. (The password is sent as RSA(MD5(password)); see
+`kdf.encrypt_login_password` for why the raw-password version returned 810.)
 
 If a region ever did require signing with a live session, `--sign-with-stored`
 retries using the token currently in `.env`.
@@ -137,8 +140,13 @@ def main() -> int:
         message = str(exc)
         print(f"[FAIL] {message}", file=sys.stderr)
         if "810" in message or "assword" in message:
+            # 810 is ambiguous by design: the cloud returns it both for a wrong
+            # password and for an unregistered account. (It was ALSO what the
+            # old raw-password bug produced for every credential — now fixed.)
             print(
-                "\nThe cloud decrypted the password and rejected it: wrong password.",
+                "\nCode 810 means the cloud decrypted the password and it did "
+                "not match: wrong password, or that account is not registered "
+                "in this region.",
                 file=sys.stderr,
             )
         elif "108" in message or "expired" in message.lower():

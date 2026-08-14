@@ -30,6 +30,30 @@ Implemented as `kdf.compute_sign` / `kdf.make_local_signer`. Login encrypts the
 password with RSA and the body with AES-128-GCM (`kdf.encrypt_login_password`,
 `kdf.aes128gcm_encrypt_body`).
 
+## Account login
+
+`POST /user/guard-code/login` exchanges account + password for a JWT, with no
+previous token. The body is double-wrapped:
+
+```text
+password_field = base64( RSA_PKCS1v15( MD5(password).hexdigest() ) )   # lowercase hex, 32 ASCII chars
+body           = x-aes128gcm( {"account","district","encryptType":2,"guardCode","password"} )
+```
+
+The RSA plaintext is **`MD5(password)` in lowercase hex (32 ASCII chars), not the
+raw password** — confirmed by a Frida capture of `Cipher.doFinal` in the app (the
+RSA input for a test password was its lowercase-hex MD5, not the password bytes).
+Verified end-to-end against the real EU server: correct credentials return
+`code=0` and a usable token.
+
+> **Bug history (2026-08-14).** `encrypt_login_password` RSA-encrypted the raw
+> password, so the server compared it against the expected MD5 and answered
+> `code=810` for *every* credential — including valid ones. `810` is ambiguous
+> (wrong password **or** unregistered account: a nonexistent account returns the
+> same code), which is why the failure was long misread as "the envelope is
+> right, the password is wrong". The fix simply applied the RE note's own
+> finding (`docs/login-cuenta.md` §2), which had never made it into the code.
+
 > Tokens are invalidated when the account logs in elsewhere. Capture yours
 > fresh (see the tutorials) and put it in `.env` — never in code.
 
