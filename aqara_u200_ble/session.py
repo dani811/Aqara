@@ -9,6 +9,7 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
+from .gatt import GattClient
 from .kdf import REGION_BASE_URLS, cloud_get_public_key, get_session_material
 from .lock_ops import LockOperation, LockOperationWrite, build_lock_operation_write
 
@@ -263,7 +264,7 @@ def decrypt_control_payload(
 
 async def run_authenticated_lock_operation(
     *,
-    bleak_client: Any,
+    client: GattClient,
     device_id: str,
     auth_headers: dict[str, str] | None,
     region: str,
@@ -286,7 +287,7 @@ async def run_authenticated_lock_operation(
         # Sin pausa, CoreBluetooth pierde fragmentos y el lock recibe la clave
         # incompleta -> responde body vacio. La pausa asegura la entrega ordenada.
         for fragment in fragment_auth_message(message_payload, direction=0x5A):
-            await bleak_client.write_gatt_char(AUTH_WRITE_UUID, fragment, response=False)
+            await client.write_gatt_char(AUTH_WRITE_UUID, fragment, response=False)
             await asyncio.sleep(0.04)
 
     async def read_full_auth_message() -> bytes:
@@ -319,7 +320,7 @@ async def run_authenticated_lock_operation(
             try:
                 if os.environ.get("U200_DEBUG"):
                     print(f"[BLE] enabling CCCD for {uuid[-4:]}", file=sys.stderr)
-                await bleak_client.start_notify(uuid, callback_by_notify_uuid[uuid])
+                await client.start_notify(uuid, callback_by_notify_uuid[uuid])
                 await asyncio.sleep(0.02)
             except Exception as exc:
                 if os.environ.get("U200_DEBUG"):
@@ -329,7 +330,7 @@ async def run_authenticated_lock_operation(
         """HCI LE Read Remote Features -- ver
         bumble_transport.py::get_remote_le_features para la evidencia
         (btsnoop real, 2026-08-13). Best-effort; bleak no lo expone."""
-        get_features = getattr(bleak_client, "get_remote_le_features", None)
+        get_features = getattr(client, "get_remote_le_features", None)
         if get_features is None:
             if os.environ.get("U200_DEBUG"):
                 print("[BLE] adaptador sin get_remote_le_features; se omite", file=sys.stderr)
@@ -350,7 +351,7 @@ async def run_authenticated_lock_operation(
         abandono sin reintentar, ver §6.3 y bumble_transport.py::request_mtu).
         Best-effort con timeout corto propio; bleak no expone esto (el SO
         decide) asi que se salta sin romper nada en ese adaptador."""
-        request_mtu = getattr(bleak_client, "request_mtu", None)
+        request_mtu = getattr(client, "request_mtu", None)
         if request_mtu is None:
             if os.environ.get("U200_DEBUG"):
                 print("[BLE] adaptador sin request_mtu; se omite", file=sys.stderr)
@@ -369,7 +370,7 @@ async def run_authenticated_lock_operation(
         DATA_LENGTH_TX_OCTETS/_TIME). Best-effort: bleak no expone esto (lo
         decide el SO); solo adaptadores de bajo nivel como Bumble pueden
         pedirlo explicitamente."""
-        set_data_length = getattr(bleak_client, "set_data_length", None)
+        set_data_length = getattr(client, "set_data_length", None)
         if set_data_length is None:
             if os.environ.get("U200_DEBUG"):
                 print(
@@ -394,7 +395,7 @@ async def run_authenticated_lock_operation(
         exactamente como hace Android antes de escribir la pubkey (ver
         GATT_CACHING_PREAMBLE_UUID16). Best-effort: el adaptador bleak
         estandar no expone read_by_type, asi que se salta sin romper nada."""
-        read_by_type = getattr(bleak_client, "read_by_type", None)
+        read_by_type = getattr(client, "read_by_type", None)
         if read_by_type is None:
             if os.environ.get("U200_DEBUG"):
                 print(
@@ -419,7 +420,7 @@ async def run_authenticated_lock_operation(
         fuentes. Best-effort: solo adaptadores de bajo nivel (Bumble) exponen
         write_by_type; bleak/CoreBluetooth no lo necesitan porque el propio
         SO ya lo hace por su cuenta."""
-        write_by_type = getattr(bleak_client, "write_by_type", None)
+        write_by_type = getattr(client, "write_by_type", None)
         if write_by_type is None:
             if os.environ.get("U200_DEBUG"):
                 print(
@@ -447,7 +448,7 @@ async def run_authenticated_lock_operation(
         el preambulo GATT y antes de las CCCD. Best-effort: bleak no expone
         esto (el SO decide los parametros de conexion); solo Bumble/adaptadores
         de bajo nivel pueden pedirlo explicitamente."""
-        update = getattr(bleak_client, "update_connection_parameters", None)
+        update = getattr(client, "update_connection_parameters", None)
         if update is None:
             if os.environ.get("U200_DEBUG"):
                 print(
@@ -565,7 +566,7 @@ async def run_authenticated_lock_operation(
             plaintext=write.payload,
         )
         control_write = bytes((write.write_prefix,)) + encrypted_payload
-        await bleak_client.write_gatt_char(CONTROL_WRITE_UUID, control_write, response=False)
+        await client.write_gatt_char(CONTROL_WRITE_UUID, control_write, response=False)
 
         decrypted_response_hex: str | None = None
         try:
@@ -591,4 +592,4 @@ async def run_authenticated_lock_operation(
     finally:
         for uuid in PRE_AUTH_NOTIFY_ORDER:
             with contextlib.suppress(Exception):
-                await bleak_client.stop_notify(uuid)
+                await client.stop_notify(uuid)

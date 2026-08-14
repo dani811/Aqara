@@ -10,8 +10,8 @@ for entry in operations_in_family(0x01):
     print(f"{entry.sub_cmd:#04x} {entry.name} [{entry.status.value}]")
 
 # Look up one operation:
-print(find_operation(0x01, 0x74))   # BLE_OPEN_LOCK, CONFIRMED
-print(find_operation(0x01, 0x02))   # SET_VOLUME, CATALOGUED
+print(find_operation(0x01, 0x74))  # BLE_OPEN_LOCK, CONFIRMED
+print(find_operation(0x01, 0x02))  # SET_VOLUME, CATALOGUED
 ```
 
 ## 2. Confirm the builder reproduces the verified commands
@@ -30,9 +30,10 @@ Expected: green. Includes a test that
 from aqara_u200_ble import build_control_frame
 
 # Generic level-3 command (mainCmd subCmd data):
-frame = build_control_frame(0x01, 0xe5)          # GET_DOOR_LOCK_STATUS, empty data
+frame = build_control_frame(0x01, 0xE5)  # GET_DOOR_LOCK_STATUS, empty data
 # Confirmed operate frame stays exact:
 from aqara_u200_ble import build_operate_frame
+
 assert build_operate_frame(open=True).hex() == "74010100b917"
 ```
 

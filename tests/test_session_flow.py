@@ -230,7 +230,7 @@ def run_unlock(
 ) -> Any:
     return asyncio.run(
         session.run_authenticated_lock_operation(
-            bleak_client=client,
+            client=client,
             device_id="fake-device",
             auth_headers=None,
             region="EU",

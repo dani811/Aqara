@@ -15,6 +15,7 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError, version
 
 from .bumble_transport import BumbleGattAdapter
+from .gatt import GattClient
 from .kdf import (
     aes128gcm_decrypt_body,
     aes128gcm_encrypt_body,
@@ -126,6 +127,7 @@ __all__ = [
     "BumbleGattAdapter",
     "CommandFamily",
     "ControlRequest",
+    "GattClient",
     "LockOperation",
     "LockOperationWrite",
     "OperationEntry",

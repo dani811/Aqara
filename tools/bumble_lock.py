@@ -108,7 +108,7 @@ async def _run(operation: str) -> int:
             adapter = BumbleGattAdapter(peer)
 
             material, write, response_hex = await run_authenticated_lock_operation(
-                bleak_client=adapter,
+                client=adapter,
                 device_id=DEVICE_ID,
                 auth_headers=None,
                 region="EU",
