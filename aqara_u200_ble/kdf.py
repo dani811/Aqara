@@ -128,10 +128,10 @@ def hkdf_sha256(
 # Captured example: https://rpc-ger.aqara.com/app/v1.0/lumi/dev/bluetooth/login/assure/publickey
 REGION_BASE_URLS: dict[str, str] = {
     "EU": "https://rpc-ger.aqara.com/app/v1.0/lumi",  # confirmed from auth4.log
-    "US": "https://rpc-us.aqara.com/app/v1.0/lumi",   # inferred pattern
-    "CN": "https://rpc.aqara.com/app/v1.0/lumi",       # inferred pattern
-    "KR": "https://rpc-kr.aqara.com/app/v1.0/lumi",   # inferred pattern
-    "RU": "https://rpc-ru.aqara.com/app/v1.0/lumi",   # inferred pattern
+    "US": "https://rpc-us.aqara.com/app/v1.0/lumi",  # inferred pattern
+    "CN": "https://rpc.aqara.com/app/v1.0/lumi",  # inferred pattern
+    "KR": "https://rpc-kr.aqara.com/app/v1.0/lumi",  # inferred pattern
+    "RU": "https://rpc-ru.aqara.com/app/v1.0/lumi",  # inferred pattern
 }
 
 # API paths (relative; append to base URL)
@@ -226,15 +226,28 @@ def make_local_signer(
         nonce = compute_nonce(request_id)
         time_ms = str(int(time.time() * 1000))
         sign = compute_sign(
-            appid=appid, nonce=nonce, time=time_ms, token=token,
-            body=body_str, appkey=appkey,
+            appid=appid,
+            nonce=nonce,
+            time=time_ms,
+            token=token,
+            body=body_str,
+            appkey=appkey,
         )
         # Cabeceras enviadas: como las reales, con Sign en lugar de Appkey.
         headers = {
-            "Lang": lang, "Cuty": country, "App-Version": app_version,
-            "Phone-Model": phone_model, "Sys-Type": sys_type, "Sys-Version": sys_version,
-            "PhoneId": phone_id, "Area": area, "Appid": appid, "ClientId": client_id,
-            "Time": time_ms, "Nonce": nonce, "Sign": sign,
+            "Lang": lang,
+            "Cuty": country,
+            "App-Version": app_version,
+            "Phone-Model": phone_model,
+            "Sys-Type": sys_type,
+            "Sys-Version": sys_version,
+            "PhoneId": phone_id,
+            "Area": area,
+            "Appid": appid,
+            "ClientId": client_id,
+            "Time": time_ms,
+            "Nonce": nonce,
+            "Sign": sign,
         }
         if token:
             # Peticion autenticada: incluir identidad.
@@ -289,10 +302,11 @@ def encrypt_login_password(password: str) -> str:
 #   wire  = base64(salt + 0x00) "-" base64(ct) "-" base64(tag)
 # El server responde con el mismo formato (su propio salt) -> se descifra igual.
 
+
 def _aes128gcm_nonce(salt: bytes, appkey: str) -> bytes:
-    return HKDF(
-        algorithm=hashes.SHA256(), length=12, salt=salt, info=b""
-    ).derive(appkey.encode("ascii"))
+    return HKDF(algorithm=hashes.SHA256(), length=12, salt=salt, info=b"").derive(
+        appkey.encode("ascii")
+    )
 
 
 def aes128gcm_encrypt_body(plaintext: bytes, appkey: str) -> str:
@@ -359,11 +373,20 @@ def login(
     }
     base = REGION_BASE_URLS.get(region, REGION_BASE_URLS["EU"])
     signer = make_local_signer(
-        appid=appid, appkey=appkey, token=sign_token, user_id=user_id,
-        client_id=client_id, phone_id=phone_id, area=area,
+        appid=appid,
+        appkey=appkey,
+        token=sign_token,
+        user_id=user_id,
+        client_id=client_id,
+        phone_id=phone_id,
+        area=area,
     )
     data = _post_json(
-        base + _PATH_LOGIN, body, None, signer=signer, path_rel=_PATH_LOGIN,
+        base + _PATH_LOGIN,
+        body,
+        None,
+        signer=signer,
+        path_rel=_PATH_LOGIN,
         encrypt_appkey=appkey,
     )
     result = _unwrap_aqara_result(data, endpoint=_PATH_LOGIN)
@@ -504,9 +527,7 @@ def _post_json(
             raise RuntimeError("_post_json necesita auth_headers o signer")
         prepared = prepare_runtime_cloud_auth_headers(auth_headers)
     request_headers = {
-        key: value
-        for key, value in prepared.items()
-        if key.lower() not in _TRANSPORT_HEADERS
+        key: value for key, value in prepared.items() if key.lower() not in _TRANSPORT_HEADERS
     }
     request_headers.setdefault("Accept", "application/json")
     request_headers.setdefault("Content-Type", "application/json; charset=utf-8")
@@ -586,15 +607,12 @@ def prepare_runtime_cloud_auth_headers(auth_headers: Mapping[str, str]) -> dict[
     prepared = dict(auth_headers)
     has_sign = bool(prepared.get("Sign", "").strip())
     required_headers = tuple(
-        key
-        for key in _REQUIRED_AUTH_HEADERS
-        if not (has_sign and key == "Appkey")
+        key for key in _REQUIRED_AUTH_HEADERS if not (has_sign and key == "Appkey")
     )
     missing = [key for key in required_headers if not prepared.get(key)]
     if missing:
         raise RuntimeError(
-            "Faltan cabeceras de auth obligatorias para Aqara cloud: "
-            + ", ".join(missing)
+            "Faltan cabeceras de auth obligatorias para Aqara cloud: " + ", ".join(missing)
         )
     placeholder_keys = []
     for key in ("Token", "Authorization", "Appid", "Appkey", "ClientId", "UserId"):
@@ -740,6 +758,7 @@ def get_session_material(
     """
     url = base_url or REGION_BASE_URLS.get(region, REGION_BASE_URLS["EU"])
     return cloud_verify(device_id, device_public_key_hex, auth_headers, url, signer=signer)
+
 
 # The auth header map is intentionally caller-provided.  Use
 # build_cloud_auth_headers() to materialize the exact key casing from a capture

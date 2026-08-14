@@ -115,6 +115,10 @@ class AuthMessage:
 # btsnoop real (los 3 fallos son artefactos de reensamblado de fragmentos).
 # Mandarlo aleatorio hacía que el lock respondiera SIEMPRE status 01 (ACK
 # vacío sin pubkey). Ver docs/ble-control-handoff.md §11.58.
+# Frozen protocol data (Constitution Article V): kept in its captured
+# 16-per-row shape so it stays diffable against the app's table. One value
+# per line would be 256 lines of noise that hides any future tampering.
+# fmt: off
 _CRC16_TABLE = (
     0, 49345, 49537, 320, 49921, 960, 640, 49729, 50689, 1728, 1920, 51009,
     1280, 50625, 50305, 1088, 52225, 3264, 3456, 52545, 3840, 53185, 52865,
@@ -142,6 +146,7 @@ _CRC16_TABLE = (
     35905, 17408, 33985, 34177, 17728, 34561, 18368, 18048, 34369, 33281,
     17088, 17280, 33601, 16640, 33217, 32897, 16448,
 )
+# fmt: on
 
 
 def crc16_aqara(data: bytes) -> int:
@@ -373,9 +378,7 @@ async def run_authenticated_lock_operation(
                 )
             return
         try:
-            await set_data_length(
-                tx_octets=DATA_LENGTH_TX_OCTETS, tx_time=DATA_LENGTH_TX_TIME
-            )
+            await set_data_length(tx_octets=DATA_LENGTH_TX_OCTETS, tx_time=DATA_LENGTH_TX_TIME)
             if os.environ.get("U200_DEBUG"):
                 print(
                     f"[BLE] data length extension solicitada: "
@@ -431,7 +434,10 @@ async def run_authenticated_lock_operation(
                 bytes((CLIENT_SUPPORTED_FEATURES_ROBUST_CACHING_BIT,)),
             )
             if os.environ.get("U200_DEBUG"):
-                print("[BLE] Client Supported Features (0x2B29) <- Robust Caching bit escrito", file=sys.stderr)
+                print(
+                    "[BLE] Client Supported Features (0x2B29) <- Robust Caching bit escrito",
+                    file=sys.stderr,
+                )
         except Exception as exc:
             if os.environ.get("U200_DEBUG"):
                 print(f"[BLE] escritura Client Supported Features fallo: {exc}", file=sys.stderr)
@@ -516,8 +522,11 @@ async def run_authenticated_lock_operation(
             lock_key_raw = await read_full_auth_message()
             msg = parse_auth_message(lock_key_raw)
             if os.environ.get("U200_DEBUG"):
-                print(f"[BLE] frame type={msg.frame_type:#x} body_len={len(msg.body)} "
-                      f"raw={lock_key_raw.hex()}", file=sys.stderr)
+                print(
+                    f"[BLE] frame type={msg.frame_type:#x} body_len={len(msg.body)} "
+                    f"raw={lock_key_raw.hex()}",
+                    file=sys.stderr,
+                )
             if msg.frame_type == 0x06 and len(msg.body) >= 33:
                 lock_key_message = msg
                 break
@@ -547,9 +556,7 @@ async def run_authenticated_lock_operation(
         auth_ack_raw = await read_full_auth_message()
         auth_ack = parse_auth_message(auth_ack_raw)
         if auth_ack.frame_type != 0x07:
-            raise RuntimeError(
-                f"se esperaba ACK auth 0x07 y llegó {auth_ack.frame_type:#x}"
-            )
+            raise RuntimeError(f"se esperaba ACK auth 0x07 y llegó {auth_ack.frame_type:#x}")
 
         write = build_lock_operation_write(operation)
         encrypted_payload = encrypt_control_payload(

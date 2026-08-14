@@ -18,17 +18,13 @@ async def scan(seconds: float) -> None:
         ) from exc
 
     print(
-        f"Escaneo pasivo durante {seconds:g} s. "
-        "No se conectará ni escribirá en ningún dispositivo."
+        f"Escaneo pasivo durante {seconds:g} s. No se conectará ni escribirá en ningún dispositivo."
     )
     seen: set[str] = set()
 
     def detection(device: Any, advertisement: Any) -> None:
         manufacturer = advertisement.manufacturer_data
-        matches = (
-            advertisement.local_name == EXPECTED_NAME
-            or AQARA_COMPANY_ID in manufacturer
-        )
+        matches = advertisement.local_name == EXPECTED_NAME or AQARA_COMPANY_ID in manufacturer
         if not matches or device.address in seen:
             return
         seen.add(device.address)

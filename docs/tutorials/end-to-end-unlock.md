@@ -38,7 +38,8 @@ the keypad and scan again.
 
 ```python
 from aqara_u200_ble import BumbleGattAdapter
-transport = BumbleGattAdapter(peer)   # peer: a connected bumble Peer
+
+transport = BumbleGattAdapter(peer)  # peer: a connected bumble Peer
 ```
 
 ## 4. Run the end-to-end unlock
@@ -56,18 +57,20 @@ signer = make_local_signer(
     phone_id=os.environ["AQARA_PHONE_ID"],
 )
 
+
 async def main():
     material, write, response = await run_authenticated_lock_operation(
-        bleak_client=transport,               # native client or BumbleGattAdapter
+        bleak_client=transport,  # native client or BumbleGattAdapter
         device_id=os.environ["AQARA_DEVICE_ID"],
         auth_headers=None,
         region=os.environ.get("AQARA_REGION", "EU"),
         base_url=None,
-        operation="unlock",                   # or "lock", "keepalive"
+        operation="unlock",  # or "lock", "keepalive"
         signer=signer,
     )
     print("session:", material.lock_public_key_hex[:16], "…")
     print("dispatched:", write.operation, write.hex_payload)
+
 
 asyncio.run(main())
 ```
