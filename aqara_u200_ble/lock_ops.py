@@ -82,6 +82,25 @@ def build_operate_frame(*, open: bool, seq: int = 1) -> bytes:
     )
 
 
+def build_control_frame(sub_cmd: int, data: bytes = b"") -> bytes:
+    """Build a generic control-frame plaintext: ``sub_cmd`` byte followed by data.
+
+    The two commands confirmed on the real lock (operate ``0x74`` and keepalive
+    ``0x2f``) both start with their **sub-command byte** — there is **no mainCmd
+    byte on the wire**; the command family (SYSTEM/USER/…) in
+    ``operations_catalog`` is an app-side grouping, not a wire prefix. This helper
+    emits that confirmed shape.
+
+    The exact ``data`` for non-confirmed commands is **unverified** (only ``0x74``
+    and ``0x2f`` were captured). For the confirmed operate command use
+    ``build_operate_frame`` — it has the additive-trailer structure that this
+    generic ``sub_cmd + data`` form does not model.
+    """
+    if not 0 <= sub_cmd <= 0xFF:
+        raise ValueError("sub_cmd must be a single byte (0..255)")
+    return bytes([sub_cmd]) + data
+
+
 def normalize_lock_operation(value: LockOperation | str) -> LockOperation:
     if isinstance(value, LockOperation):
         return value
