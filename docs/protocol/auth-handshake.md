@@ -85,3 +85,20 @@ plaintext  = AES-CCM-decrypt(session_key, nonce, ciphertext)
 `encrypt_control_payload` / `decrypt_control_payload` are inverses. The session key
 and nonce come from the cloud exchange (feature 001) and the handshake; they are
 never committed.
+
+## The choreography, executable
+
+The order of the exchange above is not only documented, it is asserted. Feature
+007 drives `run_authenticated_lock_operation` end to end against a scripted
+stand-in lock in [`tests/test_session_flow.py`](../../tests/test_session_flow.py):
+notifications enabled in the captured order, the `0610` public-key frame, the
+lock's empty ACKs tolerated until its real key arrives, the `0710` verify frame,
+the encrypted control write, and the subscription cleanup.
+
+Those tests were verified by mutation — reversing the notification order,
+removing the empty-ACK tolerance, dropping the control write's opcode prefix,
+deleting the cleanup, removing the verify-ACK check, and making an optional
+transport capability required each make at least one of them fail.
+
+They prove the sequence is intact. They do **not** prove a real lock accepts it;
+that remains the live run's job.
