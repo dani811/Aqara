@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+from .bumble_transport import BumbleGattAdapter
 from .kdf import (
     aes128gcm_decrypt_body,
     aes128gcm_encrypt_body,
@@ -53,6 +54,7 @@ from .protocol import (
     parse_control_request,
     valid_crc,
 )
+from .scanner import scan
 from .session import (
     AUTH_NOTIFY_UUID,
     AUTH_SERVICE_UUID,
@@ -110,6 +112,7 @@ __all__ = [
     "GATT_CACHING_PREAMBLE_UUID16",
     "PRE_AUTH_NOTIFY_ORDER",
     "ATTPacket",
+    "BumbleGattAdapter",
     "ControlRequest",
     "LockOperation",
     "LockOperationWrite",
@@ -146,6 +149,7 @@ __all__ = [
     "parse_control_request",
     "prepare_runtime_cloud_auth_headers",
     "run_authenticated_lock_operation",
+    "scan",
     "send_lock_operation",
     "set_voice_volume",
     "valid_crc",
