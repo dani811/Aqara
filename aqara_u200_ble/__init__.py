@@ -31,6 +31,13 @@ from .kdf import (
     make_local_signer,
     prepare_runtime_cloud_auth_headers,
 )
+from .lock_ops import (
+    LockOperation,
+    LockOperationWrite,
+    build_lock_operation_write,
+    normalize_lock_operation,
+    send_lock_operation,
+)
 from .protocol import (
     ATT_CONTROL_NOTIFY,
     ATT_CONTROL_WRITE,
@@ -45,6 +52,14 @@ from .protocol import (
     control_command_name,
     parse_control_request,
     valid_crc,
+)
+from .volume import (
+    VoiceVolumePreset,
+    VoiceVolumeWrite,
+    build_voice_volume_write,
+    normalize_voice_volume_preset,
+    set_voice_volume,
+    write_voice_volume,
 )
 
 try:
@@ -63,10 +78,16 @@ __all__ = [
     "CONTROL_WRITE",
     "ATTPacket",
     "ControlRequest",
+    "LockOperation",
+    "LockOperationWrite",
+    "VoiceVolumePreset",
+    "VoiceVolumeWrite",
     "__version__",
     "aes128gcm_decrypt_body",
     "aes128gcm_encrypt_body",
     "build_cloud_auth_headers",
+    "build_lock_operation_write",
+    "build_voice_volume_write",
     "cloud_get_public_key",
     "cloud_verify",
     "compute_nonce",
@@ -79,7 +100,12 @@ __all__ = [
     "hkdf_sha256",
     "login",
     "make_local_signer",
+    "normalize_lock_operation",
+    "normalize_voice_volume_preset",
     "parse_control_request",
     "prepare_runtime_cloud_auth_headers",
+    "send_lock_operation",
+    "set_voice_volume",
     "valid_crc",
+    "write_voice_volume",
 ]
