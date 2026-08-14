@@ -109,10 +109,16 @@ The offline NO-GO was overturned by going through the app:
 The commands are **replayed**, not synthesised: byte 2 is a per-command counter
 (`01` open, `02` on the next close) and the last two bytes are a trailer
 (`b917` / `3a12`) whose algorithm is unknown — a full CRC-16 sweep matched
-neither pair. One command per fresh session works (the counter appears to reset);
-a general builder (arbitrary counter, multiple commands per session, strict
-cross-session replay protection) would need the counter+trailer reversed. This is
-the follow-on to this spike.
+neither pair.
+
+**Robustness confirmed (2026-08-14).** Running CLOSE (`740002003a12`, counter
+`02`) and then OPEN (`74010100b917`, counter `01`) in two *separate* fresh
+sessions both actuated the bolt and both replied `74007706` — the counter went
+`02` then `01` across sessions and both were accepted. So the lock does **not**
+validate the counter across sessions, and replaying a fixed captured payload
+per fresh session is reliable for one command at a time. A general builder
+(arbitrary counter, multiple commands in one session) would still need the
+counter+trailer reversed — the follow-on to this spike.
 
 ## Safety
 
