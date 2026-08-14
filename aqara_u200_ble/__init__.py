@@ -36,6 +36,7 @@ from .lock_ops import (
     LockOperation,
     LockOperationWrite,
     build_lock_operation_write,
+    build_operate_frame,
     normalize_lock_operation,
     send_lock_operation,
 )
@@ -126,6 +127,7 @@ __all__ = [
     "build_auth_message",
     "build_cloud_auth_headers",
     "build_lock_operation_write",
+    "build_operate_frame",
     "build_voice_volume_write",
     "cloud_get_public_key",
     "cloud_verify",
