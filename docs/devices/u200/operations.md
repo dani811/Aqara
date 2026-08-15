@@ -1,90 +1,58 @@
-# Lock operations — payload map
+# U200 — operations catalog
+
+**Layer:** device-specific (U200)
 
 > Reverse-engineered by decrypting the AES-CCM control channel with the real
-> session key and correlating each frame with an app action. Payloads are
-> protocol opcodes, not secrets (Constitution Principles I & IV).
+> session key and correlating each frame with an app action, plus the enum
+> extracted from the app. Payloads are protocol opcodes, not secrets
+> (Constitution Principles I & IV).
 
-This layer turns a human intent into wire-ready command bytes and dispatches them
-through a **caller-provided authenticated transport**. It never opens BLE, holds
-keys, or encrypts — the session (feature 004) supplies the transport.
+The [control channel](../../reference/control-channel.md) is transversal; the set
+of **commands** it carries is device-specific. This is the U200's set.
 
-## Lock operation payloads
+## Confirmed operations
+
+Captured live from the app's encryption input and replayed successfully on the
+reference lock.
 
 | Operation | Payload (hex) | Write prefix | Notes |
 |-----------|---------------|--------------|-------|
-| `UNLOCK` (open) | `74010100b917` | `0x01` | Real captured command — opened the bolt from our own session (feature 009). `0x74` = BLE_OPEN_LOCK, byte 1 `0x01` = open |
-| `LOCK` (close) | `740002003a12` | `0x01` | Real captured command — byte 1 `0x00` = close |
-| `KEEPALIVE` | `2f012f` | `0x01` | Status poll; the leading counter rotates |
-| `STATE_SNAPSHOT` | `334e74746a201c00003049` | `0x01` | Extended state seen around control-page interactions |
+| `UNLOCK` (open) | `74010100b917` | `0x01` | `0x74` = BLE_OPEN_LOCK, byte 1 `0x01` = open |
+| `LOCK` (close) | `740002003a12` | `0x01` | byte 1 `0x00` = close |
+| `KEEPALIVE` | `2f012f` | `0x01` | `0x2f` = HEART_PCK; status poll |
 
-The actuation opcode is `0x74` and byte 1 is the direction (`01` open / `00`
-close). These were captured live from the app's `encryptAESCCM` input (feature
-009) and replayed successfully. The values `1f031f` / `200320` shipped as
-LOCK/UNLOCK before feature 009 were **never** the real actuators — the lock is
-silent to them — and are retained in code only as clearly-marked legacy.
+The confirmed frames start with their **sub-command** byte (`74…`, `2f…`) — the
+family/mainCmd is an app-side grouping, not a wire prefix.
 
-### Command builder
+### Operate-frame builder
 
-The frame is `74 <dir:1> <seq:2 LE> <trailer:2 LE>` where `dir` is `01` open /
-`00` close and the trailer is **additive** (not a CRC): `trailer = base_dir + seq`,
-`base_open = 0x17b8`, `base_close = 0x1238`. Cracked from nine live captures
-(the trailer increments by 1 with the sequence). `build_operate_frame(open, seq)`
-synthesises any command; `UNLOCK`/`LOCK` are the `seq=1` case. The lock ignores
-the sequence across sessions, so `seq=1` per fresh session is fine. The bases were
-derived from one device and may be device-specific. See `specs/009-lock-open-spike`.
+The actuation frame is `74 <dir:1> <seq:2 LE> <trailer:2 LE>`:
+
+- `dir` = `01` open / `00` close.
+- `trailer` is **additive** (not a CRC): `trailer = base_dir + seq`, with
+  `base_open = 0x17b8`, `base_close = 0x1238`. Cracked from nine live captures
+  (the trailer increments by 1 with the sequence).
+- `UNLOCK`/`LOCK` are the `seq = 1` case. The lock ignores the sequence across
+  sessions, so `seq = 1` per fresh session is fine.
+
+> The bases were derived from **one** device and may be device-specific — re-derive
+> them from captures on a new device.
 
 Each operation is sent encrypted:
-`control_write = write_prefix + AES-CCM(sessionKey, nonce, payload)` (the crypto is
-feature 004). This layer produces the `payload` and `write_prefix`.
+`control_write = write_prefix + AES-CCM(sessionKey, nonce, payload)`.
 
-### Intent aliases
+### Voice / alert volume
 
-Intents are case-insensitive and accept common English/Spanish aliases:
+| Preset | Serialized request (hex) — `kind|command|body|trailer` |
+|--------|--------------------------------------------------------|
+| `MEDIUM` | `01 d3 02d13e15 d5fddfe4` |
+| `HIGH` | `01 d3 02d23e16 5faddd09` |
 
-| Canonical | Aliases |
-|-----------|---------|
-| `KEEPALIVE` | keepalive, keep-alive, heartbeat |
-| `LOCK` | lock, bloquear, cerrar |
-| `UNLOCK` | unlock, desbloquear, abrir |
-| `STATE_SNAPSHOT` | snapshot, state-snapshot, estado |
+## Full catalog (from the app enum)
 
-Unknown intents raise a clear error rather than guessing.
-
-## Voice / alert volume
-
-Volume presets map to captured control requests (feature 002 framing:
-kind|command|body|trailer):
-
-| Preset | Aliases | Serialized request (hex) |
-|--------|---------|--------------------------|
-| `MEDIUM` | medium, medio | `01 d3 02d13e15 d5fddfe4` |
-| `HIGH` | high, alto | `01 d3 02d23e16 5faddd09` |
-
-`build_voice_volume_write(preset).bytes` returns the serialized `ControlRequest`;
-`set_voice_volume(transport, preset)` writes those bytes through the transport.
-
-## Transport ports
-
-Two minimal caller-provided interfaces keep this layer decoupled from BLE:
-
-- `SessionOperationTransport.send_plaintext_operation(payload: bytes)` — for lock
-  operations, where the session applies AES-CCM before writing.
-- `ControlWriteTransport.write(payload: bytes)` — for already-authenticated
-  control bytes.
-
-Both are satisfied by the BLE session (feature 004) or the end-to-end flow
-(feature 005).
-
----
-
-## Full operation catalog (feature 010)
-
-Source: the app's decompiled `BleCommandConstant.ts` (RE project). The
-authoritative data lives in `aqara_u200_ble/operations_catalog.py`; this table
-is generated from it. **Status**: `confirmed` = verified on the real lock
-(feature 009); `catalogued` = from the enum, exact `data` unverified.
-
-Total: 214 operations across 8 families. Confirmed: 2.
+214 operations across 8 families; `confirmed` = verified live, `catalogued` = from
+the enum with exact `data` unverified. The two confirmed above are `0x74`
+(BLE_OPEN_LOCK) and `0x2f` (HEART_PCK); everything else is `catalogued`.
 
 ### SYSTEM (`0x01`, reply `0x81`)
 
@@ -340,20 +308,12 @@ Total: 214 operations across 8 families. Confirmed: 2.
 |-----|------|--------|
 | `0x00` | LONG_PACKAGE | catalogued |
 
-> **Wire note.** The two confirmed frames start with their **sub-command**
-> byte (`74…`, `2f012f`) — the family/mainCmd is an app-side grouping, not a
-> wire prefix. `build_control_frame(sub, data)` emits that shape;
-> `build_operate_frame` is the confirmed operate command (additive trailer).
-
 ## Promoting a catalogued command to confirmed
 
 To recover a command's exact `data` and mark it confirmed:
 
-1. **Capture live** (the feature-009 method): reinstall the Frida-gadget app
-   (`specs/009-lock-open-spike`), launch it frozen, attach Frida on
-   `127.0.0.1:27042`, hook `AqEdUtils.encryptAESCCM`, do the operation once in
-   the app, and read the plaintext `sub_cmd + data` from the hook.
-2. **Or read the app builder** in the bundle (`sendAddPasswordCmd`,
-   `autoLockTimeCmd`, …) for the `data` structure.
+1. **Capture live** — instrument the app, perform the operation once, and read the
+   plaintext `sub_cmd + data` from the control-channel encryption input.
+2. **Or read the app's own command builder** for the `data` structure.
 
-Then set the entry's `confirmed_frame` + status in `operations_catalog.py`.
+Then record the confirmed frame and update the command's status.

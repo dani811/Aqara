@@ -1,57 +1,36 @@
-Aqara U200 Reverse Engineering
+# Aqara BLE
 
-«Open-source research project focused on understanding and documenting the Bluetooth Low Energy (BLE) protocol used by the Aqara U200 smart lock.»
+Autonomous control of Aqara Bluetooth Low Energy locks from Python — no app, no
+phone — reconstructed by reverse-engineering the official application's observed
+behaviour. The **U200** is the fully solved reference device.
 
-🎯 Goals
+## Goals
 
-- Reverse engineer the Aqara U200 BLE protocol.
-- Develop a cross-platform Python library.
-- Build a native Home Assistant integration.
-- Support Bluetooth Proxy.
-- Evaluate an ESP32 implementation.
-- Produce high-quality public technical documentation.
+- Document the Aqara BLE + cloud protocol precisely enough to reproduce it.
+- Provide a cross-platform Python library that exposes the lock's full operation
+  surface.
+- Enable a native Home Assistant integration (the primary target).
+- Make porting to other Aqara-family devices a methodical, repeatable process.
 
-Project Status
+## Start here
 
-🚧 Bootstrap phase
+- **[docs/](docs/README.md)** — the documentation entry point (understand · port ·
+  diagnose).
+- **[docs/architecture.md](docs/architecture.md)** — how it works end to end and
+  the transversal-vs-device Layer Map.
+- **[docs/porting-guide.md](docs/porting-guide.md)** — the numbered process to
+  bring a new device online, with the CRC and login obstacles solved up front.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — Spec-Driven Development workflow and the
+  secret-hygiene rules.
 
-The repository is currently being prepared. The initial milestones include:
+## Secrets — non-negotiable
 
-- Laboratory setup
-- APK analysis
-- SDK analysis
-- BLE traffic capture
-- Cryptographic analysis
-- Protocol documentation
+No real secret, capture, or app source ever enters this repository. Credentials
+and device identifiers live only in a local, git-ignored `.env` (see
+[`.env.example`](.env.example)); raw captures live under a git-ignored `captures/`
+tree. See Constitution Principle I in
+[`.specify/memory/constitution.md`](.specify/memory/constitution.md).
 
-Planned Structure
+## License
 
-docs/
-research/
-protocol/
-crypto/
-captures/
-apk/
-sdk/
-aar/
-frida/
-python/
-homeassistant/
-esp32/
-tools/
-tests/
-
-Roadmap
-
-- [ ] Create research laboratory
-- [ ] Analyze Aqara SDK
-- [ ] Analyze Aqara Home APK
-- [ ] Capture BLE communication
-- [ ] Document BLE protocol
-- [ ] Implement Python library
-- [ ] Develop Home Assistant integration
-- [ ] Evaluate ESP32 firmware
-
-License
-
-License will be defined during the initial development phase.
+See [LICENSE](LICENSE).
