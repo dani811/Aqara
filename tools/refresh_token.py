@@ -153,7 +153,7 @@ def main() -> int:
             print(
                 "\nThe login endpoint itself answered 108. Retry with "
                 "--sign-with-stored, and if that also fails capture a fresh token "
-                "from the app: docs/tutorials/02-capture-credentials.md",
+                "from the app: docs/porting-guide.md (step 1)",
                 file=sys.stderr,
             )
         return 1

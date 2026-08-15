@@ -54,7 +54,7 @@ approach is reproducible:
   drive the lock without any Android at all.
 - **A native Android probe app** — plain `android.bluetooth`, no Aqara code, to
   isolate "is it the app or the radio?" (it was neither — see
-  [the journey](../docs/journey/README.md)).
+  [diagnostics](../docs/diagnostics.md)).
 - **tshark / btsnoop** — HCI-level byte-diffs of app vs. our central.
 - **jadx / Hermes decompilation** — to read the app's own frame builders
   (`getAiotLongPackageList`, `CrcUtils.ts`, `BleCommandConstant.ts`), which is
@@ -65,4 +65,4 @@ approach is reproducible:
 1. Instrument the app with `run_hook.py capture_publickey_flow.js`.
 2. Operate the lock once; read the `/publickey` request headers.
 3. Copy `Appid`, `Token`, `UserId`, `PhoneId`, `ClientId` and the device DID
-   into your `.env`. See [tutorial 02](../docs/tutorials/02-capture-credentials.md).
+   into your `.env`. See the [porting guide](../docs/porting-guide.md), step 1.
