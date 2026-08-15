@@ -59,7 +59,7 @@ signer = make_local_signer(
 
 async def main():
     material, write, response = await run_authenticated_lock_operation(
-        bleak_client=transport,           # native client or BumbleGattAdapter
+        client=transport,                 # native client or BumbleGattAdapter
         device_id=os.environ["AQARA_DEVICE_ID"],
         auth_headers=None,
         region=os.environ.get("AQARA_REGION", "EU"),
