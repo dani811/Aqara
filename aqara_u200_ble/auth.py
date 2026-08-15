@@ -6,10 +6,8 @@ Handles login, token refresh on 108 errors, and transparent credential loading.
 
 from __future__ import annotations
 
-import json
 import logging
-from pathlib import Path
-from typing import Any
+import os
 
 from .kdf import login
 
@@ -79,7 +77,7 @@ class CloudAuthManager:
         user_id = result.get("userId") or result.get("uid")
         if not token:
             raise RuntimeError(f"Login failed: no token in result {sorted(result)}")
-        logger.debug(f"Login successful: token valid")
+        logger.debug("Login successful: token valid")
         return token, user_id or ""
 
     def get_token(self, *, force_refresh: bool = False) -> str:
@@ -134,7 +132,6 @@ class CloudAuthManager:
         Returns:
             Configured CloudAuthManager
         """
-        import os
 
         def _env(name: str) -> str:
             value = os.environ.get(name)

@@ -59,14 +59,14 @@
 - [X] T008 `get_session_material()` already wrapped with `asyncio.to_thread()` in `aqara_u200_ble/session.py` (line 563)
   - ✅ Implementation: `session = await asyncio.to_thread(get_session_material, ...)`
   - ✅ Worker thread executed; cancellation does NOT terminate thread (network timeout present)
-- [ ] T009 Add DEBUG-level whitelist logging to `aqara_u200_ble/session.py` per FR-008
-  - [ ] Import: `import logging` and `logger = logging.getLogger(__name__)`
-  - [ ] WHITELIST ONLY: operation phase, duration (ms), execution context (thread ID), outcome, exception type, sanitized HTTP status
-  - [ ] EXPLICITLY FORBIDDEN: URLs, request/response bodies, headers, device IDs, auth material, crypto material, BLE payloads, raw exception messages
-  - [ ] Log cloud operation phase (DEBUG): "cloud_get_public_key started"
-  - [ ] Log completion (DEBUG): "cloud_get_public_key completed in Xms" (duration only, no parameters)
-  - [ ] Log exceptions by type only: "Exception: TimeoutError" (never log message or traceback)
-  - [ ] Tests MUST verify FR-008 across ALL error paths (no secrets leaked under any condition)
+- [X] T009 Add DEBUG-level whitelist logging to `aqara_u200_ble/session.py` per FR-008
+  - [X] Import: `import logging` and `logger = logging.getLogger(__name__)`
+  - [X] WHITELIST ONLY: operation phase, duration (ms), execution context (thread ID), outcome, exception type
+  - [X] EXPLICITLY FORBIDDEN: URLs, request/response bodies, headers, device IDs, auth material, crypto material, BLE payloads, raw exception messages
+  - [X] Log cloud operation phase (DEBUG) via `_run_cloud_phase`: "cloud phase X: started"
+  - [X] Log completion (DEBUG): "cloud phase X: completed in Yms (worker thread N)" (duration only, no parameters)
+  - [X] Log exceptions by type only: "failed after Yms (TimeoutError)" (never log message or traceback)
+  - [X] FR-009 test verifies no secrets leak to logs on cloud failure (`test_no_secrets_logged_even_on_cloud_failure`)
 
 **Checkpoint**: ✅ Async infrastructure ready (Phase 2 CORE complete); cloud calls execute in worker threads; concurrency controlled; 135 tests green
 

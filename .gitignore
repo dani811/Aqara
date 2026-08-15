@@ -56,7 +56,11 @@ htmlcov/
 *.so
 *.dex
 *.bundle
+*.bin
 .gradle/
+
+# Reverse-engineering artifacts / firmware dumps — never commit (Principle I)
+artifacts/
 android-probe/build/
 android-probe/.gradle/
 local.properties

@@ -4,20 +4,61 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import os
 import sys
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 from .gatt import GattClient
 from .kdf import REGION_BASE_URLS, cloud_get_public_key, get_session_material
 from .lock_ops import LockOperation, LockOperationWrite, build_lock_operation_write
+
+logger = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
 
 
 class OperationInProgressError(RuntimeError):
     """Raised when run_authenticated_lock_operation() is called during another operation."""
 
     pass
+
+
+async def _run_cloud_phase(phase: str, fn: Callable[..., _T], /, **kwargs: Any) -> _T:
+    """Run a blocking cloud call in a worker thread with whitelisted DEBUG logging.
+
+    Only non-sensitive telemetry is logged (Feature 012 FR-008): the operation
+    phase, its duration, the worker thread id, the outcome, and — on failure —
+    the *type* of the exception. URLs, headers, request/response bodies, device
+    ids, auth/session/crypto material and raw exception messages are never
+    logged.
+    """
+
+    logger.debug("cloud phase %s: started", phase)
+    started = time.perf_counter()
+    try:
+        result = await asyncio.to_thread(fn, **kwargs)
+    except BaseException as exc:  # log the type only, then re-raise unchanged
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        logger.debug(
+            "cloud phase %s: failed after %.0f ms (%s)",
+            phase,
+            elapsed_ms,
+            type(exc).__name__,
+        )
+        raise
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    logger.debug(
+        "cloud phase %s: completed in %.0f ms (worker thread %d)",
+        phase,
+        elapsed_ms,
+        threading.get_ident(),
+    )
+    return result
 
 
 AUTH_SERVICE_UUID = "0000fcb9-0000-1000-8000-00805f9b34fb"
@@ -557,7 +598,8 @@ async def run_authenticated_lock_operation(
         await enable_cccd_in_app_order()
         try:
             resolved_base_url = base_url or REGION_BASE_URLS.get(region, REGION_BASE_URLS["EU"])
-            cloud_public_key_hex = await asyncio.to_thread(
+            cloud_public_key_hex = await _run_cloud_phase(
+                "cloud_get_public_key",
                 cloud_get_public_key,
                 device_id=device_id,
                 auth_headers=auth_headers,
@@ -597,7 +639,8 @@ async def run_authenticated_lock_operation(
                     "reintenta con la cerradura despierta."
                 )
 
-            session = await asyncio.to_thread(
+            session = await _run_cloud_phase(
+                "get_session_material",
                 get_session_material,
                 device_id=device_id,
                 device_public_key_hex=lock_key_message.body.hex(),

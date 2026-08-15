@@ -16,6 +16,8 @@ Requirements (from issue #1):
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import inspect
 import logging
 import threading
 import time
@@ -23,8 +25,8 @@ from typing import Any
 
 import pytest
 
-from aqara_u200_ble import session
-from tests.test_session_flow import FakeLockClient, LockScript
+from aqara_u200_ble import OperationInProgressError, session
+from test_session_flow import FakeLockClient, LockScript
 
 
 class SlowCloudHelper:
@@ -87,7 +89,8 @@ class TestCloudHelpersRunInWorkerThreads:
         monkeypatch.setattr(session, "get_session_material", fake_session_material)
 
         client = FakeLockClient(LockScript())
-        try:
+        with contextlib.suppress(Exception):
+            # Don't care if it fails; we're checking thread IDs
             asyncio.run(
                 session.run_authenticated_lock_operation(
                     client=client,
@@ -100,8 +103,6 @@ class TestCloudHelpersRunInWorkerThreads:
                     signer=None,
                 )
             )
-        except Exception:
-            pass  # Don't care if it fails; we're checking thread IDs
 
         # Both calls should have happened
         assert len(slow_cloud.calls) == 2
@@ -147,14 +148,14 @@ class TestCloudHelpersRunInWorkerThreads:
             )
 
             # Schedule some lightweight tasks while cloud helpers are running
+            background_tasks = []
             for i in range(5):
-                asyncio.create_task(parallel_task(i))
+                background_tasks.append(asyncio.create_task(parallel_task(i)))
                 await asyncio.sleep(0.01)  # Yield control
 
-            try:
+            with contextlib.suppress(Exception):
+                # Don't care if main task fails
                 await task_main
-            except Exception:
-                pass  # Don't care if main task fails
 
             # Give scheduled tasks a chance to complete
             await asyncio.sleep(0.1)
@@ -380,8 +381,6 @@ class TestExceptionPropagationAndSecurity:
         can_retry = True
         try:
             # Second call should NOT raise OperationInProgressError
-            from aqara_u200_ble import OperationInProgressError
-
             try:
                 asyncio.run(
                     session.run_authenticated_lock_operation(
@@ -415,8 +414,6 @@ class TestBackwardCompatibility:
 
         Public API must accept same parameters as pre-feature-012.
         """
-        import inspect
-
         sig = inspect.signature(session.run_authenticated_lock_operation)
         params = list(sig.parameters.keys())
 
@@ -448,8 +445,6 @@ class TestBackwardCompatibility:
 
     def test_function_is_still_async(self) -> None:
         """run_authenticated_lock_operation should still be async."""
-        import inspect
-
         assert inspect.iscoroutinefunction(session.run_authenticated_lock_operation)
 
     def test_return_type_unchanged(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -570,7 +565,7 @@ class TestBackwardCompatibility:
         monkeypatch.setattr(session, "get_session_material", fake_session_material)
 
         client = FakeLockClient(LockScript())
-        material, write, response = asyncio.run(
+        _material, write, _response = asyncio.run(
             session.run_authenticated_lock_operation(
                 client=client,
                 device_id="test",
