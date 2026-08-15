@@ -49,6 +49,26 @@ git-ignored `.env` (see [`.env.example`](.env.example)); captures live under
 git-ignored `captures/`. Code carries placeholders only. If you spot a secret
 in a diff, stop and rewrite the change.
 
+## Documentation conventions
+
+The `docs/` tree separates the **device-agnostic** protocol (reusable across the
+Aqara family) from the **device-specific** details of one lock:
+
+- `docs/reference/` — the transversal layer. Every file starts with a
+  `**Layer:** transversal` line.
+- `docs/devices/<device>/` — one folder per device. Every file starts with a
+  `**Layer:** device-specific (<DEVICE>)` line.
+
+Two more rules keep the docs trustworthy and portable:
+
+- **Claim status.** Any statement about wire behaviour is tagged `confirmed`
+  (verified byte-exact against a real device), `catalogued` (extracted from the
+  app but not exercised), or `unverified`. A claim with none of these must cite
+  the evidence in `docs/evidence/`.
+- **Neutral voice.** Documentation is written in English, describes *what was
+  done and how* (process and evidence), and never names the tooling used to
+  produce it.
+
 ## Quality gates
 
 Before opening a review, from the repo root:
