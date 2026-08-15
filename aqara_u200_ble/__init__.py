@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+from .auth import CloudAuthManager
 from .bumble_transport import BumbleGattAdapter
 from .gatt import GattClient
 from .kdf import (
@@ -77,6 +78,7 @@ from .session import (
     CONTROL_SERVICE_UUID,
     CONTROL_WRITE_UUID,
     GATT_CACHING_PREAMBLE_UUID16,
+    OperationInProgressError,
     PRE_AUTH_NOTIFY_ORDER,
     SessionMaterial,
     assemble_auth_fragments,
@@ -104,6 +106,7 @@ except PackageNotFoundError:  # pragma: no cover - running from a source checkou
 
 __all__ = [
     "ATT_CONTROL_NOTIFY",
+    "CloudAuthManager",
     "ATT_CONTROL_WRITE",
     "AUTH_NOTIFY",
     "AUTH_NOTIFY_UUID",
@@ -122,6 +125,7 @@ __all__ = [
     "CONTROL_WRITE_UUID",
     "GATT_CACHING_PREAMBLE_UUID16",
     "OPERATIONS_CATALOG",
+    "OperationInProgressError",
     "PRE_AUTH_NOTIFY_ORDER",
     "ATTPacket",
     "BumbleGattAdapter",

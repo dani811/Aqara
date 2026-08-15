@@ -13,6 +13,13 @@ from .gatt import GattClient
 from .kdf import REGION_BASE_URLS, cloud_get_public_key, get_session_material
 from .lock_ops import LockOperation, LockOperationWrite, build_lock_operation_write
 
+
+class OperationInProgressError(RuntimeError):
+    """Raised when run_authenticated_lock_operation() is called during another operation."""
+
+    pass
+
+
 AUTH_SERVICE_UUID = "0000fcb9-0000-1000-8000-00805f9b34fb"
 AUTH_WRITE_UUID = "0000ff07-0000-1000-8000-00805f9b34fb"
 AUTH_NOTIFY_UUID = "0000ff08-0000-1000-8000-00805f9b34fb"
@@ -105,6 +112,12 @@ class AuthMessage:
     app_token: int
     lock_token: int
     body: bytes
+
+
+# Per-device concurrency tracking: one flag per device_id to prevent concurrent
+# run_authenticated_lock_operation() calls on the same lock.
+# Feature 012: Cloud I/O Async-Safe (fail-fast concurrency control)
+_device_operation_in_progress: dict[str, bool] = {}
 
 
 # Tabla CRC-16/ARC (poly 0x8005 reflejado = 0xA001, init 0x0000) — extraída
@@ -273,323 +286,374 @@ async def run_authenticated_lock_operation(
     notify_timeout: float = 8.0,
     signer: Any = None,
 ) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
-    auth_queue: asyncio.Queue[bytes] = asyncio.Queue()
-    control_queue: asyncio.Queue[bytes] = asyncio.Queue()
+    """
+    Authenticate with lock, send command, and receive response (async-safe).
 
-    def on_auth_fragment(_: object, data: bytearray) -> None:
-        auth_queue.put_nowait(bytes(data))
+    Cloud I/O (key derivation, session material) executes in worker threads
+    via asyncio.to_thread(), keeping the event loop responsive. BLE operations
+    remain on the caller's event loop.
 
-    def on_control_fragment(_: object, data: bytearray) -> None:
-        control_queue.put_nowait(bytes(data))
+    Args:
+        client: BLE GATT client for read/write operations
+        device_id: Lock device identifier for cloud KDF and concurrency tracking
+        auth_headers: Optional HTTP headers for cloud requests
+        region: Cloud region (e.g., "EU", "CN")
+        base_url: Optional custom cloud endpoint
+        operation: Lock operation (e.g., "unlock", "lock")
+        notify_timeout: Seconds to wait for control response (default 8.0)
+        signer: Optional cloud request signer (e.g., RSA key for Akamai)
 
-    async def write_auth_message(message_payload: bytes) -> None:
-        # ff07 es write-SIN-respuesta (write-with-response da "Not Permitted").
-        # Sin pausa, CoreBluetooth pierde fragmentos y el lock recibe la clave
-        # incompleta -> responde body vacio. La pausa asegura la entrega ordenada.
-        for fragment in fragment_auth_message(message_payload, direction=0x5A):
-            await client.write_gatt_char(AUTH_WRITE_UUID, fragment, response=False)
-            await asyncio.sleep(0.04)
+    Returns:
+        tuple of:
+            - SessionMaterial: Session keys, nonce, verify data, lock public key
+            - LockOperationWrite: Operation details and encrypted payload
+            - str | None: Decrypted control response hex, or None if timeout
 
-    async def read_full_auth_message() -> bytes:
-        fragments: list[bytes] = []
-        while True:
-            fragment = await asyncio.wait_for(auth_queue.get(), timeout=notify_timeout)
-            if not fragment:
-                continue
-            fragments.append(fragment)
-            if fragment[1] == 0xFF:
-                return assemble_auth_fragments(fragments, expected_direction=0xDA)
+    Raises:
+        OperationInProgressError: Another operation is in progress on this device
+        RuntimeError: Cloud call failure, BLE protocol violation, or crypto error
+        asyncio.TimeoutError: BLE notification timeout
 
-    def on_notify_ignored(_: object, data: bytearray) -> None:
-        # ff64/ff92 no llevan payload de auth/control conocido; se habilitan
-        # solo porque la app lo hace antes del auth (ver PRE_AUTH_NOTIFY_ORDER).
-        pass
+    Feature 012: Cloud I/O Async-Safe
+        - Per-device concurrency control (fail-fast, non-blocking)
+        - Cloud calls execute in worker threads (never block event loop)
+        - Exceptions propagate unwrapped (original type preserved)
+        - No credentials/keys logged (FR-008 compliance)
+    """
+    # Feature 012: Per-device concurrency control (T005+T006)
+    # Fail-fast check: if operation already in progress for this device, reject immediately
+    if _device_operation_in_progress.get(device_id, False):
+        raise OperationInProgressError(
+            f"Another lock operation is in progress for device {device_id}"
+        )
 
-    callback_by_notify_uuid = {
-        CONTROL_NOTIFY_UUID: on_control_fragment,
-        CONTROL_NOTIFY2_UUID: on_notify_ignored,
-        AUX_NOTIFY_UUID: on_notify_ignored,
-        AUTH_NOTIFY_UUID: on_auth_fragment,
-    }
+    # Mark operation as in progress
+    _device_operation_in_progress[device_id] = True
 
-    async def enable_cccd_in_app_order() -> None:
-        """Habilita CCCD en el orden EXACTO capturado de la app: ff62, ff64,
-        ff92, ff08 (ver PRE_AUTH_NOTIFY_ORDER). Tolera fallos por-característica
-        (algunos transportes ya tienen el CCCD activo o no exponen esa char)."""
-        for uuid in PRE_AUTH_NOTIFY_ORDER:
-            try:
-                if os.environ.get("U200_DEBUG"):
-                    print(f"[BLE] enabling CCCD for {uuid[-4:]}", file=sys.stderr)
-                await client.start_notify(uuid, callback_by_notify_uuid[uuid])
-                await asyncio.sleep(0.02)
-            except Exception as exc:
-                if os.environ.get("U200_DEBUG"):
-                    print(f"[BLE] CCCD enable failed for {uuid[-4:]}: {exc}", file=sys.stderr)
-
-    async def request_remote_le_features() -> None:
-        """HCI LE Read Remote Features -- ver
-        bumble_transport.py::get_remote_le_features para la evidencia
-        (btsnoop real, 2026-08-13). Best-effort; bleak no lo expone."""
-        get_features = getattr(client, "get_remote_le_features", None)
-        if get_features is None:
-            if os.environ.get("U200_DEBUG"):
-                print("[BLE] adaptador sin get_remote_le_features; se omite", file=sys.stderr)
-            return
-        try:
-            features = await get_features()
-            if os.environ.get("U200_DEBUG"):
-                print(f"[BLE] LE Read Remote Features -> 0x{features:016x}", file=sys.stderr)
-        except Exception as exc:
-            if os.environ.get("U200_DEBUG"):
-                print(f"[BLE] LE Read Remote Features fallo: {exc}", file=sys.stderr)
-
-    async def request_att_mtu() -> None:
-        """ATT Exchange MTU Request -- PRIMER paso real tras conectar, ANTES
-        de todo lo demas (ver docs/ble-control-handoff.md §3 paso 2). Es la
-        UNICA pieza de la secuencia pre-auth que este proyecto nunca habia
-        reproducido con exito (un intento anterior colgo Bumble y se
-        abandono sin reintentar, ver §6.3 y bumble_transport.py::request_mtu).
-        Best-effort con timeout corto propio; bleak no expone esto (el SO
-        decide) asi que se salta sin romper nada en ese adaptador."""
-        request_mtu = getattr(client, "request_mtu", None)
-        if request_mtu is None:
-            if os.environ.get("U200_DEBUG"):
-                print("[BLE] adaptador sin request_mtu; se omite", file=sys.stderr)
-            return
-        try:
-            negotiated = await request_mtu(247)
-            if os.environ.get("U200_DEBUG"):
-                print(f"[BLE] ATT MTU negociado: {negotiated}", file=sys.stderr)
-        except Exception as exc:
-            if os.environ.get("U200_DEBUG"):
-                print(f"[BLE] ATT MTU exchange fallo: {exc}", file=sys.stderr)
-
-    async def request_data_length_extension() -> None:
-        """Replica el LE Data Length Change real, visto justo tras el MTU
-        exchange y ANTES del preambulo GATT caching (ver
-        DATA_LENGTH_TX_OCTETS/_TIME). Best-effort: bleak no expone esto (lo
-        decide el SO); solo adaptadores de bajo nivel como Bumble pueden
-        pedirlo explicitamente."""
-        set_data_length = getattr(client, "set_data_length", None)
-        if set_data_length is None:
-            if os.environ.get("U200_DEBUG"):
-                print(
-                    "[BLE] adaptador sin set_data_length; se omite",
-                    file=sys.stderr,
-                )
-            return
-        try:
-            await set_data_length(tx_octets=DATA_LENGTH_TX_OCTETS, tx_time=DATA_LENGTH_TX_TIME)
-            if os.environ.get("U200_DEBUG"):
-                print(
-                    f"[BLE] data length extension solicitada: "
-                    f"tx_octets={DATA_LENGTH_TX_OCTETS} tx_time={DATA_LENGTH_TX_TIME}",
-                    file=sys.stderr,
-                )
-        except Exception as exc:
-            if os.environ.get("U200_DEBUG"):
-                print(f"[BLE] data length extension fallo: {exc}", file=sys.stderr)
-
-    async def run_gatt_caching_preamble() -> None:
-        """Read By Type de Appearance (0x2A01) y Database Hash (0x2B2A),
-        exactamente como hace Android antes de escribir la pubkey (ver
-        GATT_CACHING_PREAMBLE_UUID16). Best-effort: el adaptador bleak
-        estandar no expone read_by_type, asi que se salta sin romper nada."""
-        read_by_type = getattr(client, "read_by_type", None)
-        if read_by_type is None:
-            if os.environ.get("U200_DEBUG"):
-                print(
-                    "[BLE] adaptador sin read_by_type; se omite el preambulo "
-                    "de GATT caching (0x2A01/0x2B2A)",
-                    file=sys.stderr,
-                )
-            return
-        for uuid16 in GATT_CACHING_PREAMBLE_UUID16:
-            try:
-                values = await read_by_type(uuid16)
-                if os.environ.get("U200_DEBUG"):
-                    hexvals = [bytes(v).hex() for v in values]
-                    print(f"[BLE] Read By Type 0x{uuid16:04x} -> {hexvals}", file=sys.stderr)
-            except Exception as exc:
-                if os.environ.get("U200_DEBUG"):
-                    print(f"[BLE] Read By Type 0x{uuid16:04x} fallo: {exc}", file=sys.stderr)
-
-    async def write_client_supported_features() -> None:
-        """Escribe el bit Robust Caching en Client Supported Features (0x2B29)
-        -- ver CLIENT_SUPPORTED_FEATURES_UUID16 arriba para la hipotesis y las
-        fuentes. Best-effort: solo adaptadores de bajo nivel (Bumble) exponen
-        write_by_type; bleak/CoreBluetooth no lo necesitan porque el propio
-        SO ya lo hace por su cuenta."""
-        write_by_type = getattr(client, "write_by_type", None)
-        if write_by_type is None:
-            if os.environ.get("U200_DEBUG"):
-                print(
-                    "[BLE] adaptador sin write_by_type; se omite Client "
-                    "Supported Features (0x2B29)",
-                    file=sys.stderr,
-                )
-            return
-        try:
-            await write_by_type(
-                CLIENT_SUPPORTED_FEATURES_UUID16,
-                bytes((CLIENT_SUPPORTED_FEATURES_ROBUST_CACHING_BIT,)),
-            )
-            if os.environ.get("U200_DEBUG"):
-                print(
-                    "[BLE] Client Supported Features (0x2B29) <- Robust Caching bit escrito",
-                    file=sys.stderr,
-                )
-        except Exception as exc:
-            if os.environ.get("U200_DEBUG"):
-                print(f"[BLE] escritura Client Supported Features fallo: {exc}", file=sys.stderr)
-
-    async def request_connection_update() -> None:
-        """Replica el LE Connection Update real (45ms->15ms) visto justo tras
-        el preambulo GATT y antes de las CCCD. Best-effort: bleak no expone
-        esto (el SO decide los parametros de conexion); solo Bumble/adaptadores
-        de bajo nivel pueden pedirlo explicitamente."""
-        update = getattr(client, "update_connection_parameters", None)
-        if update is None:
-            if os.environ.get("U200_DEBUG"):
-                print(
-                    "[BLE] adaptador sin update_connection_parameters; se omite",
-                    file=sys.stderr,
-                )
-            return
-        try:
-            await update(
-                interval_ms=POST_AUTH_CONNECTION_INTERVAL_MS,
-                latency=POST_AUTH_CONNECTION_LATENCY,
-                supervision_timeout_ms=POST_AUTH_SUPERVISION_TIMEOUT_MS,
-            )
-            if os.environ.get("U200_DEBUG"):
-                print(
-                    f"[BLE] connection update solicitado: "
-                    f"interval={POST_AUTH_CONNECTION_INTERVAL_MS}ms",
-                    file=sys.stderr,
-                )
-        except Exception as exc:
-            if os.environ.get("U200_DEBUG"):
-                print(f"[BLE] connection update fallo: {exc}", file=sys.stderr)
-
-    await request_remote_le_features()
-    await request_att_mtu()
-    # request_data_length_extension() -- RETIRADO de la secuencia activa
-    # 2026-08-13: verificado contra el btsnoop de hoy (frame 161047, evento
-    # LE Data Length Change) que el HOST del movil NUNCA manda el comando
-    # HCI "LE Set Data Length" para la conexion con la cerradura (se
-    # comprobaron las 5 apariciones de ese comando en todo el archivo -- las
-    # 5 son para OTROS connection_handle, ninguna para el de la cerradura).
-    # La extension de longitud (27/251) ocurre sola, a nivel de controlador
-    # (iniciada por el propio periferico), sin intervencion del host. Es
-    # otra operacion "de mas" que hariamos nosotros y el movil real no hace
-    # -- igual que Client Supported Features (§11.7). Se deja la funcion
-    # definida por si hace falta en un adaptador que SI la necesite.
-    await run_gatt_caching_preamble()
-    # write_client_supported_features() -- RETIRADO de la secuencia activa
-    # 2026-08-13: un btsnoop fresco (bugreport de hoy) confirma que Android
-    # NO escribe 0x2B29 contra esta cerradura en absoluto -- 4 Write Request
-    # totales en toda la fase pre-auth, los 4 son CCCD (0x0034/0x0039/0x003f/
-    # 0x0023), ninguno a Client Supported Features. La funcion se deja
-    # definida (ver docs/ble-control-handoff.md §11.7/§11.12) por si hace
-    # falta reactivarla, pero mandarla es una operacion EXTRA que el flujo
-    # real no hace -- se quita para que la secuencia sea un espejo exacto.
-    await request_connection_update()
-    await enable_cccd_in_app_order()
     try:
-        resolved_base_url = base_url or REGION_BASE_URLS.get(region, REGION_BASE_URLS["EU"])
-        cloud_public_key_hex = cloud_get_public_key(
-            device_id=device_id,
-            auth_headers=auth_headers,
-            base_url=resolved_base_url,
-            signer=signer,
-        )
-        app_token_key = int.from_bytes(os.urandom(2), "little")
-        await write_auth_message(
-            build_auth_message(
-                0x06,
-                body=bytes.fromhex(cloud_public_key_hex),
-                app_token=app_token_key,
-            )
-        )
+        auth_queue: asyncio.Queue[bytes] = asyncio.Queue()
+        control_queue: asyncio.Queue[bytes] = asyncio.Queue()
 
-        # La cerradura responde primero con un ACK 0x06 sin cuerpo y DESPUES envia
-        # su clave publica efimera (65 bytes) en otro frame 0x06. Leemos hasta
-        # obtener un 0x06 con cuerpo (la clave), tolerando ACKs vacios.
-        if os.environ.get("U200_DEBUG"):
-            print(f"[BLE] cloudPubKey={cloud_public_key_hex}", file=sys.stderr)
-        lock_key_message = None
-        for _ in range(6):
-            lock_key_raw = await read_full_auth_message()
-            msg = parse_auth_message(lock_key_raw)
-            if os.environ.get("U200_DEBUG"):
-                print(
-                    f"[BLE] frame type={msg.frame_type:#x} body_len={len(msg.body)} "
-                    f"raw={lock_key_raw.hex()}",
-                    file=sys.stderr,
+        def on_auth_fragment(_: object, data: bytearray) -> None:
+            auth_queue.put_nowait(bytes(data))
+
+        def on_control_fragment(_: object, data: bytearray) -> None:
+            control_queue.put_nowait(bytes(data))
+
+        async def write_auth_message(message_payload: bytes) -> None:
+            # ff07 es write-SIN-respuesta (write-with-response da "Not Permitted").
+            # Sin pausa, CoreBluetooth pierde fragmentos y el lock recibe la clave
+            # incompleta -> responde body vacio. La pausa asegura la entrega ordenada.
+            for fragment in fragment_auth_message(message_payload, direction=0x5A):
+                await client.write_gatt_char(AUTH_WRITE_UUID, fragment, response=False)
+                await asyncio.sleep(0.04)
+
+        async def read_full_auth_message() -> bytes:
+            fragments: list[bytes] = []
+            while True:
+                fragment = await asyncio.wait_for(auth_queue.get(), timeout=notify_timeout)
+                if not fragment:
+                    continue
+                fragments.append(fragment)
+                if fragment[1] == 0xFF:
+                    return assemble_auth_fragments(fragments, expected_direction=0xDA)
+
+        def on_notify_ignored(_: object, data: bytearray) -> None:
+            # ff64/ff92 no llevan payload de auth/control conocido; se habilitan
+            # solo porque la app lo hace antes del auth (ver PRE_AUTH_NOTIFY_ORDER).
+            pass
+
+        callback_by_notify_uuid = {
+            CONTROL_NOTIFY_UUID: on_control_fragment,
+            CONTROL_NOTIFY2_UUID: on_notify_ignored,
+            AUX_NOTIFY_UUID: on_notify_ignored,
+            AUTH_NOTIFY_UUID: on_auth_fragment,
+        }
+
+        async def enable_cccd_in_app_order() -> None:
+            """Habilita CCCD en el orden EXACTO capturado de la app: ff62, ff64,
+            ff92, ff08 (ver PRE_AUTH_NOTIFY_ORDER). Tolera fallos por-característica
+            (algunos transportes ya tienen el CCCD activo o no exponen esa char)."""
+            for uuid in PRE_AUTH_NOTIFY_ORDER:
+                try:
+                    if os.environ.get("U200_DEBUG"):
+                        print(f"[BLE] enabling CCCD for {uuid[-4:]}", file=sys.stderr)
+                    await client.start_notify(uuid, callback_by_notify_uuid[uuid])
+                    await asyncio.sleep(0.02)
+                except Exception as exc:
+                    if os.environ.get("U200_DEBUG"):
+                        print(f"[BLE] CCCD enable failed for {uuid[-4:]}: {exc}", file=sys.stderr)
+
+        async def request_remote_le_features() -> None:
+            """HCI LE Read Remote Features -- ver
+            bumble_transport.py::get_remote_le_features para la evidencia
+            (btsnoop real, 2026-08-13). Best-effort; bleak no lo expone."""
+            get_features = getattr(client, "get_remote_le_features", None)
+            if get_features is None:
+                if os.environ.get("U200_DEBUG"):
+                    print("[BLE] adaptador sin get_remote_le_features; se omite", file=sys.stderr)
+                return
+            try:
+                features = await get_features()
+                if os.environ.get("U200_DEBUG"):
+                    print(f"[BLE] LE Read Remote Features -> 0x{features:016x}", file=sys.stderr)
+            except Exception as exc:
+                if os.environ.get("U200_DEBUG"):
+                    print(f"[BLE] LE Read Remote Features fallo: {exc}", file=sys.stderr)
+
+        async def request_att_mtu() -> None:
+            """ATT Exchange MTU Request -- PRIMER paso real tras conectar, ANTES
+            de todo lo demas (ver docs/ble-control-handoff.md §3 paso 2). Es la
+            UNICA pieza de la secuencia pre-auth que este proyecto nunca habia
+            reproducido con exito (un intento anterior colgo Bumble y se
+            abandono sin reintentar, ver §6.3 y bumble_transport.py::request_mtu).
+            Best-effort con timeout corto propio; bleak no expone esto (el SO
+            decide) asi que se salta sin romper nada en ese adaptador."""
+            request_mtu = getattr(client, "request_mtu", None)
+            if request_mtu is None:
+                if os.environ.get("U200_DEBUG"):
+                    print("[BLE] adaptador sin request_mtu; se omite", file=sys.stderr)
+                return
+            try:
+                negotiated = await request_mtu(247)
+                if os.environ.get("U200_DEBUG"):
+                    print(f"[BLE] ATT MTU negociado: {negotiated}", file=sys.stderr)
+            except Exception as exc:
+                if os.environ.get("U200_DEBUG"):
+                    print(f"[BLE] ATT MTU exchange fallo: {exc}", file=sys.stderr)
+
+        async def request_data_length_extension() -> None:
+            """Replica el LE Data Length Change real, visto justo tras el MTU
+            exchange y ANTES del preambulo GATT caching (ver
+            DATA_LENGTH_TX_OCTETS/_TIME). Best-effort: bleak no expone esto (lo
+            decide el SO); solo adaptadores de bajo nivel como Bumble pueden
+            pedirlo explicitamente."""
+            set_data_length = getattr(client, "set_data_length", None)
+            if set_data_length is None:
+                if os.environ.get("U200_DEBUG"):
+                    print(
+                        "[BLE] adaptador sin set_data_length; se omite",
+                        file=sys.stderr,
+                    )
+                return
+            try:
+                await set_data_length(tx_octets=DATA_LENGTH_TX_OCTETS, tx_time=DATA_LENGTH_TX_TIME)
+                if os.environ.get("U200_DEBUG"):
+                    print(
+                        f"[BLE] data length extension solicitada: "
+                        f"tx_octets={DATA_LENGTH_TX_OCTETS} tx_time={DATA_LENGTH_TX_TIME}",
+                        file=sys.stderr,
+                    )
+            except Exception as exc:
+                if os.environ.get("U200_DEBUG"):
+                    print(f"[BLE] data length extension fallo: {exc}", file=sys.stderr)
+
+        async def run_gatt_caching_preamble() -> None:
+            """Read By Type de Appearance (0x2A01) y Database Hash (0x2B2A),
+            exactamente como hace Android antes de escribir la pubkey (ver
+            GATT_CACHING_PREAMBLE_UUID16). Best-effort: el adaptador bleak
+            estandar no expone read_by_type, asi que se salta sin romper nada."""
+            read_by_type = getattr(client, "read_by_type", None)
+            if read_by_type is None:
+                if os.environ.get("U200_DEBUG"):
+                    print(
+                        "[BLE] adaptador sin read_by_type; se omite el preambulo "
+                        "de GATT caching (0x2A01/0x2B2A)",
+                        file=sys.stderr,
+                    )
+                return
+            for uuid16 in GATT_CACHING_PREAMBLE_UUID16:
+                try:
+                    values = await read_by_type(uuid16)
+                    if os.environ.get("U200_DEBUG"):
+                        hexvals = [bytes(v).hex() for v in values]
+                        print(f"[BLE] Read By Type 0x{uuid16:04x} -> {hexvals}", file=sys.stderr)
+                except Exception as exc:
+                    if os.environ.get("U200_DEBUG"):
+                        print(f"[BLE] Read By Type 0x{uuid16:04x} fallo: {exc}", file=sys.stderr)
+
+        async def write_client_supported_features() -> None:
+            """Escribe el bit Robust Caching en Client Supported Features (0x2B29)
+            -- ver CLIENT_SUPPORTED_FEATURES_UUID16 arriba para la hipotesis y las
+            fuentes. Best-effort: solo adaptadores de bajo nivel (Bumble) exponen
+            write_by_type; bleak/CoreBluetooth no lo necesitan porque el propio
+            SO ya lo hace por su cuenta."""
+            write_by_type = getattr(client, "write_by_type", None)
+            if write_by_type is None:
+                if os.environ.get("U200_DEBUG"):
+                    print(
+                        "[BLE] adaptador sin write_by_type; se omite Client "
+                        "Supported Features (0x2B29)",
+                        file=sys.stderr,
+                    )
+                return
+            try:
+                await write_by_type(
+                    CLIENT_SUPPORTED_FEATURES_UUID16,
+                    bytes((CLIENT_SUPPORTED_FEATURES_ROBUST_CACHING_BIT,)),
                 )
-            if msg.frame_type == 0x06 and len(msg.body) >= 33:
-                lock_key_message = msg
-                break
-        if lock_key_message is None:
-            raise RuntimeError(
-                "no se recibio la clave publica del lock (solo ACKs vacios); "
-                "reintenta con la cerradura despierta."
-            )
+                if os.environ.get("U200_DEBUG"):
+                    print(
+                        "[BLE] Client Supported Features (0x2B29) <- Robust Caching bit escrito",
+                        file=sys.stderr,
+                    )
+            except Exception as exc:
+                if os.environ.get("U200_DEBUG"):
+                    msg = f"[BLE] Client Supported Features write failed: {exc}"
+                    print(msg, file=sys.stderr)
 
-        session = get_session_material(
-            device_id=device_id,
-            device_public_key_hex=lock_key_message.body.hex(),
-            auth_headers=auth_headers,
-            region=region,
-            base_url=resolved_base_url,
-            signer=signer,
-        )
+        async def request_connection_update() -> None:
+            """Replica el LE Connection Update real (45ms->15ms) visto justo tras
+            el preambulo GATT y antes de las CCCD. Best-effort: bleak no expone
+            esto (el SO decide los parametros de conexion); solo Bumble/adaptadores
+            de bajo nivel pueden pedirlo explicitamente."""
+            update = getattr(client, "update_connection_parameters", None)
+            if update is None:
+                if os.environ.get("U200_DEBUG"):
+                    print(
+                        "[BLE] adaptador sin update_connection_parameters; se omite",
+                        file=sys.stderr,
+                    )
+                return
+            try:
+                await update(
+                    interval_ms=POST_AUTH_CONNECTION_INTERVAL_MS,
+                    latency=POST_AUTH_CONNECTION_LATENCY,
+                    supervision_timeout_ms=POST_AUTH_SUPERVISION_TIMEOUT_MS,
+                )
+                if os.environ.get("U200_DEBUG"):
+                    print(
+                        f"[BLE] connection update solicitado: "
+                        f"interval={POST_AUTH_CONNECTION_INTERVAL_MS}ms",
+                        file=sys.stderr,
+                    )
+            except Exception as exc:
+                if os.environ.get("U200_DEBUG"):
+                    print(f"[BLE] connection update fallo: {exc}", file=sys.stderr)
 
-        app_token_verify = int.from_bytes(os.urandom(2), "little")
-        await write_auth_message(
-            build_auth_message(
-                0x07,
-                body=bytes.fromhex(session["verifyData"]),
-                app_token=app_token_verify,
-            )
-        )
-        auth_ack_raw = await read_full_auth_message()
-        auth_ack = parse_auth_message(auth_ack_raw)
-        if auth_ack.frame_type != 0x07:
-            raise RuntimeError(f"se esperaba ACK auth 0x07 y llegó {auth_ack.frame_type:#x}")
-
-        write = build_lock_operation_write(operation)
-        encrypted_payload = encrypt_control_payload(
-            session["sessionKey"],
-            session["nonce"],
-            plaintext=write.payload,
-        )
-        control_write = bytes((write.write_prefix,)) + encrypted_payload
-        await client.write_gatt_char(CONTROL_WRITE_UUID, control_write, response=False)
-
-        decrypted_response_hex: str | None = None
+        await request_remote_le_features()
+        await request_att_mtu()
+        # request_data_length_extension() -- RETIRADO de la secuencia activa
+        # 2026-08-13: verificado contra el btsnoop de hoy (frame 161047, evento
+        # LE Data Length Change) que el HOST del movil NUNCA manda el comando
+        # HCI "LE Set Data Length" para la conexion con la cerradura (se
+        # comprobaron las 5 apariciones de ese comando en todo el archivo -- las
+        # 5 son para OTROS connection_handle, ninguna para el de la cerradura).
+        # La extension de longitud (27/251) ocurre sola, a nivel de controlador
+        # (iniciada por el propio periferico), sin intervencion del host. Es
+        # otra operacion "de mas" que hariamos nosotros y el movil real no hace
+        # -- igual que Client Supported Features (§11.7). Se deja la funcion
+        # definida por si hace falta en un adaptador que SI la necesite.
+        await run_gatt_caching_preamble()
+        # write_client_supported_features() -- RETIRADO de la secuencia activa
+        # 2026-08-13: un btsnoop fresco (bugreport de hoy) confirma que Android
+        # NO escribe 0x2B29 contra esta cerradura en absoluto -- 4 Write Request
+        # totales en toda la fase pre-auth, los 4 son CCCD (0x0034/0x0039/0x003f/
+        # 0x0023), ninguno a Client Supported Features. La funcion se deja
+        # definida (ver docs/ble-control-handoff.md §11.7/§11.12) por si hace
+        # falta reactivarla, pero mandarla es una operacion EXTRA que el flujo
+        # real no hace -- se quita para que la secuencia sea un espejo exacto.
+        await request_connection_update()
+        await enable_cccd_in_app_order()
         try:
-            control_frame = await asyncio.wait_for(control_queue.get(), timeout=notify_timeout)
-        except TimeoutError:
-            control_frame = b""
-        if control_frame:
-            if len(control_frame) < 2:
-                raise RuntimeError("respuesta de control cifrada demasiado corta")
-            decrypted_response_hex = decrypt_control_payload(
+            resolved_base_url = base_url or REGION_BASE_URLS.get(region, REGION_BASE_URLS["EU"])
+            cloud_public_key_hex = await asyncio.to_thread(
+                cloud_get_public_key,
+                device_id=device_id,
+                auth_headers=auth_headers,
+                base_url=resolved_base_url,
+                signer=signer,
+            )
+            app_token_key = int.from_bytes(os.urandom(2), "little")
+            await write_auth_message(
+                build_auth_message(
+                    0x06,
+                    body=bytes.fromhex(cloud_public_key_hex),
+                    app_token=app_token_key,
+                )
+            )
+
+            # La cerradura responde primero con un ACK 0x06 sin cuerpo y DESPUES envia
+            # su clave publica efimera (65 bytes) en otro frame 0x06. Leemos hasta
+            # obtener un 0x06 con cuerpo (la clave), tolerando ACKs vacios.
+            if os.environ.get("U200_DEBUG"):
+                print(f"[BLE] cloudPubKey={cloud_public_key_hex}", file=sys.stderr)
+            lock_key_message = None
+            for _ in range(6):
+                lock_key_raw = await read_full_auth_message()
+                msg = parse_auth_message(lock_key_raw)
+                if os.environ.get("U200_DEBUG"):
+                    print(
+                        f"[BLE] frame type={msg.frame_type:#x} body_len={len(msg.body)} "
+                        f"raw={lock_key_raw.hex()}",
+                        file=sys.stderr,
+                    )
+                if msg.frame_type == 0x06 and len(msg.body) >= 33:
+                    lock_key_message = msg
+                    break
+            if lock_key_message is None:
+                raise RuntimeError(
+                    "no se recibio la clave publica del lock (solo ACKs vacios); "
+                    "reintenta con la cerradura despierta."
+                )
+
+            session = await asyncio.to_thread(
+                get_session_material,
+                device_id=device_id,
+                device_public_key_hex=lock_key_message.body.hex(),
+                auth_headers=auth_headers,
+                region=region,
+                base_url=resolved_base_url,
+                signer=signer,
+            )
+
+            app_token_verify = int.from_bytes(os.urandom(2), "little")
+            await write_auth_message(
+                build_auth_message(
+                    0x07,
+                    body=bytes.fromhex(session["verifyData"]),
+                    app_token=app_token_verify,
+                )
+            )
+            auth_ack_raw = await read_full_auth_message()
+            auth_ack = parse_auth_message(auth_ack_raw)
+            if auth_ack.frame_type != 0x07:
+                raise RuntimeError(f"se esperaba ACK auth 0x07 y llegó {auth_ack.frame_type:#x}")
+
+            write = build_lock_operation_write(operation)
+            encrypted_payload = encrypt_control_payload(
                 session["sessionKey"],
                 session["nonce"],
-                ciphertext=control_frame[1:],
-            ).hex()
+                plaintext=write.payload,
+            )
+            control_write = bytes((write.write_prefix,)) + encrypted_payload
+            await client.write_gatt_char(CONTROL_WRITE_UUID, control_write, response=False)
 
-        material = SessionMaterial(
-            session_key_hex=session["sessionKey"],
-            nonce_hex=session["nonce"],
-            verify_data_hex=session["verifyData"],
-            lock_public_key_hex=lock_key_message.body.hex(),
-        )
-        return material, write, decrypted_response_hex
+            decrypted_response_hex: str | None = None
+            try:
+                control_frame = await asyncio.wait_for(control_queue.get(), timeout=notify_timeout)
+            except TimeoutError:
+                control_frame = b""
+            if control_frame:
+                if len(control_frame) < 2:
+                    raise RuntimeError("respuesta de control cifrada demasiado corta")
+                decrypted_response_hex = decrypt_control_payload(
+                    session["sessionKey"],
+                    session["nonce"],
+                    ciphertext=control_frame[1:],
+                ).hex()
+
+            material = SessionMaterial(
+                session_key_hex=session["sessionKey"],
+                nonce_hex=session["nonce"],
+                verify_data_hex=session["verifyData"],
+                lock_public_key_hex=lock_key_message.body.hex(),
+            )
+            return material, write, decrypted_response_hex
+        finally:
+            for uuid in PRE_AUTH_NOTIFY_ORDER:
+                with contextlib.suppress(Exception):
+                    await client.stop_notify(uuid)
     finally:
-        for uuid in PRE_AUTH_NOTIFY_ORDER:
-            with contextlib.suppress(Exception):
-                await client.stop_notify(uuid)
+        # Feature 012: Release concurrency control flag
+        _device_operation_in_progress[device_id] = False
