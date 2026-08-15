@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
+from .auth import CloudAuthManager
 from .bumble_transport import BumbleGattAdapter
 from .gatt import GattClient
 from .kdf import (
@@ -78,6 +79,7 @@ from .session import (
     CONTROL_WRITE_UUID,
     GATT_CACHING_PREAMBLE_UUID16,
     PRE_AUTH_NOTIFY_ORDER,
+    OperationInProgressError,
     SessionMaterial,
     assemble_auth_fragments,
     build_auth_message,
@@ -125,12 +127,14 @@ __all__ = [
     "PRE_AUTH_NOTIFY_ORDER",
     "ATTPacket",
     "BumbleGattAdapter",
+    "CloudAuthManager",
     "CommandFamily",
     "ControlRequest",
     "GattClient",
     "LockOperation",
     "LockOperationWrite",
     "OperationEntry",
+    "OperationInProgressError",
     "OperationStatus",
     "SessionMaterial",
     "VoiceVolumePreset",
