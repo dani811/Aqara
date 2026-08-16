@@ -18,6 +18,7 @@ from .auth import CloudAuthManager
 from .bumble_transport import BumbleGattAdapter
 from .gatt import GattClient
 from .kdf import (
+    CloudServiceError,
     aes128gcm_decrypt_body,
     aes128gcm_encrypt_body,
     build_cloud_auth_headers,
@@ -128,6 +129,7 @@ __all__ = [
     "ATTPacket",
     "BumbleGattAdapter",
     "CloudAuthManager",
+    "CloudServiceError",
     "CommandFamily",
     "ControlRequest",
     "GattClient",

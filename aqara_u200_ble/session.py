@@ -13,8 +13,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
+from .auth import CloudAuthManager
 from .gatt import GattClient
-from .kdf import REGION_BASE_URLS, cloud_get_public_key, get_session_material
+from .kdf import (
+    REGION_BASE_URLS,
+    CloudServiceError,
+    cloud_get_public_key,
+    get_session_material,
+)
 from .lock_ops import LockOperation, LockOperationWrite, build_lock_operation_write
 
 logger = logging.getLogger(__name__)
@@ -326,8 +332,86 @@ async def run_authenticated_lock_operation(
     operation: LockOperation | str,
     notify_timeout: float = 8.0,
     signer: Any = None,
+    auth: CloudAuthManager | None = None,
 ) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
     """
+    Authenticate with the lock, send a command, and receive the response.
+
+    Credential mechanisms (provide at most one; passing **both is an error**):
+
+    - ``auth``: a :class:`CloudAuthManager` (built by the consumer from its own
+      secure credential storage). The flow logs in on demand, keeps the token in
+      memory, and — if a cloud call fails with ``code 108`` (token expired) **before
+      the actuator command is sent** — re-authenticates and re-runs the whole
+      operation once (Feature 014). A ``code 810`` (bad credentials) or any error
+      after actuation is never retried.
+    - ``signer``: a pre-built static signer (legacy path, no auto-refresh). If
+      neither is given, the legacy behaviour is preserved (the ``None`` signer is
+      passed through, as before Feature 014).
+
+    The token and credentials are never persisted or logged.
+    """
+    if signer is not None and auth is not None:
+        raise ValueError(
+            "run_authenticated_lock_operation accepts `signer` (static token) or "
+            "`auth` (CloudAuthManager for auto-login), not both."
+        )
+
+    if auth is not None:
+        active_signer: Any = await _run_cloud_phase("login", auth.build_signer)
+    else:
+        active_signer = signer
+
+    max_reauth = 1 if auth is not None else 0
+    for attempt in range(max_reauth + 1):
+        actuation_state: dict[str, bool] = {"done": False}
+        try:
+            return await _run_authenticated_lock_operation_once(
+                client=client,
+                device_id=device_id,
+                auth_headers=auth_headers,
+                region=region,
+                base_url=base_url,
+                operation=operation,
+                notify_timeout=notify_timeout,
+                signer=active_signer,
+                actuation_state=actuation_state,
+            )
+        except CloudServiceError as exc:
+            can_retry = (
+                auth is not None
+                and exc.is_code(108)
+                and not actuation_state["done"]
+                and attempt < max_reauth
+            )
+            if not can_retry:
+                raise
+            assert auth is not None  # narrowed by can_retry
+            active_signer = await _run_cloud_phase(
+                "login_refresh", auth.build_signer, force_refresh=True
+            )
+
+    raise RuntimeError("run_authenticated_lock_operation: retry loop exhausted")
+
+
+async def _run_authenticated_lock_operation_once(
+    *,
+    client: GattClient,
+    device_id: str,
+    auth_headers: dict[str, str] | None,
+    region: str,
+    base_url: str | None,
+    operation: LockOperation | str,
+    notify_timeout: float = 8.0,
+    signer: Any = None,
+    actuation_state: dict[str, bool],
+) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
+    """
+    Single attempt of the authenticated lock operation (see the public wrapper
+    ``run_authenticated_lock_operation``). ``actuation_state["done"]`` is set to
+    True immediately before the control (actuator) write so the wrapper can avoid
+    retrying after the lock may have moved.
+
     Authenticate with lock, send command, and receive response (async-safe).
 
     Cloud I/O (key derivation, session material) executes in worker threads
@@ -670,6 +754,9 @@ async def run_authenticated_lock_operation(
                 plaintext=write.payload,
             )
             control_write = bytes((write.write_prefix,)) + encrypted_payload
+            # Point of no return: from here the lock may actuate, so the wrapper
+            # must NOT retry/reauth even on a late token error (FR-016).
+            actuation_state["done"] = True
             await client.write_gatt_char(CONTROL_WRITE_UUID, control_write, response=False)
 
             decrypted_response_hex: str | None = None

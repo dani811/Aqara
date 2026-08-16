@@ -44,17 +44,24 @@ transport = BumbleGattAdapter(peer)  # peer: a connected bumble Peer
 
 ## 4. Run it
 
+The recommended path is autonomous login: give the library a `CloudAuthManager`
+built from your credentials and it logs in on demand, keeps the token in memory,
+and refreshes it if it expires — no manual token to capture or paste.
+
 ```python
 import os, asyncio
-from aqara_u200_ble import run_authenticated_lock_operation, make_local_signer
+from aqara_u200_ble import run_authenticated_lock_operation, CloudAuthManager
 
-signer = make_local_signer(
+# In production the consumer (e.g. Home Assistant) injects these from its own
+# secure storage. For a local run, load them from the environment:
+auth = CloudAuthManager(
+    account=os.environ["AQARA_ACCOUNT"],
+    password=os.environ["AQARA_PASSWORD"],
     appid=os.environ["AQARA_APPID"],
     appkey=os.environ["AQARA_APPKEY"],
-    token=os.environ["AQARA_TOKEN"],
-    user_id=os.environ["AQARA_USER_ID"],
     client_id=os.environ["AQARA_CLIENT_ID"],
     phone_id=os.environ["AQARA_PHONE_ID"],
+    region=os.environ.get("AQARA_REGION", "EU"),
 )
 
 async def main():
@@ -65,13 +72,17 @@ async def main():
         region=os.environ.get("AQARA_REGION", "EU"),
         base_url=None,
         operation="keepalive",            # start here; then "unlock" / "lock"
-        signer=signer,
+        auth=auth,                        # autonomous login + token refresh
     )
     print("session:", material.lock_public_key_hex[:16], "…")
     print("dispatched:", write.operation, write.hex_payload)
 
 asyncio.run(main())
 ```
+
+> Legacy: instead of `auth=`, you can pass a pre-built `signer=` bound to a static
+> `AQARA_TOKEN` (via `make_local_signer`). That path has no auto-refresh — when the
+> token expires the operation fails instead of renewing it.
 
 Start with `operation="keepalive"`: it runs the full handshake **without** moving
 the bolt, so you confirm the [CRC gate](../../reference/framing-crc.md) is passed

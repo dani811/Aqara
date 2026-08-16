@@ -7,9 +7,8 @@ Handles login, token refresh on 108 errors, and transparent credential loading.
 from __future__ import annotations
 
 import logging
-import os
 
-from .kdf import login
+from .kdf import CloudServiceError, Signer, login, make_local_signer
 
 logger = logging.getLogger(__name__)
 
@@ -61,24 +60,53 @@ class CloudAuthManager:
         self._user_id: str | None = None
 
     def _login(self) -> tuple[str, str]:
-        """Perform login and return (token, user_id)."""
-        logger.debug(f"Logging in as {self.account}...")
-        result = login(
-            self.account,
-            self.password,
-            appid=self.appid,
-            appkey=self.appkey,
-            client_id=self.client_id,
-            phone_id=self.phone_id,
-            region=self.region,
-            district=self.district,
-        )
+        """Perform login and return (token, user_id).
+
+        A ``code 810`` (wrong password / unregistered account) is translated into
+        a clear, **non-retryable** error so the caller never loops on it — it is
+        not a token expiry. No credential is logged.
+        """
+        logger.debug("cloud login: starting")
+        try:
+            result = login(
+                self.account,
+                self.password,
+                appid=self.appid,
+                appkey=self.appkey,
+                client_id=self.client_id,
+                phone_id=self.phone_id,
+                region=self.region,
+                district=self.district,
+            )
+        except CloudServiceError as exc:
+            if exc.is_code(810):
+                raise RuntimeError(
+                    "Aqara login rejected the credentials (code 810): wrong "
+                    "password, or the account is not registered in this region. "
+                    "This is not a token expiry and is not retried."
+                ) from exc
+            raise
         token = result.get("token")
         user_id = result.get("userId") or result.get("uid")
         if not token:
             raise RuntimeError(f"Login failed: no token in result {sorted(result)}")
-        logger.debug("Login successful: token valid")
+        logger.debug("cloud login: succeeded")
         return token, user_id or ""
+
+    def build_signer(self, *, force_refresh: bool = False) -> Signer:
+        """Build a cloud request signer bound to a valid token (logging in if
+        needed). Used by the operation flow to sign cloud calls and to rebuild
+        the signer after a token refresh."""
+        token = self.get_token(force_refresh=force_refresh)
+        return make_local_signer(
+            appid=self.appid,
+            appkey=self.appkey,
+            token=token,
+            user_id=self._user_id or "",
+            client_id=self.client_id,
+            phone_id=self.phone_id,
+            area=self.region,
+        )
 
     def get_token(self, *, force_refresh: bool = False) -> str:
         """Get valid token, logging in if needed.
@@ -98,53 +126,14 @@ class CloudAuthManager:
         return token
 
     def handle_expired_token(self) -> str:
-        """Handle code=108 error by forcing token refresh.
+        """Handle a ``code=108`` (token expired) by forcing a fresh login.
 
         Returns:
             New valid token
         """
-        logger.debug("Token expired (code=108), refreshing...")
+        logger.debug("cloud token: refreshing (expired)")
         return self.get_token(force_refresh=True)
 
-    @classmethod
-    def from_env(
-        cls,
-        *,
-        account_env: str = "AQARA_ACCOUNT",
-        password_env: str = "AQARA_PASSWORD",
-        appid_env: str = "AQARA_APPID",
-        appkey_env: str = "AQARA_APPKEY",
-        client_id_env: str = "AQARA_CLIENT_ID",
-        phone_id_env: str = "AQARA_PHONE_ID",
-        region_env: str = "AQARA_REGION",
-    ) -> CloudAuthManager:
-        """Create from environment variables.
-
-        Args:
-            account_env: Name of account env var
-            password_env: Name of password env var
-            appid_env: Name of appid env var
-            appkey_env: Name of appkey env var
-            client_id_env: Name of client_id env var
-            phone_id_env: Name of phone_id env var
-            region_env: Name of region env var
-
-        Returns:
-            Configured CloudAuthManager
-        """
-
-        def _env(name: str) -> str:
-            value = os.environ.get(name)
-            if not value:
-                raise ValueError(f"Missing {name} in environment")
-            return value
-
-        return cls(
-            account=_env(account_env),
-            password=_env(password_env),
-            appid=_env(appid_env),
-            appkey=_env(appkey_env),
-            client_id=_env(client_id_env),
-            phone_id=_env(phone_id_env),
-            region=os.environ.get(region_env, "EU"),
-        )
+    # NOTE: environment-based construction lives OUTSIDE the library, in
+    # examples/auth_from_env.py (Feature 014). The library never reads the
+    # environment: the consumer (e.g. Home Assistant) injects credentials.
