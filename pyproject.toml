@@ -80,6 +80,8 @@ aqara_u200_ble = ["py.typed"]
 target-version = "py310"
 line-length = 100
 src = ["aqara_u200_ble", "tests"]
+# examples/ holds dev-only illustrative scripts (not shipped library code).
+extend-exclude = ["examples"]
 
 [tool.ruff.lint]
 select = [

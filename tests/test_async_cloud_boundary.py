@@ -410,9 +410,9 @@ class TestBackwardCompatibility:
 
     def test_function_signature_unchanged(self) -> None:
         """
-        Feature 012 T018: run_authenticated_lock_operation signature unchanged.
-
-        Public API must accept same parameters as pre-feature-012.
+        run_authenticated_lock_operation keeps its pre-existing parameters
+        (backward compatible). Feature 014 adds an optional keyword-only `auth`
+        parameter; every earlier parameter remains, in order.
         """
         sig = inspect.signature(session.run_authenticated_lock_operation)
         params = list(sig.parameters.keys())
@@ -426,6 +426,7 @@ class TestBackwardCompatibility:
             "operation",
             "notify_timeout",
             "signer",
+            "auth",  # Feature 014: optional CloudAuthManager for auto-login
         ]
 
         assert params == expected_params

@@ -631,12 +631,48 @@ def _post_json(
         raise RuntimeError(f"{url} returned invalid JSON: {body[:200]}") from exc
 
 
+class CloudServiceError(RuntimeError):
+    """The Aqara cloud answered HTTP 200 with a non-zero service ``code``.
+
+    Subclass of :class:`RuntimeError` so existing ``except RuntimeError`` handlers
+    keep working; carries the parsed ``code`` so callers can branch on it (e.g.
+    108 = token expired/renewable, 810 = wrong password / unregistered account)
+    without parsing the message string.
+    """
+
+    def __init__(
+        self,
+        *,
+        code: int | str,
+        message: str | None,
+        endpoint: str,
+        details: Any = None,
+    ) -> None:
+        self.code = code
+        self.message = message
+        self.endpoint = endpoint
+        self.details = details
+        super().__init__(
+            f"{endpoint} rejected by Aqara cloud: code={code} message={message} details={details}"
+        )
+
+    def is_code(self, value: int) -> bool:
+        """True if this error's ``code`` equals ``value`` (int or str form)."""
+        try:
+            return int(self.code) == value
+        except (TypeError, ValueError):
+            return str(self.code) == str(value)
+
+
 def _unwrap_aqara_result(payload: dict[str, Any], *, endpoint: str) -> dict[str, Any]:
-    if "code" in payload and payload.get("code") not in (0, "0", None):
-        raise RuntimeError(
-            f"{endpoint} rejected by Aqara cloud: "
-            f"code={payload.get('code')} message={payload.get('message')} "
-            f"details={payload.get('msgDetails')}"
+    code = payload.get("code")
+    if "code" in payload and code not in (0, "0", None):
+        assert code is not None  # narrowed by the membership check above
+        raise CloudServiceError(
+            code=code,
+            message=payload.get("message"),
+            endpoint=endpoint,
+            details=payload.get("msgDetails"),
         )
     result = payload.get("result")
     if isinstance(result, dict):
