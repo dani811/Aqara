@@ -46,8 +46,18 @@ async def _run_cloud_phase(phase: str, fn: Callable[..., _T], /, **kwargs: Any) 
 
     logger.debug("cloud phase %s: started", phase)
     started = time.perf_counter()
+    # Capture the worker thread id from INSIDE the worker execution context: after
+    # the await we are back on the event-loop thread, so reading get_ident() there
+    # would report the loop, not the worker (issue #3). Only this non-sensitive
+    # integer crosses back for telemetry.
+    worker_ident: dict[str, int] = {}
+
+    def _traced(**call_kwargs: Any) -> _T:
+        worker_ident["id"] = threading.get_ident()
+        return fn(**call_kwargs)
+
     try:
-        result = await asyncio.to_thread(fn, **kwargs)
+        result = await asyncio.to_thread(_traced, **kwargs)
     except BaseException as exc:  # log the type only, then re-raise unchanged
         elapsed_ms = (time.perf_counter() - started) * 1000
         logger.debug(
@@ -62,7 +72,7 @@ async def _run_cloud_phase(phase: str, fn: Callable[..., _T], /, **kwargs: Any) 
         "cloud phase %s: completed in %.0f ms (worker thread %d)",
         phase,
         elapsed_ms,
-        threading.get_ident(),
+        worker_ident.get("id", -1),
     )
     return result
 
