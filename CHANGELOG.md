@@ -2,6 +2,24 @@
 
 All notable changes to aqara-u200-ble are documented in this file.
 
+## [0.9.0] — Feature 023: post-command listen window (spontaneous state/events) (2026-08-17)
+
+### Added
+- `run_authenticated_lock_operation(..., listen_after=<seconds>, on_report=cb)` —
+  after the command's first response, keep the connection open and forward every
+  extra frame (control ff62 decrypted; report ff64/ff92 raw) to `on_report` until
+  the window expires. Default `0.0` = exact prior behaviour (byte-identical actuator).
+- `U200Client.listen(seconds)` (non-actuating keepalive + window) and `aqara listen
+  --seconds N` — the diagnostic to see whether the lock reports position/events
+  after the ACK or on a manual/keypad operation.
+
+### Why
+- keepalive/operate/state_snapshot ACKs, bare status opcodes, and the ff64/ff92
+  channels are all silent in the one-shot window (verified live). The lock likely
+  reports state/events shortly after actuation or on manual use — only observable
+  by staying connected and listening, which this adds. Groundwork for real-time
+  state in Home Assistant.
+
 ## [0.8.0] — Feature 022: capture the ff64/ff92 report channels (2026-08-17)
 
 ### Added

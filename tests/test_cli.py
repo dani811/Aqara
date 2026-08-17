@@ -56,6 +56,10 @@ class _FakeClient:
         self.calls.append("unlock")
         return "74007706"
 
+    async def listen(self, seconds: float = 15.0) -> list:
+        self.calls.append(f"listen:{seconds:g}")
+        return [("ff64", "aabb")]
+
     async def query(self, sub_cmd: int, data: bytes = b"") -> Any:
         from aqara_u200_ble.lock_state import LockState
 
@@ -204,3 +208,13 @@ def test_query_rejects_non_whitelisted_opcode() -> None:
 
     with pytest.raises(SystemExit):  # argparse choices rejects it
         cli.main(["query", "set_auto_lock_time"])
+
+
+def test_listen_dispatches_and_prints_frames(
+    patched: dict, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from aqara_u200_ble.cli import main
+
+    assert main(["listen", "--seconds", "3"]) == 0
+    assert "listen:3" in patched["client"].calls
+    assert "ff64: aabb" in capsys.readouterr().out

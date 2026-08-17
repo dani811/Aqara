@@ -68,6 +68,10 @@ class LockScript:
     control_response: bytes | None = CONTROL_RESPONSE_PLAINTEXT
     truncate_control_response: bool = False
     optional_capabilities: str = "none"  # none | present | failing
+    #: Extra frames the lock pushes AFTER the main control response, for the
+    #: feature 023 listen window: list of (channel, payload). channel is
+    #: "ff64"/"ff92" (raw) — emitted via the report notify callbacks.
+    extra_reports: tuple[tuple[str, bytes], ...] = ()
 
 
 class FakeLockClient:
@@ -158,6 +162,14 @@ class FakeLockClient:
             plaintext=self.script.control_response,
         )
         callback(None, bytearray(b"\x20" + ciphertext))
+        uuid_by_channel = {
+            "ff64": session.CONTROL_NOTIFY2_UUID,
+            "ff92": session.AUX_NOTIFY_UUID,
+        }
+        for channel, payload in self.script.extra_reports:
+            cb = self.notify_callbacks.get(uuid_by_channel[channel])
+            if cb is not None:
+                cb(None, bytearray(payload))
 
     # ── optional low-level capabilities (best-effort in production) ─────────
 
