@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 from .gatt import GattClient
+from .models import decode_manufacturer_payload
 from .session import AUTH_SERVICE_UUID, AUX_SERVICE_UUID, CONTROL_SERVICE_UUID
 
 # ── identification constants ─────────────────────────────────────────────────
@@ -90,6 +91,12 @@ class ScanCandidate:
     manufacturer_data: Mapping[int, bytes] = field(default_factory=dict)
     reasons: frozenset[str] = frozenset()
     score: int = 0
+    #: Raw Aqara (0x0B27) manufacturer payload, if advertised (feature 016).
+    manufacturer_payload: bytes = b""
+    #: Product id decoded from the manufacturer payload (uint16 LE @ offset 2), or None.
+    product_id: int | None = None
+    #: Human model name for a known product id (e.g. "U200"), or None.
+    model: str | None = None
     #: Stack-specific handle (e.g. bleak's BLEDevice) used to reconnect. Not
     #: part of equality/repr — it may carry platform objects.
     raw: Any = field(default=None, repr=False, compare=False)
@@ -138,6 +145,8 @@ def identify_candidate(
         reasons.add("manufacturer")
     if not reasons:
         return None
+    payload = bytes(manufacturer_data.get(AQARA_COMPANY_ID, b""))
+    product_id, model = decode_manufacturer_payload(payload)
     return ScanCandidate(
         address=address,
         name=name,
@@ -146,6 +155,9 @@ def identify_candidate(
         manufacturer_data=manufacturer_data,
         reasons=frozenset(reasons),
         score=sum(SCORE_BY_REASON[r] for r in reasons),
+        manufacturer_payload=payload,
+        product_id=product_id,
+        model=model,
         raw=raw,
     )
 
@@ -428,6 +440,7 @@ __all__ = [
     "BumbleTransport",
     "ScanCandidate",
     "Transport",
+    "decode_manufacturer_payload",
     "identify_candidate",
     "normalize_mac",
 ]

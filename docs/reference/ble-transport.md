@@ -52,6 +52,16 @@ key and reply with an empty ACK — indistinguishable at first glance from a wro
 [CRC](framing-crc.md), and a common re-run of "the wall". If a custom transport
 coalesces writes, this failure reappears.
 
+## Manufacturer payload & model id
+
+The advertisement carries a manufacturer block under company id `0x0B27`. Its
+**product id** — a little-endian `uint16` at offset 2 of the payload — identifies
+the model. For the U200 it is `0x9C03` (verified live 2026-08-17; the same value
+the `xiaomi-ble` parser read in the original investigation). The library exposes
+`ScanCandidate.product_id`/`.model` and the raw `.manufacturer_payload`; unknown
+ids yield `model = None` (never invented). The rest of the payload (frame control,
+counter, trailing bytes) is not a valid MiBeacon and its fields are not asserted.
+
 ## Porting note
 
 The channel roles, the fragmentation scheme, and the timing discipline are

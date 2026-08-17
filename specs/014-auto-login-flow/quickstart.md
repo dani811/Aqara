@@ -52,8 +52,13 @@ from aqara_u200_ble import CloudAuthManager, run_authenticated_lock_operation
 
 # El consumidor (HA) inyecta credenciales desde su almacenamiento seguro:
 auth = CloudAuthManager(
-    account=..., password=..., appid=..., appkey=...,
-    client_id=..., phone_id=..., region="EU",
+    account=...,
+    password=...,
+    appid=...,
+    appkey=...,
+    client_id=...,
+    phone_id=...,
+    region="EU",
 )
 # ... conectar el transporte (client) ...
 # await run_authenticated_lock_operation(

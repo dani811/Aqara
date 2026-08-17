@@ -15,6 +15,7 @@ kinds: **runners** (talk to the lock) and **capture hooks** (observe the app).
 | --- | --- |
 | [`esp32s3_hci_usb/`](esp32s3_hci_usb/README.md) | **Firmware** that turns an ESP32‑S3 into a BLE HCI controller over its native USB port (H4 over USB‑Serial‑JTAG). Source + build/erase/flash recipe; no binaries. This is what `aqara_u200_ble.BumbleTransport` drives. |
 | [`hci_smoke.py`](hci_smoke.py) | Checks that an external controller answers `HCI Reset` / `Read Local Version` (Bumble). |
+| [`probe_cloud_endpoints.py`](probe_cloud_endpoints.py) | **Read-only** discovery of the account device-inventory endpoint (you run it with your credentials; sanitized dumps to git-ignored `captures/`). |
 | [`refresh_token.py`](refresh_token.py) | Mints a fresh cloud token from your account password (prompted, never stored) and rewrites `AQARA_TOKEN` in `.env`. Legacy: the facade logs in by itself from `AQARA_ACCOUNT`/`AQARA_PASSWORD`. |
 | [`run_hook.py`](run_hook.py) | Thin launcher for Frida capture scripts against the instrumented app. |
 
