@@ -154,3 +154,33 @@ def test_no_secrets_printed(patched: dict[str, Any], capsys: pytest.CaptureFixtu
     main(["--password", "sup3r-secret", "--account", "a@b.c", "lock"])
     out = capsys.readouterr().out
     assert "sup3r-secret" not in out
+
+
+def test_bleak_on_macos_ignores_env_mac(patched: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    # On macOS/CoreBluetooth the env MAC can't match a UUID address; the CLI must
+    # drop it and identify by advertisement (regression from feature 017).
+    import aqara_u200_ble.cli as cli
+
+    monkeypatch.setattr(cli.sys, "platform", "darwin")
+    monkeypatch.setenv("AQARA_LOCK_MAC", "AA:BB:CC:DD:EE:FF")
+    assert cli.main(["--transport", "bleak", "lock"]) == 0
+    assert patched["connect_kwargs"]["mac"] is None
+
+
+def test_explicit_mac_flag_wins_even_on_macos(
+    patched: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import aqara_u200_ble.cli as cli
+
+    monkeypatch.setattr(cli.sys, "platform", "darwin")
+    assert cli.main(["--transport", "bleak", "--mac", "AA:BB:CC:DD:EE:FF", "lock"]) == 0
+    assert patched["connect_kwargs"]["mac"] == "AA:BB:CC:DD:EE:FF"
+
+
+def test_bleak_on_linux_uses_env_mac(patched: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    import aqara_u200_ble.cli as cli
+
+    monkeypatch.setattr(cli.sys, "platform", "linux")
+    monkeypatch.setenv("AQARA_LOCK_MAC", "AA:BB:CC:DD:EE:FF")
+    assert cli.main(["--transport", "bleak", "lock"]) == 0
+    assert patched["connect_kwargs"]["mac"] == "AA:BB:CC:DD:EE:FF"
