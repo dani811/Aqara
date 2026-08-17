@@ -67,8 +67,8 @@ def make_transport(kind: str, port: str | None) -> BleakTransport | BumbleTransp
 
 def show(c: ScanCandidate) -> str:
     return (
-        f"{c.address}  name={c.name!r}  rssi={c.rssi}  score={c.score}  "
-        f"reasons={{{','.join(sorted(c.reasons))}}}  preferred={c.is_preferred}"
+        f"{c.address}  name={c.name!r}  model={c.model or '?'}  rssi={c.rssi}  "
+        f"score={c.score}  reasons={{{','.join(sorted(c.reasons))}}}  preferred={c.is_preferred}"
     )
 
 

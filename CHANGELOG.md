@@ -2,6 +2,21 @@
 
 All notable changes to aqara-u200-ble are documented in this file.
 
+## [0.4.0] — Feature 016: device model identification over the air (2026-08-17)
+
+### Added
+- `ScanCandidate` now exposes `manufacturer_payload`, `product_id` and `model`,
+  decoded from the Aqara (`0x0B27`) advertisement — recognise the model (e.g.
+  "U200", product id `0x9C03`) without connecting. `aqara_u200_ble.models`
+  (`decode_manufacturer_payload`, `MODEL_BY_PRODUCT_ID`).
+- `examples/lock_cli.py scan` prints the model per candidate.
+- `tools/probe_cloud_endpoints.py` — read-only discovery of the account
+  device-inventory cloud endpoint (user-run; sanitized dumps under `captures/`).
+
+### Notes
+- Cloud `list_devices()` is deferred until the inventory endpoint is captured
+  (the probe tool gathers the evidence). Protocol/wire bytes unchanged.
+
 ## [0.3.0] — Feature 015: client facade, transports, ESP32-S3 controller (2026-08-17)
 
 ### Added

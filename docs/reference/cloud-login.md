@@ -14,6 +14,8 @@
 | `POST /dev/bluetooth/login/assure/publickey` | request ephemeral EC key | `cloudPublicKey` |
 | `POST /dev/bluetooth/login/assure/verify` | verify the lock's pubkey | `sessionKey`, `nonce`, `verifyData` |
 | `GET  /dev/bluetooth/query?did=…` | device material | device address, `ltmk` |
+| `GET  /app/dev/query/detail` | device detail (observed) | model/area (`"area":"EU"`) |
+| account **device inventory** | list of account devices | **not captured yet** — see `tools/probe_cloud_endpoints.py` |
 
 The `publickey` → (BLE handshake) → `verify` pair is the KDF: `publickey` issues
 an ephemeral EC key to send to the lock, and `verify` takes the lock's returned
@@ -75,3 +77,13 @@ Endpoints, the signing preimage, and the login crypto are account/cloud concerns
 not lock-specific — they are expected to be identical for other Aqara devices in
 the same region. Only the EU region is confirmed; other regional endpoints follow
 the same URL pattern but are `unverified`.
+
+
+## Device inventory (feature 016 — pending capture)
+
+The app lists every device of the account (did, model `lumi.lock.*`, name, room,
+online) but the endpoint is **not captured**. Discover it read-only with your own
+session: `tools/probe_cloud_endpoints.py` (you run it with your credentials; the
+assistant never sees them). It probes candidate paths, prints each response shape,
+and writes a **sanitized** dump under the git-ignored `captures/` tree. Once the
+shape is known, `AqaraCloud.list_devices()` can be implemented from that evidence.

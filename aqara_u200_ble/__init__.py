@@ -48,6 +48,7 @@ from .lock_ops import (
     normalize_lock_operation,
     send_lock_operation,
 )
+from .models import MODEL_BY_PRODUCT_ID, decode_manufacturer_payload
 from .operations_catalog import (
     OPERATIONS_CATALOG,
     CommandFamily,
@@ -139,6 +140,7 @@ __all__ = [
     "CONTROL_WRITE_UUID",
     "EXPECTED_NAME",
     "GATT_CACHING_PREAMBLE_UUID16",
+    "MODEL_BY_PRODUCT_ID",
     "OPERATIONS_CATALOG",
     "PRE_AUTH_NOTIFY_ORDER",
     "U200_SERVICE_UUIDS",
@@ -183,6 +185,7 @@ __all__ = [
     "compute_sign",
     "control_command_name",
     "crc16_aqara",
+    "decode_manufacturer_payload",
     "decrypt_control_payload",
     "encrypt_control_payload",
     "encrypt_login_password",
