@@ -113,7 +113,8 @@ class TestCloudHelpersRunInWorkerThreads:
     def test_slow_cloud_does_not_stall_event_loop(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A slow cloud helper should not block other async work on the event loop."""
         slow_cloud = SlowCloudHelper(delay_seconds=0.2)
-        parallel_tasks_completed = []
+        parallel_tasks_completed: list[int] = []
+        scheduled = 5
 
         async def parallel_task(task_id: int) -> None:
             """A lightweight task that should run while cloud helpers block."""
@@ -149,7 +150,7 @@ class TestCloudHelpersRunInWorkerThreads:
 
             # Schedule some lightweight tasks while cloud helpers are running
             background_tasks = []
-            for i in range(5):
+            for i in range(scheduled):
                 background_tasks.append(asyncio.create_task(parallel_task(i)))
                 await asyncio.sleep(0.01)  # Yield control
 
@@ -162,9 +163,16 @@ class TestCloudHelpersRunInWorkerThreads:
 
         asyncio.run(run_with_parallel_work())
 
-        # If the event loop was stalled, parallel_tasks_completed would be mostly empty
-        # With proper threading, most/all should complete despite the slow cloud calls
-        assert len(parallel_tasks_completed) > 0
+        # Feature 012 / T012 acceptance: with the cloud call off-loop, at least 80% of
+        # the lightweight tasks must complete (issue #2). Threshold derived from the
+        # number scheduled — no fragile millisecond timing assertion.
+        import math
+
+        required = math.ceil(0.8 * scheduled)
+        assert len(parallel_tasks_completed) >= required, (
+            f"only {len(parallel_tasks_completed)}/{scheduled} tasks completed; "
+            f"the event loop was stalled by the blocking cloud call"
+        )
 
     def test_cloud_helper_exception_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Exceptions from cloud helpers should propagate with proper context."""
@@ -589,3 +597,39 @@ class TestBackwardCompatibility:
 
         # Verify payload is not empty (contains encrypted operation)
         assert len(write.payload) > 0, "Payload must not be empty"
+
+
+class TestWorkerThreadTelemetry:
+    """Issue #3: DEBUG telemetry must report the worker thread, not the loop."""
+
+    def test_completion_log_reports_worker_thread_not_loop(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        loop_thread_id = threading.get_ident()
+
+        def cloud_helper() -> int:
+            # The real blocking work runs here, on the worker thread.
+            return threading.get_ident()
+
+        with caplog.at_level(logging.DEBUG, logger="aqara_u200_ble.session"):
+            worker_id = asyncio.run(session._run_cloud_phase("probe", cloud_helper))
+
+        # The helper actually ran off-loop.
+        assert worker_id != loop_thread_id
+
+        # The completion telemetry logged that worker id (not the loop's).
+        completed = [r.getMessage() for r in caplog.records if "completed" in r.getMessage()]
+        assert completed, "no completion telemetry emitted"
+        assert f"worker thread {worker_id}" in completed[-1]
+        assert f"worker thread {loop_thread_id}" not in completed[-1]
+
+    def test_worker_telemetry_has_no_secrets(self, caplog: pytest.LogCaptureFixture) -> None:
+        secret = "matt.SHOULD-NOT-APPEAR"
+
+        def cloud_helper(*, device_id: str) -> str:
+            return device_id
+
+        with caplog.at_level(logging.DEBUG, logger="aqara_u200_ble.session"):
+            asyncio.run(session._run_cloud_phase("probe", cloud_helper, device_id=secret))
+
+        assert all(secret not in r.getMessage() for r in caplog.records)

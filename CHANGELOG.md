@@ -2,7 +2,21 @@
 
 All notable changes to aqara-u200-ble are documented in this file.
 
-## [0.5.0] — Feature 017: packaged `aqara` CLI (2026-08-17)
+## [0.5.0] — Home Assistant-consumable release (2026-08-17)
+
+First tagged, pin-able release for downstream integrations. Pin in Home
+Assistant's `manifest.json` requirements as `aqara-u200-ble==0.5.0`. Bundles
+features 012–017 (async-safe cloud I/O, operation catalogue, autonomous login,
+client facade, over-the-air model id, packaged `aqara` CLI).
+
+### Fixed (async line, requested by dani811/haos_aqara)
+- **#3**: `_run_cloud_phase` DEBUG telemetry now reports the actual **worker**
+  thread id (was logging the event-loop thread after the await).
+- **#2**: the event-loop responsiveness test now enforces the ≥80% completion
+  criterion (was `> 0`, i.e. 20%), threshold derived from the task count.
+- Corrected `[project.urls]` to the canonical repository.
+
+### Included since 0.2.0 — Feature 017: packaged `aqara` CLI
 
 ### Added
 - **`aqara` console command** (`aqara_u200_ble.cli:main`, `[project.scripts]`): a

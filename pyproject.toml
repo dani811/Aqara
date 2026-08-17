@@ -61,9 +61,9 @@ dev = [
 aqara = "aqara_u200_ble.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/danieljusdado/aqara-u200-ble"
-Repository = "https://github.com/danieljusdado/aqara-u200-ble"
-Issues = "https://github.com/danieljusdado/aqara-u200-ble/issues"
+Homepage = "https://github.com/dani811/Aqara"
+Repository = "https://github.com/dani811/Aqara"
+Issues = "https://github.com/dani811/Aqara/issues"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Packaging (flat layout — kept on purpose: the tools/ scripts import the
