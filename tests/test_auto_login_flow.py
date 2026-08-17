@@ -382,13 +382,19 @@ class TestNoSecretsInLogs:
 
 class TestPackagePurity:
     def test_package_has_no_utilities_or_interactivity(self) -> None:
-        # The library must not load credentials, prompt, or expose a CLI.
-        # Runtime feature flags (U200_DEBUG, U200_INSECURE_TLS) are allowed.
+        # The importable library must not load credentials, prompt, or read the
+        # environment. `cli.py` is the ONE sanctioned adapter (feature 017): it
+        # may have a `__main__` entry point, but must still never prompt — and it
+        # is NOT imported by the package __init__ (see test_import_library_is_pure
+        # in test_cli.py), so `import aqara_u200_ble` stays pure.
         pkg = Path(session.__file__).parent
         offenders: list[str] = []
         for py in pkg.glob("*.py"):
             src = py.read_text(encoding="utf-8")
-            for pattern in ("getpass", "input(", "def from_env", 'if __name__ == "__main__"'):
+            patterns = ["getpass", "input(", "def from_env"]
+            if py.name != "cli.py":
+                patterns.append('if __name__ == "__main__"')
+            for pattern in patterns:
                 if pattern in src:
                     offenders.append(f"{py.name}: {pattern}")
         assert offenders == [], f"non-library code in package: {offenders}"

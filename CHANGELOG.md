@@ -2,6 +2,21 @@
 
 All notable changes to aqara-u200-ble are documented in this file.
 
+## [0.5.0] — Feature 017: packaged `aqara` CLI (2026-08-17)
+
+### Added
+- **`aqara` console command** (`aqara_u200_ble.cli:main`, `[project.scripts]`): a
+  thin adapter over the public API — `login`, `scan`, `lock`, `unlock`,
+  `operate <op>`, `--transport bleak|bumble`. All logic lives in the library.
+
+### Changed
+- `examples/lock_cli.py` is now a compat shim delegating to `aqara_u200_ble.cli`.
+
+### Guarantees
+- `import aqara_u200_ble` stays pure — it does not import `cli`/`argparse` nor read
+  the environment (tested). Integrations couple to the same public API the CLI uses.
+- Protocol/wire bytes unchanged; the CLI holds no protocol/network/BLE logic.
+
 ## [0.4.0] — Feature 016: device model identification over the air (2026-08-17)
 
 ### Added

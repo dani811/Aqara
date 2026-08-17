@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 # ─────────────────────────────────────────────────────────────────────────────
 [project]
 name = "aqara-u200-ble"
-version = "0.4.0"
+version = "0.5.0"
 description = "Autonomous BLE control library for the Aqara U200 smart lock — cloud KDF, auth handshake and AES-CCM control channel, reimplemented in pure Python."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -56,6 +56,9 @@ dev = [
     "pytest>=8.0",
     "build>=1.2",
 ]
+
+[project.scripts]
+aqara = "aqara_u200_ble.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/danieljusdado/aqara-u200-ble"
@@ -106,7 +109,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["PLR2004", "S101"]
+"tests/*" = ["PLR2004", "S101", "PLC0415", "PLR0402"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["aqara_u200_ble"]

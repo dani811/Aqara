@@ -14,6 +14,25 @@ behaviour. The **U200** is the fully solved reference device.
 
 ## Quick start
 
+Two ways in — a terminal command and an importable API. **Integrations couple to
+the API**; the CLI is just a thin adapter over that same API.
+
+### Terminal — the `aqara` command
+
+```bash
+pip install -e .            # puts `aqara` on your PATH
+aqara login                 # account login only (no radio)
+aqara scan  --transport bleak
+aqara lock  --transport bumble --port serial:/dev/cu.usbmodemNNNN,115200
+aqara unlock ; aqara operate keepalive
+```
+
+Credentials come from `--account/--password` or the environment/`.env`
+(`AQARA_ACCOUNT`, `AQARA_PASSWORD`, `AQARA_APPID`, `AQARA_APPKEY`,
+`AQARA_CLIENT_ID`, `AQARA_PHONE_ID`, `AQARA_DEVICE_ID`).
+
+### Library — the coupling surface for integrations
+
 ```python
 from aqara_u200_ble import BleakTransport, CloudAuthManager, U200Client
 
