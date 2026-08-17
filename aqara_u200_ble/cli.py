@@ -137,6 +137,11 @@ async def _run(args: argparse.Namespace) -> int:  # noqa: PLR0911 - one exit per
 
     transport = _make_transport(args)
     mac = args.mac or os.environ.get("AQARA_LOCK_MAC") or None
+    if args.transport == "bleak" and sys.platform == "darwin" and not args.mac:
+        # macOS/CoreBluetooth exposes per-app UUIDs, not MACs, so a MAC filter
+        # never matches an advertised address. Ignore the env MAC and identify by
+        # advertisement instead (an explicit --mac still wins on other platforms).
+        mac = None
 
     if args.command == "scan":
         print(f"[scan] {transport.name}, {args.timeout:g}s (touch the keypad so it advertises)")
