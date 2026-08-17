@@ -56,6 +56,12 @@ class _FakeClient:
         self.calls.append("unlock")
         return "74007706"
 
+    async def query(self, sub_cmd: int, data: bytes = b"") -> Any:
+        from aqara_u200_ble.lock_state import LockState
+
+        self.calls.append(f"query:{sub_cmd:#04x}")
+        return LockState(raw_hex="0700", source="query", responded=True)
+
     async def operate(self, op: str) -> Any:
         self.calls.append(f"operate:{op}")
         from aqara_u200_ble.lock_ops import LockOperation, build_lock_operation_write
@@ -184,3 +190,17 @@ def test_bleak_on_linux_uses_env_mac(patched: dict, monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("AQARA_LOCK_MAC", "AA:BB:CC:DD:EE:FF")
     assert cli.main(["--transport", "bleak", "lock"]) == 0
     assert patched["connect_kwargs"]["mac"] == "AA:BB:CC:DD:EE:FF"
+
+
+def test_query_dispatches_to_client_query(patched: dict) -> None:
+    from aqara_u200_ble.cli import main
+
+    assert main(["query", "lock_status"]) == 0
+    assert "query:0x07" in patched["client"].calls
+
+
+def test_query_rejects_non_whitelisted_opcode() -> None:
+    import aqara_u200_ble.cli as cli
+
+    with pytest.raises(SystemExit):  # argparse choices rejects it
+        cli.main(["query", "set_auto_lock_time"])

@@ -130,7 +130,9 @@ def normalize_lock_operation(value: LockOperation | str) -> LockOperation:
 
 @dataclass(frozen=True)
 class LockOperationWrite:
-    operation: LockOperation
+    #: Either a catalogued `LockOperation` or a probe label like "query:0x07"
+    #: (feature 021) for a generic control frame that has no enum member.
+    operation: LockOperation | str
     payload: bytes
     write_prefix: int
 
@@ -139,12 +141,38 @@ class LockOperationWrite:
         return self.payload.hex()
 
 
+def build_control_query_write(sub_cmd: int, data: bytes = b"") -> LockOperationWrite:
+    """Build a generic **read-only-intended** control query write (feature 021).
+
+    Wraps ``build_control_frame(sub_cmd, data)`` with the captured control write
+    prefix (0x01). Use it to probe catalogued status opcodes (e.g. ``0x07``
+    ``LOCK_STATUS``, ``0xE5`` ``GET_DOOR_LOCK_STATUS``) whose response might carry
+    the bolt position — the keepalive/operate/state_snapshot ACKs do not. The
+    exact payload of these opcodes is **unconfirmed**; the honest first probe
+    sends only the opcode byte. The caller is responsible for sending only
+    read-only opcodes — this helper does not enforce that (the CLI does).
+    """
+
+    return LockOperationWrite(
+        operation=f"query:0x{sub_cmd:02x}",
+        payload=build_control_frame(sub_cmd, data),
+        write_prefix=0x01,
+    )
+
+
 class SessionOperationTransport(Protocol):
     def send_plaintext_operation(self, payload: bytes) -> None:
         """Send plaintext operation bytes through an authenticated session."""
 
 
-def build_lock_operation_write(operation: LockOperation | str) -> LockOperationWrite:
+def build_lock_operation_write(
+    operation: LockOperation | str | LockOperationWrite,
+) -> LockOperationWrite:
+    # Passthrough (feature 021): a pre-built write (e.g. a status-query probe from
+    # build_control_query_write) is sent as-is, so the session's actuator path is
+    # unchanged and can carry generic control frames too.
+    if isinstance(operation, LockOperationWrite):
+        return operation
     normalized = normalize_lock_operation(operation)
     # Every control frame in a real capture is written to ff61 with prefix 0x01
     # (short frames) — including the actuation commands (their ff61 write was

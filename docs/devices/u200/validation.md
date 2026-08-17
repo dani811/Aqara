@@ -130,7 +130,7 @@ async with await U200Client.connect(auth=auth, transport=..., device_id=...) as 
     print(st.raw_hex, st.responded)  # decoded fields (locked/battery) are None until confirmed
 ```
 
-Shell: `aqara state`. **To help decode**: run `aqara state` with the door
+Shell: `aqara state`. To find the position byte, probe status opcodes: `aqara query lock_status` (also `door_lock_status`, `report_lock_status`, `battery`) with the door **locked**, then **unlocked**, and compare each `raw=` — see operations.md. **To help decode**: run `aqara state` with the door
 **locked**, then **unlocked**, and note each `raw=` value; the paired samples let
 us map the response bytes to `locked`. Do the same right after a battery change
 for `battery_percent`. Share the labelled hex (no secrets in it) to extend the

@@ -14,6 +14,7 @@ environment. This module is loaded only when the ``aqara`` command runs.
     aqara scan  --transport bleak
     aqara lock  --transport bumble --port serial:/dev/cu.usbmodemNNNN,115200
     aqara state
+    aqara query lock_status
     aqara operate keepalive
 """
 
@@ -48,6 +49,18 @@ EXIT_CONFIG = 4
 EXIT_TIMEOUT = 5
 
 _REQUIRED_APP_IDS = ("AQARA_APPID", "AQARA_APPKEY", "AQARA_CLIENT_ID", "AQARA_PHONE_ID")
+
+# Read-only status/battery opcodes safe to probe (feature 021). Names -> opcode.
+# These are query/report opcodes from the app's decompiled enum; SET_* opcodes are
+# deliberately NOT here (probing them could change lock settings). UNCONFIRMED.
+STATUS_QUERIES: dict[str, int] = {
+    "lock_status": 0x07,
+    "tongue_status": 0x08,
+    "door_lock_status": 0xE5,
+    "report_lock_status": 0x15,
+    "battery": 0x4F,
+    "lithium_battery": 0x78,
+}
 
 
 def _load_dotenv() -> None:
@@ -169,6 +182,14 @@ async def _run(args: argparse.Namespace) -> int:  # noqa: PLR0911 - one exit per
             if lock.candidate is not None:
                 print("[scan] picked " + _show(lock.candidate))
             print(f"[connect] connected in {time.monotonic() - started:.1f}s")
+            if args.command == "query":
+                opcode = STATUS_QUERIES[args.query_name]
+                st = await lock.query(opcode)
+                print(
+                    f"[query] {args.query_name} (0x{opcode:02x}) responded={st.responded} "
+                    f"raw={st.raw_hex or '(none)'} total={time.monotonic() - started:.1f}s"
+                )
+                return EXIT_OK
             if args.command == "state":
                 st = await lock.status()
                 print(
@@ -213,6 +234,8 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
     for name in ("login", "scan", "state", "lock", "unlock"):
         sub.add_parser(name)
+    q = sub.add_parser("query", help="probe a read-only status/battery opcode")
+    q.add_argument("query_name", choices=sorted(STATUS_QUERIES), help="which status opcode to read")
     op = sub.add_parser("operate")
     op.add_argument("operation", help="LockOperation name or hex (e.g. keepalive)")
     return p

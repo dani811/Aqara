@@ -32,8 +32,19 @@ from .auth import CloudAuthManager
 from .errors import AmbiguousDeviceError, FlowPhase, NoDeviceFoundError, U200ClientError
 from .gatt import GattClient
 from .kdf import CloudServiceError
-from .lock_ops import LockOperation, LockOperationWrite, normalize_lock_operation
-from .lock_state import SOURCE_KEEPALIVE, SOURCE_OPERATION, LockState, decode_lock_state
+from .lock_ops import (
+    LockOperation,
+    LockOperationWrite,
+    build_control_query_write,
+    normalize_lock_operation,
+)
+from .lock_state import (
+    SOURCE_KEEPALIVE,
+    SOURCE_OPERATION,
+    SOURCE_QUERY,
+    LockState,
+    decode_lock_state,
+)
 from .scanner import scan, select_preferred
 from .session import (
     OperationInProgressError,
@@ -237,6 +248,36 @@ class U200Client:
         result = await self.operate(LockOperation.KEEPALIVE)
         raw = bytes.fromhex(result.response_hex) if result.response_hex else None
         return decode_lock_state(raw, source=SOURCE_KEEPALIVE)
+
+    async def query(self, sub_cmd: int, data: bytes = b"") -> LockState:
+        """Send a generic control opcode and return its decrypted response as state.
+
+        Intended for probing **read-only** status opcodes (e.g. 0x07 LOCK_STATUS,
+        0xE5 GET_DOOR_LOCK_STATUS) whose response may carry the bolt position,
+        unlike the static keepalive/operate ACKs. The caller is responsible for
+        sending only read-only opcodes (the CLI restricts this to a whitelist).
+        """
+
+        if not self.connected or self._gatt is None:
+            raise U200ClientError(FlowPhase.OPERATION, "el cliente está cerrado; vuelve a conectar")
+        write = build_control_query_write(sub_cmd, data)
+        try:
+            _material, _write, response = await run_authenticated_lock_operation(
+                client=self._gatt,
+                device_id=self.device_id,
+                auth_headers=None,
+                region=self.region,
+                base_url=self.base_url,
+                operation=write,
+                notify_timeout=self.notify_timeout,
+                auth=self.auth,
+            )
+        except (OperationInProgressError, CloudServiceError, U200ClientError):
+            raise
+        except Exception as exc:
+            raise U200ClientError(FlowPhase.OPERATION, f"query 0x{sub_cmd:02x}: {exc}") from exc
+        raw = bytes.fromhex(response) if response else None
+        return decode_lock_state(raw, source=SOURCE_QUERY)
 
     # ── lifecycle ───────────────────────────────────────────────────────────
 
