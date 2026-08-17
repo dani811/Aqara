@@ -13,6 +13,7 @@ environment. This module is loaded only when the ``aqara`` command runs.
     aqara login
     aqara scan  --transport bleak
     aqara lock  --transport bumble --port serial:/dev/cu.usbmodemNNNN,115200
+    aqara state
     aqara operate keepalive
 """
 
@@ -163,6 +164,15 @@ async def _run(args: argparse.Namespace) -> int:  # noqa: PLR0911 - one exit per
             if lock.candidate is not None:
                 print("[scan] picked " + _show(lock.candidate))
             print(f"[connect] connected in {time.monotonic() - started:.1f}s")
+            if args.command == "state":
+                st = await lock.status()
+                print(
+                    f"[state] responded={st.responded} raw={st.raw_hex or '(none)'} "
+                    f"locked={st.locked if st.locked is not None else '?'} "
+                    f"battery={st.battery_percent if st.battery_percent is not None else '?'} "
+                    f"total={time.monotonic() - started:.1f}s"
+                )
+                return EXIT_OK
             if args.command == "lock":
                 response, op = await lock.lock(), "LOCK"
             elif args.command == "unlock":
@@ -196,7 +206,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--account", help="account (overrides AQARA_ACCOUNT)")
     p.add_argument("--password", help="password (overrides AQARA_PASSWORD)")
     sub = p.add_subparsers(dest="command", required=True)
-    for name in ("login", "scan", "lock", "unlock"):
+    for name in ("login", "scan", "state", "lock", "unlock"):
         sub.add_parser(name)
     op = sub.add_parser("operate")
     op.add_argument("operation", help="LockOperation name or hex (e.g. keepalive)")

@@ -2,6 +2,22 @@
 
 All notable changes to aqara-u200-ble are documented in this file.
 
+## [0.6.0] — Feature 019: lock state reading (2026-08-17)
+
+### Added
+- **`LockState`** + `decode_lock_state()` (`aqara_u200_ble.lock_state`): a typed,
+  honest snapshot of the lock — `raw_hex` is always exposed; decoded fields
+  (`locked`, `battery_percent`) stay `None` until confirmed by captured evidence.
+- **`U200Client.status()`** — reads state via the confirmed read-only keepalive
+  poll (never sends an unconfirmed status opcode, never actuates). `OperationResult.state`
+  exposes an operation's response as a `LockState`.
+- **`aqara state`** CLI subcommand.
+
+### Notes
+- Decode of the response bytes is intentionally provisional pending labelled
+  captures (see docs/devices/u200/validation.md). Spontaneous event reports are a
+  known limit — they need a persistent session (future feature). Protocol unchanged.
+
 ## [0.5.0] — Home Assistant-consumable release (2026-08-17)
 
 First tagged, pin-able release for downstream integrations. Pin in Home

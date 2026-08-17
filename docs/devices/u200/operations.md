@@ -317,3 +317,21 @@ To recover a command's exact `data` and mark it confirmed:
 2. **Or read the app's own command builder** for the `data` structure.
 
 Then record the confirmed frame and update the command's status.
+
+
+## Observed control responses (feature 019)
+
+The decrypted control response of a command carries state. Confirmed samples
+(2026-08-17, own lock/account):
+
+| Command sent | Decrypted response |
+| --- | --- |
+| `keepalive` (`2f012f`) | `2f00 2c06` |
+| `unlock` (open) | `7400 7706` |
+
+`aqara_u200_ble.LockState` exposes the raw response; decoded fields
+(`locked`, `battery_percent`) stay `None` until a **labelled** sample set pins
+them down. **Decode is pending** — capture procedure in
+[validation.md](validation.md). Spontaneous event reports (manual unlock, keypad)
+are a **known limit**: they need a persistent session/subscription (a future
+feature), not the on-demand poll this feature adds.

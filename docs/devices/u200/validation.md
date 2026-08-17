@@ -54,7 +54,7 @@ async def main():
 asyncio.run(main())
 ```
 
-Or from the shell with the packaged command: `aqara scan | lock | unlock`
+Or from the shell with the packaged command: `aqara scan | state | lock | unlock`
 (`aqara --help`). The CLI is a thin adapter over this same API.
 
 **Scan & identification.** `scan(transport)` returns `ScanCandidate`s with the
@@ -120,3 +120,18 @@ the bolt, so you confirm the [CRC gate](../../reference/framing-crc.md) is passe
   locks answer, pass `mac=`.
 - **Disconnect during discovery right after a previous run**: the U200 rejects an
   immediate reconnect; wait ~5 s.
+
+
+## Reading lock state (feature 019)
+
+```python
+async with await U200Client.connect(auth=auth, transport=..., device_id=...) as lock:
+    st = await lock.status()  # read-only keepalive poll, no actuation
+    print(st.raw_hex, st.responded)  # decoded fields (locked/battery) are None until confirmed
+```
+
+Shell: `aqara state`. **To help decode**: run `aqara state` with the door
+**locked**, then **unlocked**, and note each `raw=` value; the paired samples let
+us map the response bytes to `locked`. Do the same right after a battery change
+for `battery_percent`. Share the labelled hex (no secrets in it) to extend the
+decoder. `status()` sends only the confirmed keepalive — it never actuates.
