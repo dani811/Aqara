@@ -34,6 +34,18 @@ class OperationInProgressError(RuntimeError):
     pass
 
 
+def _debug_report(channel: str, data: bytes) -> None:
+    """Log a frame from a report channel (ff64/ff92) under U200_DEBUG (feature 022).
+
+    These channels carry the lock's REPORT_* pushes (status/events). The auth flow
+    subscribes to them but historically discarded their payloads; logging them here
+    is how we discover whether the lock reports state/position spontaneously.
+    """
+
+    if os.environ.get("U200_DEBUG"):
+        print(f"[BLE] report {channel}: {data.hex()}", file=sys.stderr)
+
+
 async def _run_cloud_phase(phase: str, fn: Callable[..., _T], /, **kwargs: Any) -> _T:
     """Run a blocking cloud call in a worker thread with whitelisted DEBUG logging.
 
@@ -493,15 +505,20 @@ async def _run_authenticated_lock_operation_once(
                 if fragment[1] == 0xFF:
                     return assemble_auth_fragments(fragments, expected_direction=0xDA)
 
-        def on_notify_ignored(_: object, data: bytearray) -> None:
-            # ff64/ff92 no llevan payload de auth/control conocido; se habilitan
-            # solo porque la app lo hace antes del auth (ver PRE_AUTH_NOTIFY_ORDER).
-            pass
+        def on_report_notify(channel: str) -> Callable[[object, bytearray], None]:
+            # ff64/ff92 carry the lock's REPORT_* pushes. We enable them because the
+            # app does (PRE_AUTH_NOTIFY_ORDER); previously their payloads were
+            # discarded. Capture them under U200_DEBUG to learn if the lock reports
+            # state/position spontaneously (feature 022).
+            def handler(_: object, data: bytearray) -> None:
+                _debug_report(channel, bytes(data))
+
+            return handler
 
         callback_by_notify_uuid = {
             CONTROL_NOTIFY_UUID: on_control_fragment,
-            CONTROL_NOTIFY2_UUID: on_notify_ignored,
-            AUX_NOTIFY_UUID: on_notify_ignored,
+            CONTROL_NOTIFY2_UUID: on_report_notify("ff64"),
+            AUX_NOTIFY_UUID: on_report_notify("ff92"),
             AUTH_NOTIFY_UUID: on_auth_fragment,
         }
 
