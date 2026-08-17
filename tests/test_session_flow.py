@@ -413,3 +413,16 @@ def test_truncated_control_response_is_rejected(_fake_cloud: list[str]) -> None:
         run_unlock(client)
 
     assert "demasiado corta" in str(excinfo.value)
+
+
+def test_debug_report_logs_only_under_env(monkeypatch, capsys) -> None:
+    from aqara_u200_ble.session import _debug_report
+
+    monkeypatch.delenv("U200_DEBUG", raising=False)
+    _debug_report("ff64", bytes.fromhex("deadbeef"))
+    assert capsys.readouterr().err == ""  # silent without the flag
+
+    monkeypatch.setenv("U200_DEBUG", "1")
+    _debug_report("ff64", bytes.fromhex("deadbeef"))
+    err = capsys.readouterr().err
+    assert "report ff64" in err and "deadbeef" in err

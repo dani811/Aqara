@@ -2,6 +2,18 @@
 
 All notable changes to aqara-u200-ble are documented in this file.
 
+## [0.8.0] — Feature 022: capture the ff64/ff92 report channels (2026-08-17)
+
+### Added
+- The auth flow now logs frames from the report channels ff64 (CONTROL_NOTIFY2)
+  and ff92 (AUX_NOTIFY) under `U200_DEBUG`, instead of discarding them. These
+  carry the lock's REPORT_* pushes — a diagnostic to learn whether the lock
+  reports state/position/events spontaneously.
+
+### Notes
+- Diagnostic only: protocol/actuator path unchanged (the channels were already
+  subscribed). Groundwork for the spontaneous-events / persistent-session feature.
+
 ## [0.7.0] — Feature 021: read-only status-query probe (2026-08-17)
 
 ### Added
