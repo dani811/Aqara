@@ -335,3 +335,25 @@ them down. **Decode is pending** — capture procedure in
 [validation.md](validation.md). Spontaneous event reports (manual unlock, keypad)
 are a **known limit**: they need a persistent session/subscription (a future
 feature), not the on-demand poll this feature adds.
+
+
+## Status-query probing (feature 021)
+
+The keepalive/operate/state_snapshot responses are **static** (verified live —
+none change with bolt position). To find the byte that reports position, probe the
+catalogued **status/battery** opcodes read-only via `aqara query <name>` or
+`U200Client.query(opcode)`:
+
+| CLI name | opcode | catalog |
+| --- | --- | --- |
+| `lock_status` | `0x07` | LOCK_STATUS |
+| `tongue_status` | `0x08` | TONGUE_STATUS |
+| `door_lock_status` | `0xE5` | GET_DOOR_LOCK_STATUS |
+| `report_lock_status` | `0x15` | REPORT_LOCK_STATUS |
+| `battery` | `0x4F` | BATTERY |
+| `lithium_battery` | `0x78` | GET_LITHIUM_BATTERY_STATUS |
+
+These are **unconfirmed** probes (the payload is guessed as the bare opcode). The
+CLI only exposes these read-only names — `SET_*` opcodes are never sendable from
+`aqara query`. Run each in a known physical state (locked vs unlocked) and compare
+the `raw=`; whichever differs carries the position and feeds `LockState` decoding.

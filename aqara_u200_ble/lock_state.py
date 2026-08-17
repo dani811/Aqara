@@ -27,6 +27,7 @@ from dataclasses import dataclass
 #: Where a LockState came from.
 SOURCE_KEEPALIVE = "keepalive"
 SOURCE_OPERATION = "operation"
+SOURCE_QUERY = "query"
 SOURCE_EVENT = "event"  # reserved for spontaneous reports (needs a persistent session)
 
 
@@ -72,6 +73,7 @@ __all__ = [
     "SOURCE_EVENT",
     "SOURCE_KEEPALIVE",
     "SOURCE_OPERATION",
+    "SOURCE_QUERY",
     "LockState",
     "decode_lock_state",
 ]

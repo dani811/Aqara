@@ -2,6 +2,26 @@
 
 All notable changes to aqara-u200-ble are documented in this file.
 
+## [0.7.0] — Feature 021: read-only status-query probe (2026-08-17)
+
+### Added
+- `U200Client.query(sub_cmd, data=b"")` and `build_control_query_write()` — send a
+  generic control opcode through the authenticated session and get its decrypted
+  response as a `LockState(source="query")`. For probing catalogued **status**
+  opcodes (keepalive/operate/state_snapshot ACKs proved static and position-blind).
+- `aqara query <name>` CLI — restricted to a read-only whitelist (lock_status
+  0x07, door_lock_status 0xE5, report_lock_status 0x15, battery 0x4F, …); `SET_*`
+  opcodes are never sendable from the CLI.
+
+### Guarantees
+- Actuator path (lock/unlock) is byte-identical — the change is an opt-in
+  passthrough of a pre-built `LockOperationWrite`. Protocol unchanged. 219 tests.
+
+### Notes
+- Query opcodes are **unconfirmed** probes (payload guessed as the bare opcode).
+  If none reports position, real-time state needs spontaneous events (persistent
+  session, future feature).
+
 ## [0.6.0] — Feature 019: lock state reading (2026-08-17)
 
 ### Added
