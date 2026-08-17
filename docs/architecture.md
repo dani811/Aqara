@@ -100,12 +100,18 @@ for this documentation.
 
 ```text
 aqara_u200_ble/
+├── client.py         # U200Client — the facade: login → scan → connect → operate
+├── transport.py      # Transport contract, ScanCandidate, BleakTransport, BumbleTransport
+├── scanner.py        # scan() + identify/select a U200 by name/services/manufacturer
+├── errors.py         # FlowPhase, U200ClientError, NoDeviceFoundError, AmbiguousDeviceError
+├── auth.py           # CloudAuthManager: account login + token refresh (code 108)
 ├── kdf.py            # cloud login, request signing, KDF endpoints, HKDF
 ├── session.py        # auth handshake (0610/0710), CRC, AES-CCM control codec
 ├── lock_ops.py       # lock / unlock / keepalive payloads
+├── operations_catalog.py  # the U200 operation surface
 ├── protocol.py       # ATT + control-request primitives
-├── scanner.py        # passive BLE discovery
+├── gatt.py           # GattClient protocol the transports must satisfy
 ├── volume.py         # voice-volume helper
-├── bumble_transport.py  # ESP32-S3 HCI (Bumble) GATT adapter
+├── bumble_transport.py  # BumbleGattAdapter (Peer -> GattClient, low-level primitives)
 └── py.typed
 ```

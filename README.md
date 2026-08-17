@@ -12,10 +12,33 @@ behaviour. The **U200** is the fully solved reference device.
 - Enable a native Home Assistant integration (the primary target).
 - Make porting to other Aqara-family devices a methodical, repeatable process.
 
+## Quick start
+
+```python
+from aqara_u200_ble import BleakTransport, CloudAuthManager, U200Client
+
+auth = CloudAuthManager(
+    account=..., password=..., appid=..., appkey=..., client_id=..., phone_id=...
+)
+async with await U200Client.connect(
+    auth=auth, transport=BleakTransport(), device_id="lumi1.xxxx"
+) as lock:
+    await lock.lock()
+```
+
+The facade logs in (and re-authenticates on token expiry), scans and identifies
+the lock by what it advertises, connects, discovers services and runs the
+authenticated operation. Swap `BleakTransport()` for
+`BumbleTransport("serial:/dev/…")` to drive an ESP32‑S3 controller
+([firmware](tools/esp32s3_hci_usb/README.md)). Shell equivalent:
+`python examples/lock_cli.py --transport bleak lock`.
+
 ## Start here
 
 - **[docs/](docs/README.md)** — the documentation entry point (understand · port ·
   diagnose).
+- **[docs/devices/u200/validation.md](docs/devices/u200/validation.md)** — run it
+  against a real U200 (facade, transports, troubleshooting).
 - **[docs/architecture.md](docs/architecture.md)** — how it works end to end and
   the transversal-vs-device Layer Map.
 - **[docs/porting-guide.md](docs/porting-guide.md)** — the numbered process to
