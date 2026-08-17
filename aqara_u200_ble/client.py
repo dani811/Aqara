@@ -33,6 +33,7 @@ from .errors import AmbiguousDeviceError, FlowPhase, NoDeviceFoundError, U200Cli
 from .gatt import GattClient
 from .kdf import CloudServiceError
 from .lock_ops import LockOperation, LockOperationWrite, normalize_lock_operation
+from .lock_state import SOURCE_KEEPALIVE, SOURCE_OPERATION, LockState, decode_lock_state
 from .scanner import scan, select_preferred
 from .session import (
     OperationInProgressError,
@@ -56,6 +57,13 @@ class OperationResult:
     response_hex: str | None
     write: LockOperationWrite
     session: SessionMaterial
+
+    @property
+    def state(self) -> LockState:
+        """The lock's response to this operation, as a `LockState`."""
+
+        raw = bytes.fromhex(self.response_hex) if self.response_hex else None
+        return decode_lock_state(raw, source=SOURCE_OPERATION)
 
 
 class U200Client:
@@ -217,6 +225,18 @@ class U200Client:
 
     async def unlock(self) -> str | None:
         return (await self.operate(LockOperation.UNLOCK)).response_hex
+
+    async def status(self) -> LockState:
+        """Read the lock state without actuating, via the confirmed keepalive poll.
+
+        Sends only the read-only KEEPALIVE command (never an unconfirmed status
+        opcode) and returns a `LockState` wrapping the decrypted response. Decoded
+        fields stay ``None`` until confirmed by evidence — see `lock_state`.
+        """
+
+        result = await self.operate(LockOperation.KEEPALIVE)
+        raw = bytes.fromhex(result.response_hex) if result.response_hex else None
+        return decode_lock_state(raw, source=SOURCE_KEEPALIVE)
 
     # ── lifecycle ───────────────────────────────────────────────────────────
 
