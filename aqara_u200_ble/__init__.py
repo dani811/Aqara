@@ -5,9 +5,11 @@ handshake (frames ``0610``/``0710``) and the AES-CCM control channel. See
 ``docs/`` for the reverse-engineered protocol.
 
 This package is assembled incrementally, one Spec Kit feature at a time. The
-current build exposes **feature 001 — cloud login & key derivation** and
-**feature 002 — control channel framing**; later features (003 operations,
-004 BLE auth handshake, 005 end-to-end) extend the public surface below.
+recommended entry point is the **feature 015 facade**: ``U200Client`` +
+a ``Transport`` (``BleakTransport`` for the host radio, ``BumbleTransport`` for
+an external ESP32-S3 HCI controller) + ``CloudAuthManager`` (account login with
+automatic token refresh). The lower-level pieces (KDF, framing, session flow,
+operations catalogue) remain public for advanced consumers.
 """
 
 from __future__ import annotations
@@ -16,6 +18,8 @@ from importlib.metadata import PackageNotFoundError, version
 
 from .auth import CloudAuthManager
 from .bumble_transport import BumbleGattAdapter
+from .client import OperationResult, U200Client
+from .errors import AmbiguousDeviceError, FlowPhase, NoDeviceFoundError, U200ClientError
 from .gatt import GattClient
 from .kdf import (
     CloudServiceError,
@@ -67,7 +71,7 @@ from .protocol import (
     parse_control_request,
     valid_crc,
 )
-from .scanner import scan
+from .scanner import identify_candidate, scan, select_preferred
 from .session import (
     AUTH_NOTIFY_UUID,
     AUTH_SERVICE_UUID,
@@ -91,6 +95,15 @@ from .session import (
     parse_auth_message,
     run_authenticated_lock_operation,
 )
+from .transport import (
+    AQARA_COMPANY_ID,
+    EXPECTED_NAME,
+    U200_SERVICE_UUIDS,
+    BleakTransport,
+    BumbleTransport,
+    ScanCandidate,
+    Transport,
+)
 from .volume import (
     VoiceVolumePreset,
     VoiceVolumeWrite,
@@ -106,6 +119,7 @@ except PackageNotFoundError:  # pragma: no cover - running from a source checkou
     __version__ = "0.0.0+unknown"
 
 __all__ = [
+    "AQARA_COMPANY_ID",
     "ATT_CONTROL_NOTIFY",
     "ATT_CONTROL_WRITE",
     "AUTH_NOTIFY",
@@ -123,22 +137,34 @@ __all__ = [
     "CONTROL_SERVICE_UUID",
     "CONTROL_WRITE",
     "CONTROL_WRITE_UUID",
+    "EXPECTED_NAME",
     "GATT_CACHING_PREAMBLE_UUID16",
     "OPERATIONS_CATALOG",
     "PRE_AUTH_NOTIFY_ORDER",
+    "U200_SERVICE_UUIDS",
     "ATTPacket",
+    "AmbiguousDeviceError",
+    "BleakTransport",
     "BumbleGattAdapter",
+    "BumbleTransport",
     "CloudAuthManager",
     "CloudServiceError",
     "CommandFamily",
     "ControlRequest",
+    "FlowPhase",
     "GattClient",
     "LockOperation",
     "LockOperationWrite",
+    "NoDeviceFoundError",
     "OperationEntry",
     "OperationInProgressError",
+    "OperationResult",
     "OperationStatus",
+    "ScanCandidate",
     "SessionMaterial",
+    "Transport",
+    "U200Client",
+    "U200ClientError",
     "VoiceVolumePreset",
     "VoiceVolumeWrite",
     "__version__",
@@ -166,6 +192,7 @@ __all__ = [
     "hkdf_expand",
     "hkdf_extract",
     "hkdf_sha256",
+    "identify_candidate",
     "login",
     "make_local_signer",
     "normalize_lock_operation",
@@ -176,6 +203,7 @@ __all__ = [
     "prepare_runtime_cloud_auth_headers",
     "run_authenticated_lock_operation",
     "scan",
+    "select_preferred",
     "send_lock_operation",
     "set_voice_volume",
     "valid_crc",

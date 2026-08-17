@@ -12,48 +12,21 @@ on the reference device, that the whole pipeline works after any change.
 
 ## 1. Prerequisites
 
-- Python 3.11+ and the package installed: `pip install -e '.[ble]'` (native BLE)
-  or `pip install -e '.[bumble]'` (external HCI controller, e.g. ESP32-S3).
-- A `.env` with your captured account token and device identifiers.
+- Python 3.10+ and the package installed: `pip install -e '.[ble]'` (native BLE)
+  or `pip install -e '.[bumble]'` (external HCI controller, e.g. an ESP32-S3
+  running [`tools/esp32s3_hci_usb`](../../../tools/esp32s3_hci_usb/README.md)).
+- A `.env` with your account (`AQARA_ACCOUNT`/`AQARA_PASSWORD`), app identifiers
+  and device id. No token to capture: the library logs in by itself.
 
-## 2. Discover the lock (optional)
+## 2. The recommended way: the facade (three lines)
 
-```python
-import asyncio
-from aqara_u200_ble import scan
-
-asyncio.run(scan(seconds=8))
-```
-
-The scan is **passive** — it never writes to any device. The U200 only advertises
-after its **keypad is physically activated**; touch the keypad and scan again if
-nothing appears.
-
-## 3. Choose a transport
-
-- **Native (bleak)**: pass a connected client straight to the flow.
-- **External controller (Bumble)**: wrap a connected Bumble `Peer` in
-  `BumbleGattAdapter`, which exposes the low-level GATT primitives (Read-By-Type,
-  MTU, data-length, connection update) the pre-authentication needs and that
-  native stacks may not.
+Everything below — login, token refresh, scan & identification, connection,
+service discovery, the authenticated session — is one call chain:
 
 ```python
-from aqara_u200_ble import BumbleGattAdapter
-transport = BumbleGattAdapter(peer)  # peer: a connected bumble Peer
-```
+import asyncio, os
+from aqara_u200_ble import BleakTransport, BumbleTransport, CloudAuthManager, U200Client
 
-## 4. Run it
-
-The recommended path is autonomous login: give the library a `CloudAuthManager`
-built from your credentials and it logs in on demand, keeps the token in memory,
-and refreshes it if it expires — no manual token to capture or paste.
-
-```python
-import os, asyncio
-from aqara_u200_ble import run_authenticated_lock_operation, CloudAuthManager
-
-# In production the consumer (e.g. Home Assistant) injects these from its own
-# secure storage. For a local run, load them from the environment:
 auth = CloudAuthManager(
     account=os.environ["AQARA_ACCOUNT"],
     password=os.environ["AQARA_PASSWORD"],
@@ -63,21 +36,58 @@ auth = CloudAuthManager(
     phone_id=os.environ["AQARA_PHONE_ID"],
     region=os.environ.get("AQARA_REGION", "EU"),
 )
+transport = BleakTransport()  # host Bluetooth …
+# transport = BumbleTransport(os.environ["AQARA_ESP32_PORT"])   # … or ESP32-S3 controller
+
 
 async def main():
-    material, write, response = await run_authenticated_lock_operation(
-        client=transport,                 # native client or BumbleGattAdapter
+    async with await U200Client.connect(
+        auth=auth,
+        transport=transport,
         device_id=os.environ["AQARA_DEVICE_ID"],
-        auth_headers=None,
-        region=os.environ.get("AQARA_REGION", "EU"),
-        base_url=None,
-        operation="keepalive",            # start here; then "unlock" / "lock"
-        auth=auth,                        # autonomous login + token refresh
-    )
-    print("session:", material.lock_public_key_hex[:16], "…")
-    print("dispatched:", write.operation, write.hex_payload)
+        # mac=os.environ.get("AQARA_LOCK_MAC"),  # optional; otherwise identified by advertisement
+    ) as lock:
+        print(await lock.operate("keepalive"))  # full handshake, bolt does not move
+        print(await lock.lock())  # -> the lock's response (hex) or None
+
 
 asyncio.run(main())
+```
+
+Or from the shell: `python examples/lock_cli.py --transport bleak scan | lock | unlock`.
+
+**Scan & identification.** `scan(transport)` returns `ScanCandidate`s with the
+*reasons* they look like a U200 (`name` = `DoorLocker`, `service` = fcb9/ff60/ff90
+advertised, `manufacturer` = 0x0B27, `mac` = the one you asked for). A device
+that only shares the manufacturer id is never chosen automatically (a real false
+positive was seen); pass `mac=` to disambiguate. The U200 only advertises after
+its **keypad is physically activated**.
+
+**Transports.** `BleakTransport` restricts discovery to the U200 services (needed
+on macOS/CoreBluetooth) and omits the low-level primitives; `BumbleTransport`
+connects with the phone's connection parameters, never pairs (the U200 drops the
+link on any SMP request), and exposes Read-By-Type / MTU / connection update.
+Errors carry the phase (`U200ClientError.phase`: login, scan, connect, discover,
+operation).
+
+## 3. Lower level: bring your own connected client
+
+If you already hold a connected GATT client (Home Assistant's, or a Bumble
+`Peer` wrapped in `BumbleGattAdapter`), wrap it: `U200Client.from_gatt(auth=…,
+gatt_client=…, device_id=…)`, or call the flow directly:
+
+```python
+from aqara_u200_ble import run_authenticated_lock_operation
+
+material, write, response = await run_authenticated_lock_operation(
+    client=gatt_client,
+    device_id=...,
+    auth_headers=None,
+    region="EU",
+    base_url=None,
+    operation="keepalive",
+    auth=auth,
+)
 ```
 
 > Legacy: instead of `auth=`, you can pass a pre-built `signer=` bound to a static
@@ -96,12 +106,16 @@ the bolt, so you confirm the [CRC gate](../../reference/framing-crc.md) is passe
 3. The cloud `verify` returns the session material.
 4. The operation payload is wrapped in AES-CCM and written on the control channel.
 
-## 5. Troubleshooting
+## 4. Troubleshooting
 
 - **Empty response / no key from the lock**: almost always a dropped fragment or a
   wrong CRC field. The library spaces fragment writes (~40 ms); confirm your
   transport does not coalesce writes. See [diagnostics](../../diagnostics.md).
 - **A GATT request hangs**: bound every low-level request with its own timeout; a
   mid-request disconnect must not hang forever.
-- **Missing optional dependency `bleak`/`bumble`**: install the matching extra
-  (`.[ble]` or `.[bumble]`).
+- **Missing optional dependency `bleak`/`bumble`**: the transport tells you the extra
+  to install (`.[ble]` or `.[bumble]`).
+- **`NoDeviceFoundError` / `AmbiguousDeviceError`**: touch the keypad; if several
+  locks answer, pass `mac=`.
+- **Disconnect during discovery right after a previous run**: the U200 rejects an
+  immediate reconnect; wait ~5 s.

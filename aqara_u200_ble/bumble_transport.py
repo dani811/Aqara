@@ -106,8 +106,8 @@ class BumbleGattAdapter:
         (el semaforo interno de Client.send_request de Bumble no se libera ni
         con asyncio.wait_for por fuera). Se retiro entonces SIN volver a
         probarlo con cuidado. Aqui se reintenta con timeout corto propio
-        (mismo patron que update_connection_parameters) + el candado global de
-        45s en tools/bumble_lock.py como red de seguridad si aun asi se cuelga."""
+        (mismo patron que update_connection_parameters) + el timeout por fase
+        de `client.py`/`transport.py` como red de seguridad si aun asi se cuelga."""
         return await asyncio.wait_for(self.peer.request_mtu(mtu), timeout=5.0)
 
     async def set_data_length(self, *, tx_octets: int, tx_time: int) -> None:
