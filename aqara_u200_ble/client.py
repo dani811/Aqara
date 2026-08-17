@@ -249,6 +249,42 @@ class U200Client:
         raw = bytes.fromhex(result.response_hex) if result.response_hex else None
         return decode_lock_state(raw, source=SOURCE_KEEPALIVE)
 
+    async def listen(self, seconds: float = 15.0) -> list[tuple[str, str]]:
+        """Keep the session open after a keepalive and collect spontaneous frames.
+
+        Returns ``(channel, hex)`` for every extra frame the lock pushes within the
+        window — control ff62 (decrypted), report ff64/ff92 (raw). Non-actuating
+        (uses the keepalive poll). This is the diagnostic seed of real-time state /
+        events: run it and see whether the lock reports position or a keypad/manual
+        event after the immediate ACK (feature 023).
+        """
+
+        if not self.connected or self._gatt is None:
+            raise U200ClientError(FlowPhase.OPERATION, "el cliente está cerrado; vuelve a conectar")
+        reports: list[tuple[str, str]] = []
+
+        def collect(channel: str, data: bytes) -> None:
+            reports.append((channel, data.hex()))
+
+        try:
+            await run_authenticated_lock_operation(
+                client=self._gatt,
+                device_id=self.device_id,
+                auth_headers=None,
+                region=self.region,
+                base_url=self.base_url,
+                operation=LockOperation.KEEPALIVE,
+                notify_timeout=self.notify_timeout,
+                auth=self.auth,
+                listen_after=seconds,
+                on_report=collect,
+            )
+        except (OperationInProgressError, CloudServiceError, U200ClientError):
+            raise
+        except Exception as exc:
+            raise U200ClientError(FlowPhase.OPERATION, f"listen: {exc}") from exc
+        return reports
+
     async def query(self, sub_cmd: int, data: bytes = b"") -> LockState:
         """Send a generic control opcode and return its decrypted response as state.
 

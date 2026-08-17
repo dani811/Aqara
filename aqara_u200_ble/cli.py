@@ -15,6 +15,7 @@ environment. This module is loaded only when the ``aqara`` command runs.
     aqara lock  --transport bumble --port serial:/dev/cu.usbmodemNNNN,115200
     aqara state
     aqara query lock_status
+    aqara listen --seconds 20
     aqara operate keepalive
 """
 
@@ -182,6 +183,14 @@ async def _run(args: argparse.Namespace) -> int:  # noqa: PLR0911 - one exit per
             if lock.candidate is not None:
                 print("[scan] picked " + _show(lock.candidate))
             print(f"[connect] connected in {time.monotonic() - started:.1f}s")
+            if args.command == "listen":
+                reports = await lock.listen(args.seconds)
+                print(f"[listen] {args.seconds:g}s window, {len(reports)} frame(s):")
+                for channel, hexdata in reports:
+                    print(f"  {channel}: {hexdata}")
+                if not reports:
+                    print("  (nothing pushed on ff62/ff64/ff92 after the ACK)")
+                return EXIT_OK
             if args.command == "query":
                 opcode = STATUS_QUERIES[args.query_name]
                 st = await lock.query(opcode)
@@ -234,6 +243,8 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
     for name in ("login", "scan", "state", "lock", "unlock"):
         sub.add_parser(name)
+    ls = sub.add_parser("listen", help="keep the session open and print spontaneous frames")
+    ls.add_argument("--seconds", type=float, default=15.0, help="listen window (seconds)")
     q = sub.add_parser("query", help="probe a read-only status/battery opcode")
     q.add_argument("query_name", choices=sorted(STATUS_QUERIES), help="which status opcode to read")
     op = sub.add_parser("operate")

@@ -355,9 +355,17 @@ async def run_authenticated_lock_operation(
     notify_timeout: float = 8.0,
     signer: Any = None,
     auth: CloudAuthManager | None = None,
+    listen_after: float = 0.0,
+    on_report: Callable[[str, bytes], None] | None = None,
 ) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
     """
     Authenticate with the lock, send a command, and receive the response.
+
+    ``listen_after`` (seconds) keeps the connection open after the command's first
+    response and forwards every additional frame — control ff62 (decrypted),
+    report ff64/ff92 (raw) — to ``on_report(channel, data)`` until the window
+    expires (Feature 023, for spontaneous state/events). Default ``0.0`` keeps the
+    exact prior "one command, one response, disconnect" behaviour.
 
     Credential mechanisms (provide at most one; passing **both is an error**):
 
@@ -398,6 +406,8 @@ async def run_authenticated_lock_operation(
                 notify_timeout=notify_timeout,
                 signer=active_signer,
                 actuation_state=actuation_state,
+                listen_after=listen_after,
+                on_report=on_report,
             )
         except CloudServiceError as exc:
             can_retry = (
@@ -427,6 +437,8 @@ async def _run_authenticated_lock_operation_once(
     notify_timeout: float = 8.0,
     signer: Any = None,
     actuation_state: dict[str, bool],
+    listen_after: float = 0.0,
+    on_report: Callable[[str, bytes], None] | None = None,
 ) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
     """
     Single attempt of the authenticated lock operation (see the public wrapper
@@ -505,13 +517,16 @@ async def _run_authenticated_lock_operation_once(
                 if fragment[1] == 0xFF:
                     return assemble_auth_fragments(fragments, expected_direction=0xDA)
 
+        report_queue: asyncio.Queue[tuple[str, bytes]] = asyncio.Queue()
+
         def on_report_notify(channel: str) -> Callable[[object, bytearray], None]:
             # ff64/ff92 carry the lock's REPORT_* pushes. We enable them because the
-            # app does (PRE_AUTH_NOTIFY_ORDER); previously their payloads were
-            # discarded. Capture them under U200_DEBUG to learn if the lock reports
-            # state/position spontaneously (feature 022).
+            # app does (PRE_AUTH_NOTIFY_ORDER). Log under U200_DEBUG (feature 022)
+            # and queue them so a listen window can forward them (feature 023).
             def handler(_: object, data: bytearray) -> None:
-                _debug_report(channel, bytes(data))
+                frame = bytes(data)
+                _debug_report(channel, frame)
+                report_queue.put_nowait((channel, frame))
 
             return handler
 
@@ -799,6 +814,42 @@ async def _run_authenticated_lock_operation_once(
                     session["nonce"],
                     ciphertext=control_frame[1:],
                 ).hex()
+
+            if listen_after > 0 and on_report is not None:
+                # Feature 023: keep the connection open and forward every extra
+                # frame — remaining control ff62 (decrypted) and report ff64/ff92
+                # (raw) — until the window expires. This is how spontaneous state
+                # reports / events (which arrive after the ACK, or on a manual /
+                # keypad operation) become observable.
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + listen_after
+                while True:
+                    remaining = deadline - loop.time()
+                    if remaining <= 0:
+                        break
+                    get_control = asyncio.ensure_future(control_queue.get())
+                    get_report = asyncio.ensure_future(report_queue.get())
+                    done, pending = await asyncio.wait(
+                        {get_control, get_report},
+                        timeout=remaining,
+                        return_when=asyncio.FIRST_COMPLETED,
+                    )
+                    for fut in pending:
+                        fut.cancel()
+                    if get_control in done:
+                        frame = get_control.result()
+                        if len(frame) >= 2:
+                            on_report(
+                                "ff62",
+                                decrypt_control_payload(
+                                    session["sessionKey"],
+                                    session["nonce"],
+                                    ciphertext=frame[1:],
+                                ),
+                            )
+                    if get_report in done:
+                        channel, data = get_report.result()
+                        on_report(channel, data)
 
             material = SessionMaterial(
                 session_key_hex=session["sessionKey"],
