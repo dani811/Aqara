@@ -1,0 +1,220 @@
+"""`aqara` — the packaged command-line adapter over the public API (feature 017).
+
+This module is a **thin** adapter: it parses arguments, loads credentials (from
+flags or the environment — the library itself never reads the environment), builds
+the public objects (`CloudAuthManager`, a `Transport`, `U200Client`) and calls
+their methods, then prints. **No protocol, network or BLE logic lives here** — an
+integration couples to the same public API this CLI uses, without importing `cli`.
+
+Purity invariant: `import aqara_u200_ble` must NOT import this module (it is not
+imported by the package ``__init__``) and importing the library reads no
+environment. This module is loaded only when the ``aqara`` command runs.
+
+    aqara login
+    aqara scan  --transport bleak
+    aqara lock  --transport bumble --port serial:/dev/cu.usbmodemNNNN,115200
+    aqara operate keepalive
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import os
+import sys
+import time
+from pathlib import Path
+
+from . import (
+    AmbiguousDeviceError,
+    BleakTransport,
+    BumbleTransport,
+    CloudAuthManager,
+    NoDeviceFoundError,
+    ScanCandidate,
+    Transport,
+    U200Client,
+    U200ClientError,
+    scan,
+)
+
+# Exit codes by outcome class (FR-005).
+EXIT_OK = 0
+EXIT_ERROR = 1
+EXIT_NOT_FOUND = 2
+EXIT_AMBIGUOUS = 3
+EXIT_CONFIG = 4
+EXIT_TIMEOUT = 5
+
+_REQUIRED_APP_IDS = ("AQARA_APPID", "AQARA_APPKEY", "AQARA_CLIENT_ID", "AQARA_PHONE_ID")
+
+
+def _load_dotenv() -> None:
+    """Populate os.environ from a .env in cwd or repo root (never overrides)."""
+
+    for candidate in (Path.cwd() / ".env", Path(__file__).resolve().parents[1] / ".env"):
+        if candidate.exists():
+            for raw in candidate.read_text().splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                os.environ.setdefault(key.strip(), value.split(" #", 1)[0].strip())
+            return
+
+
+def _auth_from(args: argparse.Namespace) -> CloudAuthManager:
+    """Build a CloudAuthManager from flags or the environment (CLI-only)."""
+
+    account = args.account or os.environ.get("AQARA_ACCOUNT")
+    password = args.password or os.environ.get("AQARA_PASSWORD")
+    missing = [
+        name
+        for name, val in (
+            ("AQARA_ACCOUNT/--account", account),
+            ("AQARA_PASSWORD/--password", password),
+            *((n, os.environ.get(n)) for n in _REQUIRED_APP_IDS),
+        )
+        if not val
+    ]
+    if missing:
+        raise _ConfigError("missing credentials: " + ", ".join(missing))
+    return CloudAuthManager(
+        account=account or "",
+        password=password or "",
+        appid=os.environ["AQARA_APPID"],
+        appkey=os.environ["AQARA_APPKEY"],
+        client_id=os.environ["AQARA_CLIENT_ID"],
+        phone_id=os.environ["AQARA_PHONE_ID"],
+        region=os.environ.get("AQARA_REGION", "EU"),
+    )
+
+
+class _ConfigError(RuntimeError):
+    """Missing/invalid configuration (maps to EXIT_CONFIG)."""
+
+
+def _make_transport(args: argparse.Namespace) -> Transport:
+    if args.transport == "bleak":
+        return BleakTransport()
+    port = args.port or os.environ.get("AQARA_ESP32_PORT")
+    if not port:
+        raise _ConfigError("--transport bumble needs --port or AQARA_ESP32_PORT")
+    return BumbleTransport(port)
+
+
+def _show(c: ScanCandidate) -> str:
+    return (
+        f"{c.address}  name={c.name!r}  model={c.model or '?'}  rssi={c.rssi}  "
+        f"score={c.score}  reasons={{{','.join(sorted(c.reasons))}}}  preferred={c.is_preferred}"
+    )
+
+
+def _device_id() -> str:
+    did = os.environ.get("AQARA_DEVICE_ID")
+    if not did:
+        raise _ConfigError("missing AQARA_DEVICE_ID")
+    return did
+
+
+async def _run(args: argparse.Namespace) -> int:  # noqa: PLR0911 - one exit per outcome
+    # login: only the account path, no radio.
+    if args.command == "login":
+        auth = _auth_from(args)
+        started = time.monotonic()
+        try:
+            await asyncio.to_thread(auth.build_signer)
+        except Exception as exc:  # 810/network/TLS
+            print(f"[login] FAILED: {exc}")
+            return EXIT_ERROR
+        token = auth.get_token()
+        print(
+            f"[login] OK in {time.monotonic() - started:.1f}s: token obtained "
+            f"({len(token)} chars, JWT={'yes' if token.count('.') == 2 else 'no'})"
+        )
+        return EXIT_OK
+
+    transport = _make_transport(args)
+    mac = args.mac or os.environ.get("AQARA_LOCK_MAC") or None
+
+    if args.command == "scan":
+        print(f"[scan] {transport.name}, {args.timeout:g}s (touch the keypad so it advertises)")
+        found = await scan(transport, timeout=args.timeout, mac=mac)
+        for c in found:
+            print("  " + _show(c))
+        if not found:
+            print("  (no candidates)")
+        await transport.disconnect()
+        return EXIT_OK if found else EXIT_NOT_FOUND
+
+    auth = _auth_from(args)
+    device_id = _device_id()
+    started = time.monotonic()
+    print(f"[flow] login → scan → connect → discover → {args.command} via {transport.name}")
+    try:
+        async with await U200Client.connect(
+            auth=auth,
+            transport=transport,
+            device_id=device_id,
+            mac=mac,
+            region=os.environ.get("AQARA_REGION", "EU"),
+            scan_timeout=args.timeout,
+        ) as lock:
+            if lock.candidate is not None:
+                print("[scan] picked " + _show(lock.candidate))
+            print(f"[connect] connected in {time.monotonic() - started:.1f}s")
+            if args.command == "lock":
+                response, op = await lock.lock(), "LOCK"
+            elif args.command == "unlock":
+                response, op = await lock.unlock(), "UNLOCK"
+            else:
+                result = await lock.operate(args.operation)
+                response, op = result.response_hex, result.operation.name
+            shown = response or "(no response; the bolt may still have moved)"
+            print(f"[OK] op={op} response={shown} total={time.monotonic() - started:.1f}s")
+            return EXIT_OK
+    except AmbiguousDeviceError as exc:
+        print(f"[scan] {exc}")
+        return EXIT_AMBIGUOUS
+    except NoDeviceFoundError as exc:
+        print(f"[scan] {exc}")
+        return EXIT_NOT_FOUND
+    except U200ClientError as exc:
+        print(f"[{exc.phase.value}] FAILED: {exc}")
+        return EXIT_ERROR
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="aqara",
+        description="Control an Aqara U200 lock through the aqara_u200_ble library.",
+    )
+    p.add_argument("--transport", choices=("bleak", "bumble"), default="bleak")
+    p.add_argument("--port", help="bumble transport spec, e.g. serial:/dev/cu.usbmodemNNNN,115200")
+    p.add_argument("--mac", help="lock MAC (overrides AQARA_LOCK_MAC); omit to identify by advert")
+    p.add_argument("--timeout", type=float, default=30.0, help="scan timeout (seconds)")
+    p.add_argument("--account", help="account (overrides AQARA_ACCOUNT)")
+    p.add_argument("--password", help="password (overrides AQARA_PASSWORD)")
+    sub = p.add_subparsers(dest="command", required=True)
+    for name in ("login", "scan", "lock", "unlock"):
+        sub.add_parser(name)
+    op = sub.add_parser("operate")
+    op.add_argument("operation", help="LockOperation name or hex (e.g. keepalive)")
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    _load_dotenv()
+    args = _build_parser().parse_args(argv)
+    try:
+        return asyncio.run(asyncio.wait_for(_run(args), timeout=120))
+    except _ConfigError as exc:
+        print(f"[config] {exc}")
+        return EXIT_CONFIG
+    except TimeoutError:
+        print("[!] global timeout (120s): something hung in the radio stack; retry")
+        return EXIT_TIMEOUT
+
+
+if __name__ == "__main__":
+    sys.exit(main())

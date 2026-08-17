@@ -54,7 +54,8 @@ async def main():
 asyncio.run(main())
 ```
 
-Or from the shell: `python examples/lock_cli.py --transport bleak scan | lock | unlock`.
+Or from the shell with the packaged command: `aqara scan | lock | unlock`
+(`aqara --help`). The CLI is a thin adapter over this same API.
 
 **Scan & identification.** `scan(transport)` returns `ScanCandidate`s with the
 *reasons* they look like a U200 (`name` = `DoorLocker`, `service` = fcb9/ff60/ff90
