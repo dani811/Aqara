@@ -20,17 +20,21 @@ Bluetooth SIG base; the advertisement carries them all as 16-bit shorts.
 
 ## Full attribute table (complete service discovery, 2026-08-19)
 
-Enumerated live against the reference U200 (macOS CoreBluetooth, own lock,
-firmware as shipped). Every service the lock exposes, in handle order —
+Enumerated live against the reference U200 (macOS CoreBluetooth + ESP32-S3/bumble
+for the OS-hidden services, own lock, firmware as shipped). Every service the lock exposes, in handle order —
 including the ones the protocol does not use:
 
 | Handles | Service | Characteristic (decl / value) | Props | Descriptors | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `0x0001`–`0x000d` | `1800` GAP / `1801` GATT | — | — | — | Hidden by CoreBluetooth; handle span inferred from the gap before `0x000e`. Re-read with a raw HCI stack (bumble/ESP32-S3) if needed. |
+| `0x0001`–`0x0008` | `1801` Generic Attribute | `2a05` Service Changed `0x0002`/`0x0003` | indicate | CCCD `0x0004` | Hidden by CoreBluetooth; read via ESP32-S3/bumble |
+| | | `2b2a` Database Hash `0x0005`/`0x0006` | read | — | `c1e296c4089af00548a300f1177fedea` (firmware-specific; changes if the GATT table changes) |
+| | | `2b29` Client Supported Features `0x0007`/`0x0008` | read, write | — | `00` |
+| `0x0009`–`0x000d` | `1800` Generic Access | `2a00` Device Name `0x000a`/`0x000b` | read, write | — | `"Empty Example"` (SiLabs SDK default — the advertised name `DoorLocker` is not the GAP name) |
+| | | `2a01` Appearance `0x000c`/`0x000d` | read | — | `0000` |
 | `0x000e`–`0x0014` | `180a` Device Information | `2a29` Manufacturer `0x000f`/`0x0010` | read | — | `"Silicon Labs"` |
 | | | `2a24` Model Number `0x0011`/`0x0012` | read | — | `"Blue Gecko"` (SoC default, useless for model id) |
 | | | `2a23` System ID `0x0013`/`0x0014` | read | — | `000102030405` (SoC default) |
-| `0x0015`–`0x001d` | **`fff6` Matter BTP (commissioning)** | `18ee2ef5-263d-4559-959f-4f9c429f9d11` C1 `0x0016`/`0x0017` | read, write | — | Matter BLE Transport C1 (central → device) |
+| `0x0015`–`0x001d` | **`fff6` Matter BTP (commissioning)** | `18ee2ef5-263d-4559-959f-4f9c429f9d11` C1 `0x0016`/`0x0017` | read, write | — | Matter BLE Transport C1 (central → device); reads `00` via bumble |
 | | | `18ee2ef5-…-9d12` C2 `0x0018`/`0x0019` | read, write, write-no-rsp, indicate | CCCD `0x001a` | Matter BTP C2 (device → central) |
 | | | `64630238-8772-45f2-b87d-748a83218f04` C3 `0x001b`/`0x001c` | read, write, write-no-rsp, indicate | CCCD `0x001d` | Matter "additional data" |
 | `0x001e`–`0x0023` | `fcb9` Auth | `ff07` `0x001f`/`0x0020` | write-no-rsp | — | `AUTH_WRITE` |
