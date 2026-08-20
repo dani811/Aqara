@@ -19,6 +19,17 @@ from importlib.metadata import PackageNotFoundError, version
 from .auth import CloudAuthManager
 from .bumble_transport import BumbleGattAdapter
 from .client import OperationResult, U200Client
+from .cloud_crypto import (
+    aes128gcm_decrypt_body,
+    aes128gcm_encrypt_body,
+    compute_nonce,
+    compute_sign,
+    encrypt_login_password,
+    hkdf_expand,
+    hkdf_extract,
+    hkdf_sha256,
+    make_local_signer,
+)
 from .errors import AmbiguousDeviceError, FlowPhase, NoDeviceFoundError, U200ClientError
 from .gatt import GattClient
 from .gatt_uuids import (
@@ -37,20 +48,11 @@ from .gatt_uuids import (
 )
 from .kdf import (
     CloudServiceError,
-    aes128gcm_decrypt_body,
-    aes128gcm_encrypt_body,
     build_cloud_auth_headers,
     cloud_get_public_key,
     cloud_verify,
-    compute_nonce,
-    compute_sign,
-    encrypt_login_password,
     get_session_material,
-    hkdf_expand,
-    hkdf_extract,
-    hkdf_sha256,
     login,
-    make_local_signer,
     prepare_runtime_cloud_auth_headers,
 )
 from .lock_ops import (

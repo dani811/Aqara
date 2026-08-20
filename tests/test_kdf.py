@@ -22,6 +22,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from aqara_u200_ble import (
     aes128gcm_decrypt_body,
     aes128gcm_encrypt_body,
+    cloud_crypto,
     compute_nonce,
     compute_sign,
     encrypt_login_password,
@@ -125,12 +126,12 @@ def test_encrypt_login_password_rsa_plaintext_is_md5_hex_lowercase() -> None:
     der = key.public_key().public_bytes(Encoding.DER, PublicFormat.SubjectPublicKeyInfo)
     monkey_b64 = base64.b64encode(der).decode("ascii")
 
-    saved = kdf._LOGIN_RSA_PUBKEY_DER_B64
+    saved = cloud_crypto._LOGIN_RSA_PUBKEY_DER_B64
     try:
-        kdf._LOGIN_RSA_PUBKEY_DER_B64 = monkey_b64
-        blob = kdf.encrypt_login_password(throwaway_password)
+        cloud_crypto._LOGIN_RSA_PUBKEY_DER_B64 = monkey_b64
+        blob = cloud_crypto.encrypt_login_password(throwaway_password)
     finally:
-        kdf._LOGIN_RSA_PUBKEY_DER_B64 = saved
+        cloud_crypto._LOGIN_RSA_PUBKEY_DER_B64 = saved
 
     plaintext = key.decrypt(base64.b64decode(blob), _pad.PKCS1v15())
     expected = hashlib.md5(throwaway_password.encode("utf-8")).hexdigest()
