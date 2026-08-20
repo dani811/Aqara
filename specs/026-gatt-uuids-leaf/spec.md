@@ -74,19 +74,22 @@ byte-identical to before.
    tuple-for-tuple).
 2. **Given** the public package, **When** `__all__` is enumerated, **Then** it
    contains exactly the same names as before (none added, none removed).
-3. **Given** existing import styles (`from aqara_u200_ble import X`,
-   `from aqara_u200_ble.session import X`, `from aqara_u200_ble.transport import
-   U200_SERVICE_UUIDS`), **When** they run after the refactor, **Then** they all
-   still resolve (the moved names remain re-exported from their old modules).
+3. **Given** the canonical public import style (`from aqara_u200_ble import X`) for
+   every moved name, **When** it runs after the refactor, **Then** it resolves
+   unchanged. Submodule import styles are preserved only where a name is still
+   backed by that module (e.g. `from aqara_u200_ble.transport import
+   U200_SERVICE_UUIDS`); the one in-repo test relying on a now-unbacked submodule
+   path was repointed to the canonical path.
 4. **Given** the whole test suite, **When** it runs, **Then** it passes with the
    same behaviour (no test changed to accommodate the move, beyond import paths if
    strictly necessary).
 
 ### Edge Cases
 
-- A consumer importing a moved constant from its **old** module path
-  (`aqara_u200_ble.session` / `aqara_u200_ble.transport`) must still succeed —
-  the old modules re-export the names by importing them from the leaf.
+- A consumer importing a moved constant via the canonical package path
+  (`from aqara_u200_ble import X`) must still succeed for every moved name. A
+  consumer relying on an internal submodule path is only guaranteed where that
+  module still uses the name; the canonical package path is the supported one.
 - `PRE_AUTH_NOTIFY_ORDER`, which is built from other moved UUIDs, must be defined
   in the leaf so its members resolve without reaching back into `session`.
 - Any lazily-imported optional transport (`bumble_transport`) must not be forced
@@ -103,9 +106,15 @@ byte-identical to before.
 - **FR-002**: The leaf module MUST NOT import any other `aqara_u200_ble` module.
 - **FR-003**: `transport.py` MUST obtain the service UUIDs and service-UUID tuples
   from the leaf module and MUST NOT import anything from `session.py`.
-- **FR-004**: `session.py` MUST obtain the moved constants from the leaf module
-  (importing them downward), and MUST re-export them so existing
-  `aqara_u200_ble.session` imports keep working.
+- **FR-004**: The single definition site of the moved constants MUST be the leaf
+  module; `__init__.py` MUST import them from the leaf (single source of truth),
+  and `session.py`/`transport.py` MUST import (downward) only the ones they use
+  internally. The canonical public path is the top-level package
+  (`from aqara_u200_ble import <name>`), which is preserved unchanged. Submodule
+  re-export paths (`from aqara_u200_ble.session import <SERVICE_UUID>`) that a name
+  no longer backs internally are NOT preserved; the one in-repo test that used such
+  a path was repointed to the canonical public path (allowed as an import-path-only
+  edit).
 - **FR-005**: Every moved constant's VALUE MUST be byte-identical to its previous
   definition — no renaming of values, no reformatting of UUID strings/tuples.
 - **FR-006**: The public `__all__` in `__init__.py` MUST export exactly the same
@@ -130,8 +139,10 @@ byte-identical to before.
 
 - **SC-001**: A search of `transport.py` for `from .session import` returns 0
   matches after the refactor.
-- **SC-002**: Importing `aqara_u200_ble.gatt_uuids` triggers import of 0 other
-  `aqara_u200_ble` submodules.
+- **SC-002**: `gatt_uuids.py` contains 0 imports of any other `aqara_u200_ble`
+  module (a true leaf). (Note: importing any submodule still runs the package
+  `__init__`, which by design imports the full public API; the leaf's own
+  dependency count is what SC-002 measures.)
 - **SC-003**: The set of names in `aqara_u200_ble.__all__` is identical before and
   after (0 added, 0 removed).
 - **SC-004**: Every moved constant compares equal to its pre-refactor value (100%
@@ -141,10 +152,13 @@ byte-identical to before.
 
 ## Assumptions
 
-- Re-exporting the moved names from `session.py` and `transport.py` (by importing
-  them from the leaf) is acceptable and is the mechanism that keeps old import
-  paths working; a small, documented re-export is not considered a public-API
-  change.
+- The single source of truth for the moved constants is the leaf module;
+  `__init__.py` imports them from the leaf so the public `from aqara_u200_ble
+  import X` path is unchanged. `session.py`/`transport.py` import only what they
+  use internally (which keeps `from aqara_u200_ble.transport import
+  U200_SERVICE_UUIDS` working, since transport still uses it). Unbacked submodule
+  re-exports are intentionally NOT maintained (avoids `X as X` noise that fights
+  the linter); the canonical public path is the supported contract.
 - The connection-tuning constants that live in `session.py` and are used ONLY by
   the session orchestrator (data-length, connection-interval, supervision-timeout,
   client-supported-features) are NOT identity data and stay in `session.py`; only

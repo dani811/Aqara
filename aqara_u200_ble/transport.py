@@ -29,8 +29,12 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 from .gatt import GattClient
+
+# Import GATT identity constants DOWNWARD from the leaf module (not from session):
+# this is what keeps the radio layer independent of session/auth/kdf. Re-exported
+# below so ``from aqara_u200_ble.transport import U200_SERVICE_UUIDS`` keeps working.
+from .gatt_uuids import U200_SERVICE_UUID16, U200_SERVICE_UUIDS
 from .models import decode_manufacturer_payload
-from .session import AUTH_SERVICE_UUID, AUX_SERVICE_UUID, CONTROL_SERVICE_UUID
 
 # ── identification constants ─────────────────────────────────────────────────
 
@@ -38,16 +42,6 @@ from .session import AUTH_SERVICE_UUID, AUX_SERVICE_UUID, CONTROL_SERVICE_UUID
 EXPECTED_NAME = "DoorLocker"
 #: Bluetooth SIG company identifier Aqara/Lumi puts in the manufacturer data.
 AQARA_COMPANY_ID = 0x0B27
-#: Services the U200 exposes (auth fcb9, control ff60, auxiliary ff90). Used both
-#: to identify a candidate from its advertisement and to restrict discovery on
-#: stacks (CoreBluetooth) that refuse to enumerate descriptors of foreign services.
-U200_SERVICE_UUIDS: tuple[str, ...] = (
-    AUTH_SERVICE_UUID,
-    CONTROL_SERVICE_UUID,
-    AUX_SERVICE_UUID,
-)
-#: 16-bit short forms of the same services, for advertisements that carry them short.
-U200_SERVICE_UUID16: tuple[str, ...] = tuple(u[4:8] for u in U200_SERVICE_UUIDS)
 
 #: Scores that make up `ScanCandidate.score` (higher = more certainly the lock).
 SCORE_BY_REASON: Mapping[str, int] = {"mac": 8, "name": 4, "service": 2, "manufacturer": 1}
