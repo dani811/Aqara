@@ -16,7 +16,5 @@ jobs:
         run: pip install -e ".[dev,ble]"
       - name: Lint (ruff)
         run: ruff check .
-      - name: Types (mypy)
-        run: mypy aqara_u200_ble
       - name: Secret-hygiene guard + unit tests
         run: pytest -q

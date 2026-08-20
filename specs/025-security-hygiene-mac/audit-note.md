@@ -14,7 +14,7 @@ the tracked tree.
 
 | Match | Where | Verdict |
 | --- | --- | --- |
-| `AA:BB:CC:DD:EE:FF` | `tests/test_cli.py` (was) | **REMOVED** — real lock MAC → placeholder; purged from history |
+| `[REDACTED-MAC]` (the real lock MAC) | `tests/test_cli.py` (was) | **REMOVED** — → placeholder; purged from history |
 | `AA:BB:CC:DD:EE:FF` | tests, spec | placeholder (allow-listed) |
 | `11:22:33:44:55:66` | tests | placeholder (allow-listed) |
 | `CA:FE:00:00:00:01` / `:02` | tests | synthetic "cafe" test device (allow-listed) |
