@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import logging
 
-from .kdf import CloudServiceError, Signer, login, make_local_signer
+from .cloud_crypto import Signer, make_local_signer
+from .kdf import CloudServiceError, login
 
 logger = logging.getLogger(__name__)
 
