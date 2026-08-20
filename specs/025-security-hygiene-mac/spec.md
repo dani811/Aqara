@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Input**: User description: "Cleanup phase 1 — Security hygiene: sanitize the leaked real device MAC (AA:BB:CC:DD:EE:FF, hardcoded in tests/test_cli.py, committed in 4afdcc5, pushed to the public repo dani811/Aqara — a Constitution Principle I violation) and add a guard that prevents any real-looking secret/MAC from recurring in tracked files. Behavior of the library and wire protocol must not change."
+**Input**: User description: "Cleanup phase 1 — Security hygiene: sanitize the leaked real device MAC ([REDACTED-MAC], hardcoded in tests/test_cli.py, committed in 4afdcc5, pushed to the public repo dani811/Aqara — a Constitution Principle I violation) and add a guard that prevents any real-looking secret/MAC from recurring in tracked files. Behavior of the library and wire protocol must not change."
 
 ## Overview
 
@@ -14,7 +14,7 @@ The project constitution's Principle I (Security & Secret Hygiene, NON-NEGOTIABL
 forbids committing device identifiers — MAC addresses "without limitation" —
 because the artefacts here control a physical door. A regression fix
 (commit `4afdcc5`, `fix(020)`) hardcoded the reference lock's **real** BLE MAC
-`AA:BB:CC:DD:EE:FF` into `tests/test_cli.py` (lines 175, 194, 196). That value has
+`[REDACTED-MAC]` into `tests/test_cli.py` (lines 175, 194, 196). That value has
 been verified against the lock's live advertisement and is now present in the
 public GitHub repository. This feature removes the leaked value from the current
 tree and installs an automated guard so the class of mistake cannot silently
@@ -32,13 +32,13 @@ compliance with Principle I.
 the repository continues to publish a real device identifier on every clone. It
 is the reason this feature exists.
 
-**Independent Test**: Grep the whole tracked tree for `AA:BB:CC:DD:EE:FF`; expect
+**Independent Test**: Grep the whole tracked tree for `[REDACTED-MAC]`; expect
 zero matches. Run the test suite; `tests/test_cli.py` still passes and still
 exercises the same CLI env-MAC behaviour, now using an obviously-fake placeholder.
 
 **Acceptance Scenarios**:
 
-1. **Given** the current tree contains `AA:BB:CC:DD:EE:FF` in `tests/test_cli.py`,
+1. **Given** the current tree contains `[REDACTED-MAC]` in `tests/test_cli.py`,
    **When** the sanitization is applied, **Then** a case-insensitive search of all
    git-tracked files for that exact string returns no matches.
 2. **Given** the placeholder replaces the real MAC, **When** the test suite runs,
@@ -120,7 +120,7 @@ normal test/CI invocation, not as an opt-in extra.
 
 ### Functional Requirements
 
-- **FR-001**: The exact string `AA:BB:CC:DD:EE:FF` (case-insensitive) MUST NOT
+- **FR-001**: The exact string `[REDACTED-MAC]` (case-insensitive) MUST NOT
   appear in any git-tracked file after this feature.
 - **FR-002**: Every occurrence of that MAC in `tests/test_cli.py` MUST be replaced
   with a single obviously-fake placeholder consistent with the existing
@@ -150,7 +150,7 @@ normal test/CI invocation, not as an opt-in extra.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Leaked value**: the real lock MAC `AA:BB:CC:DD:EE:FF` — the single known
+- **Leaked value**: the real lock MAC `[REDACTED-MAC]` — the single known
   secret being removed.
 - **Placeholder allow-list**: the finite set of sanctioned non-secret patterns the
   guard tolerates (fake MAC family, the login RSA public key, SoC default System
@@ -162,7 +162,7 @@ normal test/CI invocation, not as an opt-in extra.
 
 ### Measurable Outcomes
 
-- **SC-001**: A case-insensitive search of all tracked files for `AA:BB:CC:DD:EE:FF`
+- **SC-001**: A case-insensitive search of all tracked files for `[REDACTED-MAC]`
   returns 0 matches.
 - **SC-002**: The full test suite passes (all 197+ tests), with the previously
   MAC-bearing tests still asserting the same behaviour — 0 tests removed or skipped
