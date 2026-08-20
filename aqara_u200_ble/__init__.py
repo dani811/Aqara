@@ -21,6 +21,20 @@ from .bumble_transport import BumbleGattAdapter
 from .client import OperationResult, U200Client
 from .errors import AmbiguousDeviceError, FlowPhase, NoDeviceFoundError, U200ClientError
 from .gatt import GattClient
+from .gatt_uuids import (
+    AUTH_NOTIFY_UUID,
+    AUTH_SERVICE_UUID,
+    AUTH_WRITE_UUID,
+    AUX_NOTIFY_UUID,
+    AUX_SERVICE_UUID,
+    CONTROL_NOTIFY2_UUID,
+    CONTROL_NOTIFY_UUID,
+    CONTROL_SERVICE_UUID,
+    CONTROL_WRITE_UUID,
+    GATT_CACHING_PREAMBLE_UUID16,
+    PRE_AUTH_NOTIFY_ORDER,
+    U200_SERVICE_UUIDS,
+)
 from .kdf import (
     CloudServiceError,
     aes128gcm_decrypt_body,
@@ -76,17 +90,6 @@ from .protocol import (
 )
 from .scanner import identify_candidate, scan, select_preferred
 from .session import (
-    AUTH_NOTIFY_UUID,
-    AUTH_SERVICE_UUID,
-    AUTH_WRITE_UUID,
-    AUX_NOTIFY_UUID,
-    AUX_SERVICE_UUID,
-    CONTROL_NOTIFY2_UUID,
-    CONTROL_NOTIFY_UUID,
-    CONTROL_SERVICE_UUID,
-    CONTROL_WRITE_UUID,
-    GATT_CACHING_PREAMBLE_UUID16,
-    PRE_AUTH_NOTIFY_ORDER,
     OperationInProgressError,
     SessionMaterial,
     assemble_auth_fragments,
@@ -101,7 +104,6 @@ from .session import (
 from .transport import (
     AQARA_COMPANY_ID,
     EXPECTED_NAME,
-    U200_SERVICE_UUIDS,
     BleakTransport,
     BumbleTransport,
     ScanCandidate,

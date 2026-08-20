@@ -15,6 +15,21 @@ from typing import Any, TypeVar
 
 from .auth import CloudAuthManager
 from .gatt import GattClient
+
+# GATT identity constants live in the leaf module ``gatt_uuids`` so the low-level
+# transport can import them without depending on this (higher) module. Re-exported
+# from here so ``from aqara_u200_ble.session import AUTH_SERVICE_UUID`` etc. keep
+# working. See gatt_uuids.py.
+from .gatt_uuids import (
+    AUTH_NOTIFY_UUID,
+    AUTH_WRITE_UUID,
+    AUX_NOTIFY_UUID,
+    CONTROL_NOTIFY2_UUID,
+    CONTROL_NOTIFY_UUID,
+    CONTROL_WRITE_UUID,
+    GATT_CACHING_PREAMBLE_UUID16,
+    PRE_AUTH_NOTIFY_ORDER,
+)
 from .kdf import (
     REGION_BASE_URLS,
     CloudServiceError,
@@ -89,32 +104,12 @@ async def _run_cloud_phase(phase: str, fn: Callable[..., _T], /, **kwargs: Any) 
     return result
 
 
-AUTH_SERVICE_UUID = "0000fcb9-0000-1000-8000-00805f9b34fb"
-AUTH_WRITE_UUID = "0000ff07-0000-1000-8000-00805f9b34fb"
-AUTH_NOTIFY_UUID = "0000ff08-0000-1000-8000-00805f9b34fb"
-CONTROL_SERVICE_UUID = "0000ff60-2333-5b1e-9d7c-c687fd2f04f2"
-CONTROL_WRITE_UUID = "0000ff61-2333-5b1e-9d7c-c687fd2f04f2"
-CONTROL_NOTIFY_UUID = "0000ff62-2333-5b1e-9d7c-c687fd2f04f2"
-# Notificaciones secundarias (svc ff60): la app las habilita antes del auth.
-CONTROL_NOTIFY2_UUID = "0000ff64-2333-5b1e-9d7c-c687fd2f04f2"
-AUX_SERVICE_UUID = "0000ff90-2333-5b1e-9d7c-c687fd2f04f2"
-AUX_NOTIFY_UUID = "0000ff92-2333-5b1e-9d7c-c687fd2f04f2"
+# NOTE: the GATT-caching preamble UUID16 tuple (Appearance + Database Hash) now
+# lives in gatt_uuids.GATT_CACHING_PREAMBLE_UUID16; the constants below are the
+# session-only tuning values that pair with it and stay here.
 
-# Preámbulo GATT estándar de Bluetooth 5.1+ ("Robust Caching", Vol 3 Part G):
-# Read By Type de Appearance (0x2A01) y Database Hash (0x2B2A). Confirmado
-# por captura HCI real (2026-08-11) que la app/Android SIEMPRE hace estas dos
-# lecturas justo tras el MTU exchange y ANTES de escribir la clave pública
-# (0610). Es lo que durante meses se documentó como "lectura del handle
-# 0x0006" sin saber qué era: no es un secreto de Aqara, es que el handle 0x0006
-# resulta ser donde vive el Database Hash EN ESTA CERRADURA (el handle en sí
-# no es estable; se resuelve por UUID, no a pelo). bleak no expone esta
-# primitiva (Read By Type genérico); Bumble sí, vía
-# Client.read_characteristics_by_uuid. Adaptadores que no la soporten
-# simplemente se saltan este paso (best-effort, ver
-# run_authenticated_lock_operation).
-GATT_CACHING_PREAMBLE_UUID16 = (0x2A01, 0x2B2A)  # Appearance, Database Hash
-
-# HIPOTESIS PROBADA Y DESCARTADA (2026-08-12b): el preambulo de arriba solo
+# HIPOTESIS PROBADA Y DESCARTADA (2026-08-12b): el preambulo GATT-caching (ahora
+# en gatt_uuids.GATT_CACHING_PREAMBLE_UUID16) solo
 # REPLICA LA LECTURA de Database Hash, pero nunca escribia `Client Supported
 # Features` (0x2B29) -- la otra mitad del mecanismo de "Robust Caching"
 # (Bluetooth Core Vol 3 Part G Sec 2.5.2; ver tambien la doc de Silicon Labs
@@ -155,17 +150,6 @@ DATA_LENGTH_TX_TIME = 2120
 POST_AUTH_CONNECTION_INTERVAL_MS = 15.0
 POST_AUTH_CONNECTION_LATENCY = 0
 POST_AUTH_SUPERVISION_TIMEOUT_MS = 4000.0
-
-# Orden EXACTO en el que la app habilita CCCD antes de mandar la clave pública
-# (confirmado por captura real, ver docs/protocolo.md "Secuencia completa de
-# conexión").
-PRE_AUTH_NOTIFY_ORDER = (
-    CONTROL_NOTIFY_UUID,  # ff62
-    CONTROL_NOTIFY2_UUID,  # ff64
-    AUX_NOTIFY_UUID,  # ff92
-    AUTH_NOTIFY_UUID,  # ff08
-)
-
 
 @dataclass(frozen=True)
 class SessionMaterial:

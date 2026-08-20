@@ -13,6 +13,8 @@ import pytest
 
 from aqara_u200_ble import (
     AQARA_COMPANY_ID,
+    AUTH_SERVICE_UUID,
+    CONTROL_SERVICE_UUID,
     AmbiguousDeviceError,
     NoDeviceFoundError,
     ScanCandidate,
@@ -20,7 +22,6 @@ from aqara_u200_ble import (
     scan,
     select_preferred,
 )
-from aqara_u200_ble.session import AUTH_SERVICE_UUID, CONTROL_SERVICE_UUID
 
 MAC_LOCK = "CA:FE:00:00:00:01"
 MAC_OTHER = "CA:FE:00:00:00:02"
