@@ -5,27 +5,6 @@ from __future__ import annotations
 import binascii
 from dataclasses import dataclass
 
-AUTH_WRITE = 0x0020
-AUTH_NOTIFY = 0x0022
-CONTROL_WRITE = 0x0031
-CONTROL_NOTIFY = 0x0033
-BULK_WRITE = 0x003C
-BULK_NOTIFY = 0x003E
-
-ATT_CONTROL_WRITE = CONTROL_WRITE
-ATT_CONTROL_NOTIFY = CONTROL_NOTIFY
-
-
-@dataclass(frozen=True)
-class ATTPacket:
-    frame: int
-    epoch: float
-    connection: int
-    direction: int
-    opcode: int
-    handle: int
-    value: bytes
-
 
 @dataclass(frozen=True)
 class ControlRequest:

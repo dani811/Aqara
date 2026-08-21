@@ -5,7 +5,7 @@ Bumble se usa cuando el transporte real es un controlador BLE externo (p.ej.
 un ESP32-S3 por HCI serie) en vez del Bluetooth nativo del sistema, y porque
 expone primitivas GATT de bajo nivel (Read By Type Request) que bleak no
 soporta y que la cerradura necesita en el preámbulo pre-auth (ver
-`session.GATT_CACHING_PREAMBLE_UUID16` y docs/ble-control-handoff.md §6.6).
+`session.GATT_CACHING_PREAMBLE_UUID16` y docs/reference/).
 
 Movido aquí desde `tools/bumble_lock.py` (2026-08-11) para que sea
 reutilizable como parte de la librería en vez de vivir solo en un script.
@@ -89,7 +89,7 @@ class BumbleGattAdapter:
         SI estaba ya descartado como bajo impacto -- este consulta el mapa
         de features LE del peer, no la version LMP). Bumble lo expone como
         Device.get_remote_le_features(), no automatico. Ver
-        docs/ble-control-handoff.md §11.14."""
+        docs/reference/."""
         connection = self.peer.connection
         features = await asyncio.wait_for(
             connection.device.get_remote_le_features(connection), timeout=5.0
@@ -101,7 +101,7 @@ class BumbleGattAdapter:
         que Android SIEMPRE hace este intercambio justo tras conectar, ANTES
         del preambulo GATT caching -- y es el UNICO paso de esa secuencia que
         este proyecto nunca ha reproducido con exito: un intento anterior
-        (2026-08-11, ver docs/ble-control-handoff.md §6.3) colgo el proceso
+        (2026-08-11, ver docs/reference/) colgo el proceso
         para siempre cuando la cerradura desconectaba a mitad de la peticion
         (el semaforo interno de Client.send_request de Bumble no se libera ni
         con asyncio.wait_for por fuera). Se retiro entonces SIN volver a
@@ -113,7 +113,7 @@ class BumbleGattAdapter:
     async def set_data_length(self, *, tx_octets: int, tx_time: int) -> None:
         """Pide LE Data Length Extension (Vol 6 Part B 4.5.10). Timeout
         propio corto: ver update_connection_parameters, misma cautela tras
-        el colgado real de request_mtu (docs/ble-control-handoff.md §6.3)."""
+        el colgado real de request_mtu (docs/reference/)."""
         connection = self.peer.connection
         await asyncio.wait_for(
             connection.set_data_length(tx_octets, tx_time),
@@ -125,7 +125,7 @@ class BumbleGattAdapter:
     ) -> None:
         """Pide un LE Connection Update (Vol 6 Part B 4.5.1). Con timeout
         corto propio: `peer.request_mtu()` demostro (2026-08-11, ver
-        docs/ble-control-handoff.md §6.6) que una peticion GATT pendiente
+        docs/reference/) que una peticion GATT pendiente
         puede quedarse colgada para siempre si la cerradura desconecta a
         mitad, incluso envuelta en asyncio.wait_for por fuera. Igual de
         importante aqui: nunca dejar esto sin cota de tiempo propia."""

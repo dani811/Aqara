@@ -37,18 +37,18 @@ including the ones the protocol does not use:
 | `0x0015`–`0x001d` | **`fff6` Matter BTP (commissioning)** | `18ee2ef5-263d-4559-959f-4f9c429f9d11` C1 `0x0016`/`0x0017` | read, write | — | Matter BLE Transport C1 (central → device); reads `00` via bumble |
 | | | `18ee2ef5-…-9d12` C2 `0x0018`/`0x0019` | read, write, write-no-rsp, indicate | CCCD `0x001a` | Matter BTP C2 (device → central) |
 | | | `64630238-8772-45f2-b87d-748a83218f04` C3 `0x001b`/`0x001c` | read, write, write-no-rsp, indicate | CCCD `0x001d` | Matter "additional data" |
-| `0x001e`–`0x0023` | `fcb9` Auth | `ff07` `0x001f`/`0x0020` | write-no-rsp | — | `AUTH_WRITE` |
-| | | `ff08` `0x0021`/`0x0022` | notify | CCCD `0x0023` | `AUTH_NOTIFY` |
+| `0x001e`–`0x0023` | `fcb9` Auth | `ff07` `0x001f`/`0x0020` | write-no-rsp | — | auth write |
+| | | `ff08` `0x0021`/`0x0022` | notify | CCCD `0x0023` | auth notify |
 | `0x0024`–`0x0028` | `ff70` (vendor) **unknown** | `ff71` `0x0025`/`0x0026` | write-no-rsp | — | Not used by the app flow we reproduce; no notify side |
 | | | `ff72` `0x0027`/`0x0028` | write-no-rsp | — | idem |
 | `0x0029`–`0x002e` | `ff80` (vendor) **unknown** | `ff81` `0x002a`/`0x002b` | write-no-rsp | — | Not used by the app flow we reproduce |
 | | | `ff82` `0x002c`/`0x002d` | notify | CCCD `0x002e` | Never subscribed by us — candidate for a state/event channel |
-| `0x002f`–`0x0039` | `ff60` Control | `ff61` `0x0030`/`0x0031` | write-no-rsp | — | `CONTROL_WRITE` |
-| | | `ff62` `0x0032`/`0x0033` | notify | CCCD `0x0034` | `CONTROL_NOTIFY` |
+| `0x002f`–`0x0039` | `ff60` Control | `ff61` `0x0030`/`0x0031` | write-no-rsp | — | control write |
+| | | `ff62` `0x0032`/`0x0033` | notify | CCCD `0x0034` | control notify |
 | | | `ff63` `0x0035`/`0x0036` | write-no-rsp | — | OTA write |
-| | | `ff64` `0x0037`/`0x0038` | notify | CCCD `0x0039` | `CONTROL_NOTIFY2` (report) |
-| `0x003a`–`0x003f` | `ff90` Aux / bulk | `ff91` `0x003b`/`0x003c` | write-no-rsp | — | `BULK_WRITE` |
-| | | `ff92` `0x003d`/`0x003e` | notify | CCCD `0x003f` | `BULK_NOTIFY` / `AUX_NOTIFY` |
+| | | `ff64` `0x0037`/`0x0038` | notify | CCCD `0x0039` | control notify 2 (report; ff64) |
+| `0x003a`–`0x003f` | `ff90` Aux / bulk | `ff91` `0x003b`/`0x003c` | write-no-rsp | — | bulk write |
+| | | `ff92` `0x003d`/`0x003e` | notify | CCCD `0x003f` | bulk/aux notify (ff92) |
 
 Negotiated MTU on macOS: 247.
 
@@ -80,19 +80,21 @@ full `BleakClient(dev)` connect aborts. Discover per service list instead:
 forms only resolve SIG-base UUIDs; the vendor services need the full 128-bit
 string. On Linux/BlueZ or the ESP32-S3 HCI transport a plain discovery works.
 
-## ATT handles (symbolic constants)
+## ATT handles (informational)
 
-Higher layers reference these symbolically so the concrete handles live in one
-place:
+These are the concrete handle values observed on the reference firmware. The code
+does **not** reference handles directly — every characteristic is resolved by UUID
+(see `aqara_u200_ble/gatt_uuids.py`), so handles are not stable across firmware and
+are listed here only for orientation when reading a capture.
 
-| Constant | Handle | Role |
-|----------|--------|------|
-| `AUTH_WRITE` | `0x0020` | Auth — central → lock |
-| `AUTH_NOTIFY` | `0x0022` | Auth — lock → central |
-| `CONTROL_WRITE` | `0x0031` | Control — central → lock |
-| `CONTROL_NOTIFY` | `0x0033` | Control — lock → central |
-| `BULK_WRITE` | `0x003C` | Bulk — central → lock |
-| `BULK_NOTIFY` | `0x003E` | Bulk — lock → central |
+| Role | Handle |
+|------|--------|
+| Auth write (central → lock) | `0x0020` |
+| Auth notify (lock → central) | `0x0022` |
+| Control write (central → lock) | `0x0031` |
+| Control notify (lock → central) | `0x0033` |
+| Bulk write (central → lock) | `0x003C` |
+| Bulk notify (lock → central) | `0x003E` |
 
 ## Discovery notes
 

@@ -54,7 +54,6 @@ class LockOperation(str, Enum):
     # lock is silent to them — they are NOT the real actuators. Kept for
     # provenance only; no alias maps here.
     LEGACY_UNVERIFIED_1F031F = "1f031f"
-    LEGACY_UNVERIFIED_200320 = "200320"
 
 
 # Operate-command builder (feature 009). frame = 74 <dir> <seq:2 LE> <trailer:2 LE>

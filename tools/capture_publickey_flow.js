@@ -1,7 +1,7 @@
 "use strict";
 // ============================================================================
 // TEST DE REPLAY CRUZADO -- PASO 1 (captura desde la app REAL)
-// Ver docs/ble-control-handoff.md §11.49.
+// Ver docs/reference/.
 //
 // OBJETIVO: capturar, de una sola operación de bloqueo/desbloqueo real con la
 // app oficial, TODO lo que la app hace en el handshake 0610, para poder (a)

@@ -135,7 +135,7 @@ async def _run_cloud_phase(phase: str, fn: Callable[..., _T], /, **kwargs: Any) 
 # idéntico (`000610ffff0000...`, body_len=0). DESCARTADO como causa única del
 # muro. Se deja implementado (best-effort, no hace daño y es spec-compliant)
 # por si combinado con otra pieza aporta algo, pero no es la solucion. Ver
-# docs/ble-control-handoff.md §11.7 para el detalle completo y los siguientes
+# docs/reference/ para el detalle completo y los siguientes
 # candidatos.
 CLIENT_SUPPORTED_FEATURES_UUID16 = 0x2B29
 CLIENT_SUPPORTED_FEATURES_ROBUST_CACHING_BIT = 0x01
@@ -148,14 +148,14 @@ CLIENT_SUPPORTED_FEATURES_ROBUST_CACHING_BIT = 0x01
 # como tx_octets/tx_time propios al llamar set_data_length, que es lo mas
 # parecido a "pedir la extension" desde el lado central. Sin confirmar aun
 # si esto es necesario o si el propio controlador ya lo hace solo. Ver
-# docs/ble-control-handoff.md §8.
+# docs/reference/.
 DATA_LENGTH_TX_OCTETS = 251
 DATA_LENGTH_TX_TIME = 2120
 
 # LE Connection Update visto en el HCI snoop real justo despues del preambulo
 # GATT y ANTES de las CCCD: intervalo 36->12 (unidades de 1.25ms = 45ms->15ms),
 # latencia 0, supervision_timeout 400 (unidades de 10ms = 4000ms). Ver
-# docs/ble-control-handoff.md §6.6 (sospechoso siguiente, sin confirmar aun
+# docs/reference/ (sospechoso siguiente, sin confirmar aun
 # si esto es necesario para que la cerradura responda con su pubkey real).
 POST_AUTH_CONNECTION_INTERVAL_MS = 15.0
 POST_AUTH_CONNECTION_LATENCY = 0
@@ -401,7 +401,7 @@ async def _run_authenticated_lock_operation_once(
 
         async def request_att_mtu() -> None:
             """ATT Exchange MTU Request -- PRIMER paso real tras conectar, ANTES
-            de todo lo demas (ver docs/ble-control-handoff.md §3 paso 2). Es la
+            de todo lo demas (ver docs/reference/ paso 2). Es la
             UNICA pieza de la secuencia pre-auth que este proyecto nunca habia
             reproducido con exito (un intento anterior colgo Bumble y se
             abandono sin reintentar, ver §6.3 y bumble_transport.py::request_mtu).
@@ -548,7 +548,7 @@ async def _run_authenticated_lock_operation_once(
         # NO escribe 0x2B29 contra esta cerradura en absoluto -- 4 Write Request
         # totales en toda la fase pre-auth, los 4 son CCCD (0x0034/0x0039/0x003f/
         # 0x0023), ninguno a Client Supported Features. La funcion se deja
-        # definida (ver docs/ble-control-handoff.md §11.7/§11.12) por si hace
+        # definida (ver docs/reference/) por si hace
         # falta reactivarla, pero mandarla es una operacion EXTRA que el flujo
         # real no hace -- se quita para que la secuencia sea un espejo exacto.
         await request_connection_update()
