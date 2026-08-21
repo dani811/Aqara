@@ -30,7 +30,15 @@ from .cloud_crypto import (
     hkdf_sha256,
     make_local_signer,
 )
+from .control_codec import decrypt_control_payload, encrypt_control_payload
 from .errors import AmbiguousDeviceError, FlowPhase, NoDeviceFoundError, U200ClientError
+from .framing import (
+    assemble_auth_fragments,
+    build_auth_message,
+    crc16_aqara,
+    fragment_auth_message,
+    parse_auth_message,
+)
 from .gatt import GattClient
 from .gatt_uuids import (
     AUTH_NOTIFY_UUID,
@@ -94,13 +102,6 @@ from .scanner import identify_candidate, scan, select_preferred
 from .session import (
     OperationInProgressError,
     SessionMaterial,
-    assemble_auth_fragments,
-    build_auth_message,
-    crc16_aqara,
-    decrypt_control_payload,
-    encrypt_control_payload,
-    fragment_auth_message,
-    parse_auth_message,
     run_authenticated_lock_operation,
 )
 from .transport import (
