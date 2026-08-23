@@ -22,7 +22,7 @@ the tracked tree.
 | SHA-256 hashes | `.specify/integrations/claude.manifest.json` | speckit skill integrity hashes — not secrets |
 | RSA public key (DER b64) | `aqara_u200_ble/kdf.py` | Aqara login **public** key — not a secret |
 | `000102030405` | docs (System ID) | SoC default, not a device secret |
-| `22160062+dani811@users.noreply.github.com` | `pyproject.toml` | package author identity (allow-listed) |
+| `dani811` | `pyproject.toml` | package author identity (allow-listed) |
 
 No private-key blocks, auth tokens, or real device ids found in tracked files.
 

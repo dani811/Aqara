@@ -108,7 +108,7 @@ normal test/CI invocation, not as an opt-in extra.
 
 - A MAC that legitimately must appear as an example in documentation → must be a
   sanctioned placeholder from the allow-list, otherwise the guard flags it.
-- The author's own email (`22160062+dani811@users.noreply.github.com`) appears in `pyproject.toml`
+- The author's own email (`dani811`) appears in `pyproject.toml`
   as package authorship → must be allow-listed as identity, not treated as a leak.
 - The embedded login RSA **public** key and `System ID 000102030405` (SoC default)
   are not secrets → must not trip the guard.
@@ -191,7 +191,7 @@ normal test/CI invocation, not as an opt-in extra.
   CI step), not a full entropy-based secret scanner; the project's threat model is
   "no real device/account artefact in version control," which pattern matching over
   the known shapes (MAC, token, key headers, capture extensions) covers.
-- The author identity `22160062+dani811@users.noreply.github.com` in packaging metadata is intended
+- The author identity `dani811` in packaging metadata is intended
   and allow-listed, not a leak.
 - The project currently has no test CI (only `publish.yml`); wiring the guard into
   CI implies adding a minimal test/lint workflow, which is in scope insofar as it
