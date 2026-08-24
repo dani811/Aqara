@@ -42,10 +42,17 @@ and was retired in feature 015).
 
 ## Capture hooks (Frida)
 
+> **Setup & pinned versions: [`frida-setup.md`](frida-setup.md).** The host
+> `frida-tools` version MUST equal the gadget baked into the repacked app (pinned
+> to **17.17.0** in [`requirements-frida.txt`](requirements-frida.txt)); a drifted
+> host fails with "connection closed". Verify with `python tools/check_gadget.py`.
+
 | Tool | What it captures |
 | --- | --- |
+| [`capture_all_http.js`](capture_all_http.js) | **Every** okhttp3 request + response the app makes (unfiltered) — use it to discover endpoints the scoped hooks miss, e.g. the device-inventory call for `list_devices()` (feature 016). |
 | [`capture_publickey_flow.js`](capture_publickey_flow.js) | The `/publickey` + `/verify` HTTP flow and the `ff07`/`ff08` frames — how you capture your own `.env` values and confirm the handshake. |
 | [`capture_login_flow.js`](capture_login_flow.js) | A real **account login** from the app: the plaintext that enters the RSA, the login URL/headers/body, and any digest of a short string. Kept as the reference capture for the login envelope (it confirmed the RSA input is `MD5(password)` hex). |
+| [`check_gadget.py`](check_gadget.py) | Verifies the host frida ↔ gadget version match before you capture (prints "CONNECTED" or the mismatch). |
 
 ## The instrumentation stack (what was used)
 

@@ -1,0 +1,12 @@
+# Pinned Frida toolchain for the capture hooks (tools/*.js via run_hook.py).
+#
+# INVARIANT: the host frida-tools version MUST EQUAL the frida-gadget version
+# baked into the repackaged Aqara app. Frida broke wire compatibility between
+# 16.x and 17.x, so a drifted host (e.g. an unpinned `pipx install frida-tools`
+# that pulled 17.x against a 16.x gadget) fails the handshake with
+# "connection closed" / "Failed to spawn". See tools/frida-setup.md.
+#
+# Install (host):  pipx install --force "frida-tools==17.17.0"
+#              or:  pip install -r tools/requirements-frida.txt
+frida-tools==17.17.0
+frida==17.17.0
