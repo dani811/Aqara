@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from aqara_u200_ble import (
+from aqara_ble import (
     CloudAuthManager,
     FlowPhase,
     NoDeviceFoundError,
@@ -29,7 +29,7 @@ from aqara_u200_ble import (
     U200ClientError,
     session,
 )
-from aqara_u200_ble import auth as auth_module
+from aqara_ble import auth as auth_module
 from test_auto_login_flow import (
     FAKE_PASSWORD,
     FAKE_TOKEN,

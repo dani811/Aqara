@@ -1,6 +1,29 @@
 # Changelog
 
-All notable changes to aqara-u200-ble are documented in this file.
+All notable changes to aqara-ble are documented in this file.
+
+## [1.0.0] — First stable release (2026-08-23)
+
+### Summary
+- First stable, PyPI-distributable release of the autonomous Aqara U200 BLE
+  control library. The public API (`U200Client` facade, `CloudAuthManager`,
+  the transports, and the lower-level KDF/framing/session pieces) is now
+  considered stable under semantic versioning.
+
+### Confirmed live
+- Actuation validated end-to-end against a real U200 (login → scan → connect →
+  operate): `unlock` (`0x74` dir `01`) retracts the pestillo — a full open —
+  and `lock` (dir `00`) closes; `state` keepalive (`0x2f`) reads without moving
+  the bolt. There is no separate "open without latch" command.
+
+### Notes
+- Cloud I/O is async-safe: blocking cloud calls run off the event loop via
+  `asyncio.to_thread`, so the facade is usable directly from async hosts
+  (e.g. Home Assistant).
+- Real-time bolt position / spontaneous events remain provisional (`LockState`
+  decoded fields stay `None` until confirmed); the `listen` window is the
+  groundwork for it.
+- Packaging metadata carries no personal identifying information.
 
 ## [0.9.0] — Feature 023: post-command listen window (spontaneous state/events) (2026-08-17)
 
@@ -55,7 +78,7 @@ All notable changes to aqara-u200-ble are documented in this file.
 ## [0.6.0] — Feature 019: lock state reading (2026-08-17)
 
 ### Added
-- **`LockState`** + `decode_lock_state()` (`aqara_u200_ble.lock_state`): a typed,
+- **`LockState`** + `decode_lock_state()` (`aqara_ble.lock_state`): a typed,
   honest snapshot of the lock — `raw_hex` is always exposed; decoded fields
   (`locked`, `battery_percent`) stay `None` until confirmed by captured evidence.
 - **`U200Client.status()`** — reads state via the confirmed read-only keepalive
@@ -71,7 +94,7 @@ All notable changes to aqara-u200-ble are documented in this file.
 ## [0.5.0] — Home Assistant-consumable release (2026-08-17)
 
 First tagged, pin-able release for downstream integrations. Pin in Home
-Assistant's `manifest.json` requirements as `aqara-u200-ble==0.5.0`. Bundles
+Assistant's `manifest.json` requirements as `aqara-ble==0.5.0`. Bundles
 features 012–017 (async-safe cloud I/O, operation catalogue, autonomous login,
 client facade, over-the-air model id, packaged `aqara` CLI).
 
@@ -85,15 +108,15 @@ client facade, over-the-air model id, packaged `aqara` CLI).
 ### Included since 0.2.0 — Feature 017: packaged `aqara` CLI
 
 ### Added
-- **`aqara` console command** (`aqara_u200_ble.cli:main`, `[project.scripts]`): a
+- **`aqara` console command** (`aqara_ble.cli:main`, `[project.scripts]`): a
   thin adapter over the public API — `login`, `scan`, `lock`, `unlock`,
   `operate <op>`, `--transport bleak|bumble`. All logic lives in the library.
 
 ### Changed
-- `examples/lock_cli.py` is now a compat shim delegating to `aqara_u200_ble.cli`.
+- `examples/lock_cli.py` is now a compat shim delegating to `aqara_ble.cli`.
 
 ### Guarantees
-- `import aqara_u200_ble` stays pure — it does not import `cli`/`argparse` nor read
+- `import aqara_ble` stays pure — it does not import `cli`/`argparse` nor read
   the environment (tested). Integrations couple to the same public API the CLI uses.
 - Protocol/wire bytes unchanged; the CLI holds no protocol/network/BLE logic.
 
@@ -102,7 +125,7 @@ client facade, over-the-air model id, packaged `aqara` CLI).
 ### Added
 - `ScanCandidate` now exposes `manufacturer_payload`, `product_id` and `model`,
   decoded from the Aqara (`0x0B27`) advertisement — recognise the model (e.g.
-  "U200", product id `0x9C03`) without connecting. `aqara_u200_ble.models`
+  "U200", product id `0x9C03`) without connecting. `aqara_ble.models`
   (`decode_manufacturer_payload`, `MODEL_BY_PRODUCT_ID`).
 - `examples/lock_cli.py scan` prints the model per candidate.
 - `tools/probe_cloud_endpoints.py` — read-only discovery of the account
@@ -143,7 +166,7 @@ client facade, over-the-air model id, packaged `aqara` CLI).
 - **New exception type**: `OperationInProgressError`
   - Raised when `run_authenticated_lock_operation()` is called while another operation is in progress on the same device
   - Enables fail-fast concurrency control (non-blocking)
-  - Exported from public API (`aqara_u200_ble.OperationInProgressError`)
+  - Exported from public API (`aqara_ble.OperationInProgressError`)
 
 ### Changed
 - **Cloud I/O now async-safe**:
@@ -187,7 +210,7 @@ client facade, over-the-air model id, packaged `aqara` CLI).
 No migration required. Existing code continues to work unchanged. To handle `OperationInProgressError`:
 
 ```python
-from aqara_u200_ble import run_authenticated_lock_operation, OperationInProgressError
+from aqara_ble import run_authenticated_lock_operation, OperationInProgressError
 
 try:
     material, write, response = await run_authenticated_lock_operation(

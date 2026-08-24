@@ -25,7 +25,7 @@ service discovery, the authenticated session — is one call chain:
 
 ```python
 import asyncio, os
-from aqara_u200_ble import BleakTransport, BumbleTransport, CloudAuthManager, U200Client
+from aqara_ble import BleakTransport, BumbleTransport, CloudAuthManager, U200Client
 
 auth = CloudAuthManager(
     account=os.environ["AQARA_ACCOUNT"],
@@ -78,7 +78,7 @@ If you already hold a connected GATT client (Home Assistant's, or a Bumble
 gatt_client=…, device_id=…)`, or call the flow directly:
 
 ```python
-from aqara_u200_ble import run_authenticated_lock_operation
+from aqara_ble import run_authenticated_lock_operation
 
 material, write, response = await run_authenticated_lock_operation(
     client=gatt_client,

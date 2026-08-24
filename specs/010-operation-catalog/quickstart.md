@@ -3,7 +3,7 @@
 ## 1. Browse the catalog (no lock, no network)
 
 ```python
-from aqara_u200_ble import OPERATIONS_CATALOG, operations_in_family, find_operation
+from aqara_ble import OPERATIONS_CATALOG, operations_in_family, find_operation
 
 # Everything in the SYSTEM family:
 for entry in operations_in_family(0x01):
@@ -27,12 +27,12 @@ Expected: green. Includes a test that
 ## 3. Build a frame for any operation
 
 ```python
-from aqara_u200_ble import build_control_frame
+from aqara_ble import build_control_frame
 
 # Generic level-3 command (mainCmd subCmd data):
 frame = build_control_frame(0x01, 0xE5)  # GET_DOOR_LOCK_STATUS, empty data
 # Confirmed operate frame stays exact:
-from aqara_u200_ble import build_operate_frame
+from aqara_ble import build_operate_frame
 
 assert build_operate_frame(open=True).hex() == "74010100b917"
 ```

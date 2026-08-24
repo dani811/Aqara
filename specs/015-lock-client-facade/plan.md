@@ -62,7 +62,7 @@ specs/015-lock-client-facade/
 ### Source Code (repository root)
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 ├── client.py            # NUEVO: U200Client (fachada), FlowPhase, U200ClientError
 ├── transport.py         # NUEVO: Transport (Protocol), ScanCandidate, BleakTransport, BumbleTransport
 ├── scanner.py           # REFACTOR: identify_candidate()/scan() devuelven ScanCandidate; el print pasa a examples
@@ -93,7 +93,7 @@ docs/
 ├── README.md, devices/u200/validation.md, architecture.md  # fachada como vía recomendada
 ```
 
-**Structure Decision**: un solo paquete (`aqara_u200_ble/`) con dos módulos nuevos; el firmware vive en `tools/` como fuente + receta (sin binarios), coherente con "runners/tools" del repo.
+**Structure Decision**: un solo paquete (`aqara_ble/`) con dos módulos nuevos; el firmware vive en `tools/` como fuente + receta (sin binarios), coherente con "runners/tools" del repo.
 
 ## Complexity Tracking
 

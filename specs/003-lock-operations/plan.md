@@ -21,7 +21,7 @@ transport is injected.
 **Language/Version**: Python 3.11+
 
 **Primary Dependencies**: Standard library (`dataclasses`, `enum`, `typing.Protocol`).
-`volume.py` imports `ControlRequest` from `aqara_u200_ble.protocol` (feature 002).
+`volume.py` imports `ControlRequest` from `aqara_ble.protocol` (feature 002).
 
 **Storage**: None.
 
@@ -31,7 +31,7 @@ rejection of unknown intents/presets. No network, no BLE.
 
 **Target Platform**: Any OS with Python 3.11+.
 
-**Project Type**: Library (`aqara_u200_ble/lock_ops.py`, `aqara_u200_ble/volume.py`).
+**Project Type**: Library (`aqara_ble/lock_ops.py`, `aqara_ble/volume.py`).
 
 **Performance Goals**: Not performance-sensitive.
 
@@ -70,7 +70,7 @@ specs/003-lock-operations/
 ### Source Code (repository root)
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 ├── lock_ops.py          # THIS FEATURE — operations, payloads, prefixes, transport port
 ├── volume.py            # THIS FEATURE — volume presets bound to control requests
 └── __init__.py          # extended to export the operations surface

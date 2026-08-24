@@ -30,7 +30,7 @@ is opened — Principle V forbids network I/O in unit tests.
 **Target Platform**: Any OS with Python 3.11+; the opt-out exists for macOS
 installs whose CA store is unusable.
 
-**Project Type**: Library — one module touched (`aqara_u200_ble/kdf.py`).
+**Project Type**: Library — one module touched (`aqara_ble/kdf.py`).
 
 **Performance Goals**: Not performance-sensitive. Context construction is
 per-request, as it already is today.
@@ -93,7 +93,7 @@ specs/006-tls-verification/
 ### Source Code (repository root)
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 └── kdf.py               # THIS FIX — `_tls_context()` factory + enriched
                          #   certificate-failure error inside `_post_json`
 

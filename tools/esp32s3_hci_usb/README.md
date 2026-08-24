@@ -1,7 +1,7 @@
 # esp32s3_hci_usb — an ESP32‑S3 as a Bluetooth LE HCI controller over USB
 
 Turns a bare ESP32‑S3 into the **external HCI controller** that
-`aqara_u200_ble.BumbleTransport` drives. This is the route that exposes every
+`aqara_ble.BumbleTransport` drives. This is the route that exposes every
 low‑level primitive the U200 pre‑auth uses (LE Read Remote Features, ATT MTU,
 Read‑By‑Type GATT‑caching preamble, connection‑parameter update) — the host's
 native stack (bleak/CoreBluetooth) omits them.

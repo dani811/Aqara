@@ -71,7 +71,7 @@ completadas, sin umbrales de milisegundos frágiles.
 publicada, con URLs de proyecto correctas y una wheel que instala limpia.
 
 **Independent Test**: el gate completo (`pytest`, `ruff`, `mypy --strict`, build)
-pasa; la wheel contiene `aqara_u200_ble` y `py.typed`; existe un tag inmutable de
+pasa; la wheel contiene `aqara_ble` y `py.typed`; existe un tag inmutable de
 la versión.
 
 **Acceptance Scenarios**:
@@ -106,7 +106,7 @@ la versión.
 - **FR-006**: `pyproject.toml` MUST tener URLs correctas del repositorio real y la
   versión publicable actual.
 - **FR-007**: El gate de release (`pytest`, `ruff`, `mypy --strict`, build) MUST
-  pasar; la wheel MUST contener `aqara_u200_ble` y `py.typed`.
+  pasar; la wheel MUST contener `aqara_ble` y `py.typed`.
 - **FR-008**: MUST crearse un tag inmutable de la versión desde el commit validado.
 - **FR-009**: La documentación MUST indicar el artefacto/versión exactos para el
   `requirements` de Home Assistant.

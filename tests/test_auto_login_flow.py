@@ -17,9 +17,9 @@ from typing import Any
 
 import pytest
 
-from aqara_u200_ble import CloudAuthManager, CloudServiceError, session
-from aqara_u200_ble import auth as auth_module
-from aqara_u200_ble.kdf import _unwrap_aqara_result
+from aqara_ble import CloudAuthManager, CloudServiceError, session
+from aqara_ble import auth as auth_module
+from aqara_ble.kdf import _unwrap_aqara_result
 from test_session_flow import FakeLockClient, LockScript
 
 FAKE_PUBKEY_HEX = (bytes([0x04]) + bytes(range(65, 129))).hex()
@@ -386,7 +386,7 @@ class TestPackagePurity:
         # environment. `cli.py` is the ONE sanctioned adapter (feature 017): it
         # may have a `__main__` entry point, but must still never prompt — and it
         # is NOT imported by the package __init__ (see test_import_library_is_pure
-        # in test_cli.py), so `import aqara_u200_ble` stays pure.
+        # in test_cli.py), so `import aqara_ble` stays pure.
         pkg = Path(session.__file__).parent
         offenders: list[str] = []
         for py in pkg.glob("*.py"):

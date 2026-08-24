@@ -18,8 +18,8 @@ def test_import_library_is_pure() -> None:
     # Run in a fresh interpreter so nothing this test session already imported
     # pollutes the check: importing the package must not pull the CLI or argparse.
     code = (
-        "import sys, aqara_u200_ble; "
-        "assert 'aqara_u200_ble.cli' not in sys.modules, 'cli imported'; "
+        "import sys, aqara_ble; "
+        "assert 'aqara_ble.cli' not in sys.modules, 'cli imported'; "
         "assert 'argparse' not in sys.modules, 'argparse imported'"
     )
     result = subprocess.run(
@@ -30,7 +30,7 @@ def test_import_library_is_pure() -> None:
 
 def test_cli_module_has_no_protocol_logic() -> None:
     # The adapter must not import protocol/session/crypto modules directly.
-    import aqara_u200_ble.cli as cli
+    import aqara_ble.cli as cli
 
     src = __import__("inspect").getsource(cli)
     for banned in ("import struct", "AES", "crc16", "_post_json", "session.run_authenticated"):
@@ -61,14 +61,14 @@ class _FakeClient:
         return [("ff64", "aabb")]
 
     async def query(self, sub_cmd: int, data: bytes = b"") -> Any:
-        from aqara_u200_ble.lock_state import LockState
+        from aqara_ble.lock_state import LockState
 
         self.calls.append(f"query:{sub_cmd:#04x}")
         return LockState(raw_hex="0700", source="query", responded=True)
 
     async def operate(self, op: str) -> Any:
         self.calls.append(f"operate:{op}")
-        from aqara_u200_ble.lock_ops import LockOperation, build_lock_operation_write
+        from aqara_ble.lock_ops import LockOperation, build_lock_operation_write
 
         class R:
             response_hex = "2f00"
@@ -80,7 +80,7 @@ class _FakeClient:
 
 @pytest.fixture
 def patched(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    import aqara_u200_ble.cli as cli
+    import aqara_ble.cli as cli
 
     state: dict[str, Any] = {"client": _FakeClient(), "connect_kwargs": None, "scanned": False}
 
@@ -108,35 +108,35 @@ def patched(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
 
 def test_lock_dispatches_to_client(patched: dict[str, Any]) -> None:
-    from aqara_u200_ble.cli import main
+    from aqara_ble.cli import main
 
     assert main(["lock"]) == 0
     assert "lock" in patched["client"].calls
 
 
 def test_unlock_dispatches(patched: dict[str, Any]) -> None:
-    from aqara_u200_ble.cli import main
+    from aqara_ble.cli import main
 
     assert main(["unlock"]) == 0
     assert "unlock" in patched["client"].calls
 
 
 def test_operate_passes_operation(patched: dict[str, Any]) -> None:
-    from aqara_u200_ble.cli import main
+    from aqara_ble.cli import main
 
     assert main(["operate", "keepalive"]) == 0
     assert "operate:keepalive" in patched["client"].calls
 
 
 def test_scan_returns_not_found_exit_when_empty(patched: dict[str, Any]) -> None:
-    from aqara_u200_ble.cli import main
+    from aqara_ble.cli import main
 
     assert main(["scan"]) == 2  # EXIT_NOT_FOUND
     assert patched["scanned"]
 
 
 def test_missing_credentials_is_config_exit(monkeypatch: pytest.MonkeyPatch) -> None:
-    import aqara_u200_ble.cli as cli
+    import aqara_ble.cli as cli
 
     monkeypatch.setattr(cli, "_load_dotenv", lambda: None)
     monkeypatch.delenv("AQARA_ACCOUNT", raising=False)
@@ -148,8 +148,8 @@ def test_missing_credentials_is_config_exit(monkeypatch: pytest.MonkeyPatch) -> 
 def test_client_error_maps_to_phase_exit(
     patched: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import aqara_u200_ble.cli as cli
-    from aqara_u200_ble import FlowPhase, U200ClientError
+    import aqara_ble.cli as cli
+    from aqara_ble import FlowPhase, U200ClientError
 
     async def boom(**kwargs: Any) -> Any:
         raise U200ClientError(FlowPhase.CONNECT, "no radio")
@@ -159,7 +159,7 @@ def test_client_error_maps_to_phase_exit(
 
 
 def test_no_secrets_printed(patched: dict[str, Any], capsys: pytest.CaptureFixture[str]) -> None:
-    from aqara_u200_ble.cli import main
+    from aqara_ble.cli import main
 
     main(["--password", "sup3r-secret", "--account", "a@b.c", "lock"])
     out = capsys.readouterr().out
@@ -169,7 +169,7 @@ def test_no_secrets_printed(patched: dict[str, Any], capsys: pytest.CaptureFixtu
 def test_bleak_on_macos_ignores_env_mac(patched: dict, monkeypatch: pytest.MonkeyPatch) -> None:
     # On macOS/CoreBluetooth the env MAC can't match a UUID address; the CLI must
     # drop it and identify by advertisement (regression from feature 017).
-    import aqara_u200_ble.cli as cli
+    import aqara_ble.cli as cli
 
     monkeypatch.setattr(cli.sys, "platform", "darwin")
     monkeypatch.setenv("AQARA_LOCK_MAC", "AA:BB:CC:DD:EE:FF")
@@ -180,7 +180,7 @@ def test_bleak_on_macos_ignores_env_mac(patched: dict, monkeypatch: pytest.Monke
 def test_explicit_mac_flag_wins_even_on_macos(
     patched: dict, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import aqara_u200_ble.cli as cli
+    import aqara_ble.cli as cli
 
     monkeypatch.setattr(cli.sys, "platform", "darwin")
     assert cli.main(["--transport", "bleak", "--mac", "AA:BB:CC:DD:EE:FF", "lock"]) == 0
@@ -188,7 +188,7 @@ def test_explicit_mac_flag_wins_even_on_macos(
 
 
 def test_bleak_on_linux_uses_env_mac(patched: dict, monkeypatch: pytest.MonkeyPatch) -> None:
-    import aqara_u200_ble.cli as cli
+    import aqara_ble.cli as cli
 
     monkeypatch.setattr(cli.sys, "platform", "linux")
     monkeypatch.setenv("AQARA_LOCK_MAC", "AA:BB:CC:DD:EE:FF")
@@ -197,14 +197,14 @@ def test_bleak_on_linux_uses_env_mac(patched: dict, monkeypatch: pytest.MonkeyPa
 
 
 def test_query_dispatches_to_client_query(patched: dict) -> None:
-    from aqara_u200_ble.cli import main
+    from aqara_ble.cli import main
 
     assert main(["query", "lock_status"]) == 0
     assert "query:0x07" in patched["client"].calls
 
 
 def test_query_rejects_non_whitelisted_opcode() -> None:
-    import aqara_u200_ble.cli as cli
+    import aqara_ble.cli as cli
 
     with pytest.raises(SystemExit):  # argparse choices rejects it
         cli.main(["query", "set_auto_lock_time"])
@@ -213,7 +213,7 @@ def test_query_rejects_non_whitelisted_opcode() -> None:
 def test_listen_dispatches_and_prints_frames(
     patched: dict, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from aqara_u200_ble.cli import main
+    from aqara_ble.cli import main
 
     assert main(["listen", "--seconds", "3"]) == 0
     assert "listen:3" in patched["client"].calls

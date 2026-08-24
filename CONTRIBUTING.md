@@ -75,7 +75,7 @@ Before opening a review, from the repo root:
 
 ```bash
 ruff check . && ruff format --check .
-mypy aqara_u200_ble
+mypy aqara_ble
 pytest
 ```
 

@@ -1,13 +1,13 @@
 """GATT identity constants for the U200 — device-specific leaf data.
 
-This module is a **leaf**: it imports nothing else from ``aqara_u200_ble``. It
+This module is a **leaf**: it imports nothing else from ``aqara_ble``. It
 holds the service/characteristic UUIDs, the GATT-caching preamble UUID16 tuple,
 the pre-auth CCCD-enable order, and the U200 service-UUID tuples — the concrete
 identity values the architecture doc classifies as device-specific.
 
 It exists to break the previous layering inversion where the low-level radio
-layer (:mod:`aqara_u200_ble.transport`) imported these constants *upward* from
-:mod:`aqara_u200_ble.session` (the authenticated-protocol/orchestration layer).
+layer (:mod:`aqara_ble.transport`) imported these constants *upward* from
+:mod:`aqara_ble.session` (the authenticated-protocol/orchestration layer).
 Both ``session`` and ``transport`` now import them *downward* from here, so
 importing the transport no longer drags in ``session → auth → kdf → cryptography``.
 

@@ -18,6 +18,6 @@ actuador no cambia.
 
 ## Project Structure
 ```text
-aqara_u200_ble/session.py   # _debug_report() + on_report_notify(channel)
+aqara_ble/session.py   # _debug_report() + on_report_notify(channel)
 tests/test_session_flow.py  # test del helper (stderr bajo U200_DEBUG)
 ```

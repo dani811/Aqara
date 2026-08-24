@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from aqara_u200_ble import LockState, decode_lock_state
-from aqara_u200_ble.lock_state import SOURCE_KEEPALIVE, SOURCE_OPERATION
+from aqara_ble import LockState, decode_lock_state
+from aqara_ble.lock_state import SOURCE_KEEPALIVE, SOURCE_OPERATION
 
 # Real samples captured 2026-08-17.
 KEEPALIVE_RESP = bytes.fromhex("2f002c06")

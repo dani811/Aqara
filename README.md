@@ -34,7 +34,7 @@ Credentials come from `--account/--password` or the environment/`.env`
 ### Library — the coupling surface for integrations
 
 ```python
-from aqara_u200_ble import BleakTransport, CloudAuthManager, U200Client
+from aqara_ble import BleakTransport, CloudAuthManager, U200Client
 
 auth = CloudAuthManager(
     account=..., password=..., appid=..., appkey=..., client_id=..., phone_id=...

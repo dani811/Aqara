@@ -7,7 +7,7 @@ the four decisions that shaped the design and what was rejected.
 
 ## 1. Where the insecure context comes from
 
-**Finding**: [`aqara_u200_ble/kdf.py`](../../aqara_u200_ble/kdf.py) builds the
+**Finding**: [`aqara_ble/kdf.py`](../../aqara_ble/kdf.py) builds the
 context inline inside `_post_json`, the single funnel through which every cloud
 call passes (`login`, `cloud_get_public_key`, `cloud_verify`, and therefore
 `get_session_material`). A package-wide search for `ssl` returns exactly one

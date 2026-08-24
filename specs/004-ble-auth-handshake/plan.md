@@ -34,7 +34,7 @@ scope (needs hardware) — verified live (Principle V).
 
 **Target Platform**: Any OS with Python 3.11+; the live flow needs a BLE controller.
 
-**Project Type**: Library (`aqara_u200_ble/session.py`).
+**Project Type**: Library (`aqara_ble/session.py`).
 
 **Performance Goals**: Fragment writes are deliberately spaced (~40 ms) so the
 controller does not drop fragments — a correctness constraint, not a perf target.
@@ -79,7 +79,7 @@ specs/004-ble-auth-handshake/
 ### Source Code (repository root)
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 ├── session.py           # THIS FEATURE — CRC, frame build/parse, fragmentation,
 │                        #   AES-CCM control crypto, UUID/order constants, and the
 │                        #   live run_authenticated_lock_operation orchestration

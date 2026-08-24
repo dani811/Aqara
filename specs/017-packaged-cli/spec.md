@@ -24,7 +24,7 @@ métodos, e imprime. **Ninguna decisión de protocolo, red o BLE vive en el CLI*
 todo está en la librería, de modo que cualquier integración se acopla importando
 la misma API que usa el CLI, sin copiar cableado.
 
-Invariante clave: `import aqara_u200_ble` sigue siendo **puro** (sin leer
+Invariante clave: `import aqara_ble` sigue siendo **puro** (sin leer
 entorno, argv ni stdout); el módulo del CLI es un consumidor que solo se carga al
 ejecutar el comando, no al importar la librería.
 
@@ -69,14 +69,14 @@ arrastra el CLI ni lee el entorno.
 **Why this priority**: "abstracto de la lógica para que otras integraciones se
 acoplen fácilmente" es el requisito explícito.
 
-**Independent Test**: `import aqara_u200_ble` no importa el módulo del CLI ni
+**Independent Test**: `import aqara_ble` no importa el módulo del CLI ni
 `argparse`, y no lee variables de entorno; el módulo del CLI no define ninguna
 lógica de protocolo/red/BLE (solo parseo, carga de credenciales, llamadas a la
 API e impresión).
 
 **Acceptance Scenarios**:
 
-1. **Given** `import aqara_u200_ble`, **When** se importa, **Then** `aqara_u200_ble.cli`
+1. **Given** `import aqara_ble`, **When** se importa, **Then** `aqara_ble.cli`
    no está entre los módulos cargados y no se ha leído el entorno.
 2. **Given** el módulo del CLI, **When** se revisa, **Then** toda la lógica que
    invoca (login, escaneo, conexión, operación) reside en la API pública, no en
@@ -106,7 +106,7 @@ API e impresión).
 - **FR-003**: El CLI MUST ser un adaptador fino: **toda** la lógica de
   login/escaneo/conexión/operación proviene de la API pública; el CLI solo
   parsea, carga credenciales, llama e imprime.
-- **FR-004**: `import aqara_u200_ble` MUST NOT importar el módulo del CLI ni leer
+- **FR-004**: `import aqara_ble` MUST NOT importar el módulo del CLI ni leer
   el entorno; el CLI se carga solo al ejecutar el comando.
 - **FR-005**: El CLI MUST mapear resultados a códigos de salida por clase
   (éxito 0; configuración; no encontrado/ambiguo; error de fase; timeout) y
@@ -133,7 +133,7 @@ API e impresión).
   Python a mano ni conocer rutas de scripts.
 - **SC-002**: Una integración reproduce lo que hace el CLI con **≤ 5 líneas**
   usando solo la API pública (sin importar `cli`).
-- **SC-003**: `import aqara_u200_ble` no carga `aqara_u200_ble.cli` ni lee el
+- **SC-003**: `import aqara_ble` no carga `aqara_ble.cli` ni lee el
   entorno (test automatizado).
 - **SC-004**: La suite sigue verde y ningún test de protocolo cambia; el CLI no
   contiene lógica de protocolo/red/BLE.

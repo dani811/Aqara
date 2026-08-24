@@ -23,7 +23,7 @@ Templates / references reviewed for alignment:
 Follow-up TODOs: none
 -->
 
-# aqara-u200-ble Constitution
+# aqara-ble Constitution
 
 A fully autonomous Python library that controls the Aqara U200 smart lock over
 Bluetooth Low Energy (and its supporting cloud KDF/login), reconstructed by

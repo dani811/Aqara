@@ -13,11 +13,11 @@ from typing import Any
 
 import pytest
 
-from aqara_u200_ble import (
+from aqara_ble import (
     build_control_query_write,
     session,
 )
-from aqara_u200_ble.lock_ops import build_control_frame, build_lock_operation_write
+from aqara_ble.lock_ops import build_control_frame, build_lock_operation_write
 from test_session_flow import (  # noqa: F401 - imported for fixtures
     FakeLockClient,
     LockScript,

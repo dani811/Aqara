@@ -99,7 +99,7 @@ for this documentation.
 ## Package layout
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 ├── client.py         # U200Client — the facade: login → scan → connect → operate
 ├── transport.py      # Transport contract, ScanCandidate, BleakTransport, BumbleTransport
 ├── scanner.py        # scan() + identify/select a U200 by name/services/manufacturer

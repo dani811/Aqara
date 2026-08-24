@@ -66,7 +66,7 @@
   - Mover `poc_real_lock_unlock.py` y `run_real_lock_unlock.py` (raíz) a `examples/`.
   - `tools/refresh_token.py` (CLI legacy) permanece en `tools/` (ya fuera del
     paquete); se mantiene como bootstrap manual/opcional.
-- **Rationale**: clarify → "purificar y reubicar ahora"; el paquete `aqara_u200_ble/`
+- **Rationale**: clarify → "purificar y reubicar ahora"; el paquete `aqara_ble/`
   debe contener solo librería (SC-007).
 - **Nota**: los tests que hoy referencian `from_env` o los PoCs se actualizan a la
   nueva ubicación; ningún test hace I/O real.

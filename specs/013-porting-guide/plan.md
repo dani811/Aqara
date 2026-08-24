@@ -28,7 +28,7 @@ crónica. Esta feature **no toca código de la librería**.
 **Language/Version**: Markdown (GitHub-Flavored), documentación redactada en
 **inglés**. Diagramas en ASCII/Mermaid embebidos, sin dependencias externas.
 
-**Primary Dependencies**: Ninguna nueva. La librería Python (`aqara_u200_ble/`) y
+**Primary Dependencies**: Ninguna nueva. La librería Python (`aqara_ble/`) y
 sus tests permanecen intactos; se referencian desde la doc pero no se modifican.
 
 **Storage**: Sistema de ficheros, árbol `docs/`. El material sensible sigue en

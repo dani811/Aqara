@@ -45,7 +45,7 @@ git clone https://github.com/dani811/Aqara.git
 cd Aqara
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"          # add ,bumble or ,ble for a transport
-ruff check . && ruff format --check . && mypy aqara_u200_ble && pytest
+ruff check . && ruff format --check . && mypy aqara_ble && pytest
 ```
 
 All green means the transversal primitives (CRC, framing, control codec) are

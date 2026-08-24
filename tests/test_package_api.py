@@ -10,24 +10,24 @@ from __future__ import annotations
 import importlib
 import importlib.util
 
-import aqara_u200_ble
+import aqara_ble
 
 
 def test_every_public_name_is_importable() -> None:
-    missing = [name for name in aqara_u200_ble.__all__ if not hasattr(aqara_u200_ble, name)]
+    missing = [name for name in aqara_ble.__all__ if not hasattr(aqara_ble, name)]
     assert missing == [], f"names in __all__ missing from the package: {missing}"
 
 
 def test_public_api_is_sorted_and_unique() -> None:
-    names = list(aqara_u200_ble.__all__)
+    names = list(aqara_ble.__all__)
     assert len(names) == len(set(names)), "duplicate names in __all__"
 
 
 def test_optional_backends_are_truly_optional() -> None:
     # The package imported successfully above; confirm neither optional backend
     # is a hard requirement for that import.
-    aqara_u200_ble_reimported = importlib.reload(aqara_u200_ble)
-    assert aqara_u200_ble_reimported is aqara_u200_ble
+    aqara_ble_reimported = importlib.reload(aqara_ble)
+    assert aqara_ble_reimported is aqara_ble
     # These may or may not be installed; either way, importing the package worked.
     for optional in ("bleak", "bumble"):
         # importlib.util.find_spec must not raise regardless of presence.
@@ -45,4 +45,4 @@ def test_key_end_to_end_symbols_present() -> None:
         "BumbleGattAdapter",
         "scan",
     ):
-        assert hasattr(aqara_u200_ble, symbol)
+        assert hasattr(aqara_ble, symbol)

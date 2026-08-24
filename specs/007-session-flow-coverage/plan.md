@@ -10,7 +10,7 @@ Add `tests/test_session_flow.py`: a `FakeLockClient` that implements the duck-ty
 surface `run_authenticated_lock_operation` expects (`start_notify`, `stop_notify`,
 `write_gatt_char`, and optionally the low-level extras), answering scripted frames
 through the stored notify callbacks. The two cloud calls are monkeypatched at their
-import site in `aqara_u200_ble.session`. Tests drive the coroutine with
+import site in `aqara_ble.session`. Tests drive the coroutine with
 `asyncio.run` and assert the recorded exchange. No production module changes.
 
 ## Technical Context

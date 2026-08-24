@@ -21,10 +21,10 @@ from typing import Any
 
 import pytest
 
-import aqara_u200_ble
-from aqara_u200_ble import GattClient, encrypt_control_payload, session
-from aqara_u200_ble.bumble_transport import BumbleGattAdapter
-from aqara_u200_ble.session import (
+import aqara_ble
+from aqara_ble import GattClient, encrypt_control_payload, session
+from aqara_ble.bumble_transport import BumbleGattAdapter
+from aqara_ble.session import (
     AUTH_NOTIFY_UUID,
     AUTH_WRITE_UUID,
     CONTROL_WRITE_UUID,
@@ -275,9 +275,9 @@ class TestPackageExports:
 
     def test_gatt_client_exported(self) -> None:
         """GattClient is in the public API."""
-        assert hasattr(aqara_u200_ble, "GattClient")
-        assert aqara_u200_ble.GattClient is GattClient
+        assert hasattr(aqara_ble, "GattClient")
+        assert aqara_ble.GattClient is GattClient
 
     def test_gatt_client_in_all(self) -> None:
         """GattClient is in __all__."""
-        assert "GattClient" in aqara_u200_ble.__all__
+        assert "GattClient" in aqara_ble.__all__

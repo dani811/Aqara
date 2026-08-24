@@ -32,7 +32,7 @@ description: "Task list for feature 014 — Encaje del login autónomo en el flu
 
 ## Phase 2: Foundational (blocking prerequisites)
 
-- [X] T002 Add `CloudServiceError(RuntimeError)` with `code`/`message`/`endpoint` in `aqara_u200_ble/kdf.py`; raise it from `_unwrap_aqara_result` when `code ∉ {0,"0",None}` (keep the current message text) and export it in `aqara_u200_ble/__init__.py` `__all__` (contract C2)
+- [X] T002 Add `CloudServiceError(RuntimeError)` with `code`/`message`/`endpoint` in `aqara_ble/kdf.py`; raise it from `_unwrap_aqara_result` when `code ∉ {0,"0",None}` (keep the current message text) and export it in `aqara_ble/__init__.py` `__all__` (contract C2)
 - [X] T003 Unit test in `tests/test_auto_login_flow.py`: `_unwrap_aqara_result` raises `CloudServiceError` with the right `code` for 108 and 810, and remains an `except RuntimeError` (C2.2)
 
 **Checkpoint**: typed error available for 108/810 branching.
@@ -47,7 +47,7 @@ operación completa el flujo obteniendo el token por sí misma.
 **Independent Test**: con solo `auth` (credenciales, sin `signer`), cloud simulado
 y `FakeLockClient`, la operación completa el flujo (hubo login).
 
-- [X] T004 [US1] Add `auth: CloudAuthManager | None = None` to `run_authenticated_lock_operation` in `aqara_u200_ble/session.py`; enforce **exactly-one-of** `{auth, signer}` with a clear `ValueError` **before** any network/radio; when `auth` is given, obtain the token off-loop (`auth.get_token()` via the 012 async pattern) and build the signer with `make_local_signer(token, user_id)` (contract C1.1–C1.3)
+- [X] T004 [US1] Add `auth: CloudAuthManager | None = None` to `run_authenticated_lock_operation` in `aqara_ble/session.py`; enforce **exactly-one-of** `{auth, signer}` with a clear `ValueError` **before** any network/radio; when `auth` is given, obtain the token off-loop (`auth.get_token()` via the 012 async pattern) and build the signer with `make_local_signer(token, user_id)` (contract C1.1–C1.3)
 - [X] T005 [P] [US1] Test in `tests/test_auto_login_flow.py`: only `auth` (no token/signer) → login happens and the operation completes; a second operation reuses the cached token (SC-001)
 - [X] T006 [P] [US1] Test: passing both `{auth, signer}` or neither → `ValueError` before any I/O (C1.1)
 - [X] T006b [P] [US1] Test: the **explicit `signer` path** (no `auth`) still completes the operation with a mocked cloud + `FakeLockClient` — backward compatibility verified, not only relied on via regression (SC-005, FR-010)
@@ -64,7 +64,7 @@ re-ejecutar la operación una vez; nunca reintentar tras actuar.
 **Independent Test**: cloud responde 108 y luego OK → la operación tiene éxito tras
 exactamente una reautenticación + re-ejecución.
 
-- [X] T007 [US2] In `aqara_u200_ble/session.py`, wrap the operation body in a **≤1 reauth** loop: on `CloudServiceError(code=108)` while `actuated == False`, call `auth.handle_expired_token()`, rebuild the signer, and re-run the operation once; set the `actuated` flag immediately before the control write; on 108 after actuation, do **not** reauth (contracts C1.4, FR-016)
+- [X] T007 [US2] In `aqara_ble/session.py`, wrap the operation body in a **≤1 reauth** loop: on `CloudServiceError(code=108)` while `actuated == False`, call `auth.handle_expired_token()`, rebuild the signer, and re-run the operation once; set the `actuated` flag immediately before the control write; on 108 after actuation, do **not** reauth (contracts C1.4, FR-016)
 - [X] T008 [US2] Test: cloud raises 108 on the first cloud call then succeeds → exactly one reauth + re-run → success (SC-002)
 - [X] T009 [US2] Test (idempotency): 108 signalled after the actuator was dispatched → **no** retry, no double actuation (SC-008)
 - [X] T010 [US2] Test: reauth then the cloud still rejects → clear error, no login loop (US2 scenario 2, FR-004)
@@ -81,7 +81,7 @@ sin reintentar login, con mensaje que nombra la causa.
 
 **Independent Test**: cloud 810 → falla con cero login-retries y mensaje claro.
 
-- [X] T011 [US3] In `aqara_u200_ble/auth.py` `_login`, translate `CloudServiceError(code=810)` into a clear **non-retryable** error distinguishing "credenciales/cuenta" from "token expirado"; ensure the flow reauths **only** on code 108 (FR-005)
+- [X] T011 [US3] In `aqara_ble/auth.py` `_login`, translate `CloudServiceError(code=810)` into a clear **non-retryable** error distinguishing "credenciales/cuenta" from "token expirado"; ensure the flow reauths **only** on code 108 (FR-005)
 - [X] T012 [US3] Test: cloud returns 810 → operation fails with **zero** login-retries and the error names the cause (SC-003)
 
 **Checkpoint**: sin bucles de login.
@@ -96,11 +96,11 @@ en logs, y el paquete no contiene utilidades.
 **Independent Test**: logs DEBUG sin secretos; el paquete sin `from_env`/CLI/PoC;
 sin `input`/`getpass`.
 
-- [X] T013 [P] [US4] Remove `CloudAuthManager.from_env` from `aqara_u200_ble/auth.py`; create `examples/auth_from_env.py` with a function building a `CloudAuthManager` from `os.environ` (dev-only) (C3.3, C4.1)
+- [X] T013 [P] [US4] Remove `CloudAuthManager.from_env` from `aqara_ble/auth.py`; create `examples/auth_from_env.py` with a function building a `CloudAuthManager` from `os.environ` (dev-only) (C3.3, C4.1)
 - [X] T014 [P] [US4] Move `poc_real_lock_unlock.py` and `run_real_lock_unlock.py` from the repo root to `examples/`; fix any path/import references (C4.2)
-- [X] T015 [US4] Route login/refresh logging through the DEBUG whitelist (fase/duración/tipo, sin secretos) in `aqara_u200_ble/auth.py` / the flow, reusing the 012 discipline (FR-008)
+- [X] T015 [US4] Route login/refresh logging through the DEBUG whitelist (fase/duración/tipo, sin secretos) in `aqara_ble/auth.py` / the flow, reusing the 012 discipline (FR-008)
 - [X] T016 [US4] Test: with DEBUG logging, no secret (token, password, sessionKey, nonce, verifyData) appears in `caplog` on success **and** on failure (SC-004)
-- [X] T017 [US4] Static/guard test: no `input`/`getpass` and no `from_env`/`os.environ` utility inside `aqara_u200_ble/` (SC-006, SC-007)
+- [X] T017 [US4] Static/guard test: no `input`/`getpass` and no `from_env`/`os.environ` utility inside `aqara_ble/` (SC-006, SC-007)
 - [X] T018 [US4] Update `.env.example`: add `AQARA_ACCOUNT` / `AQARA_PASSWORD` documented as **dev-only** for `examples/auth_from_env.py` (placeholders only)
 
 **Checkpoint**: librería pura y segura.

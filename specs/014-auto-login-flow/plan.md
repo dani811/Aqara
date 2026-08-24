@@ -13,7 +13,7 @@ llamada cloud falle por token expirado (`code 108`) **antes de actuar**, se
 reautentica y se **re-ejecuta la operación entera una vez**; ante credenciales
 inválidas (`code 810`) u otros códigos, falla sin reintentar. El token vive **solo
 en memoria**; la librería no persiste secretos. Además se **purifica el paquete**:
-`from_env` y los scripts CLI/PoC salen de `aqara_u200_ble/` a `examples/`.
+`from_env` y los scripts CLI/PoC salen de `aqara_ble/` a `examples/`.
 
 Para distinguir códigos de forma robusta (hoy se lanza `RuntimeError` con `code=`
 en el texto) se introduce una excepción tipada `CloudServiceError` con `.code`.
@@ -36,7 +36,7 @@ credenciales inyectadas por el consumidor; nada se persiste (Principio I).
 **Target Platform**: Librería Python; consumidor de referencia = integración Home
 Assistant (headless, no interactivo).
 
-**Project Type**: Single project (librería `aqara_u200_ble/`).
+**Project Type**: Single project (librería `aqara_ble/`).
 
 **Constraints**: no interactivo (sin `input`/`getpass` en el flujo); sin secretos
 en logs (whitelist de la 012); reintento máximo 1 y **solo antes de actuar**;
@@ -78,7 +78,7 @@ specs/014-auto-login-flow/
 ### Source changes (repository)
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 ├── kdf.py         # + CloudServiceError(code, message, endpoint); raise it in _unwrap_aqara_result
 ├── auth.py        # CloudAuthManager pure (credentials in __init__); remove from_env;
 │                  #   distinguish 810 (non-retryable) in _login; keep get_token/handle_expired_token

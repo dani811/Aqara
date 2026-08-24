@@ -37,7 +37,7 @@ are validated live (Principle V) — not unit-tested.
 **Target Platform**: Any OS with Python 3.11+ for the library; live use needs a BLE
 controller (native or ESP32-S3 over HCI via Bumble).
 
-**Project Type**: Library (`aqara_u200_ble/scanner.py`, `aqara_u200_ble/bumble_transport.py`).
+**Project Type**: Library (`aqara_ble/scanner.py`, `aqara_ble/bumble_transport.py`).
 
 **Performance Goals**: Not applicable; correctness and not-hanging dominate.
 
@@ -78,7 +78,7 @@ specs/005-end-to-end-unlock/
 ### Source Code (repository root)
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 ├── scanner.py           # THIS FEATURE — passive discovery (optional bleak)
 ├── bumble_transport.py  # THIS FEATURE — BumbleGattAdapter (optional bumble)
 └── __init__.py          # extended to export scan + BumbleGattAdapter

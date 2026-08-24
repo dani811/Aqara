@@ -10,9 +10,9 @@ Two implementations ship with the package, each importing its optional
 dependency lazily so the package itself stays dependency-free:
 
 - `BleakTransport` — the host's native Bluetooth stack (macOS / Linux / Windows)
-  through `bleak` (extra: `aqara-u200-ble[ble]`).
+  through `bleak` (extra: `aqara-ble[ble]`).
 - `BumbleTransport` — an external HCI controller (e.g. an ESP32-S3 running
-  `tools/esp32s3_hci_usb`) through `bumble` (extra: `aqara-u200-ble[bumble]`).
+  `tools/esp32s3_hci_usb`) through `bumble` (extra: `aqara-ble[bumble]`).
 
 Scan results are `ScanCandidate`s: what was seen on the air plus *why* it looks
 like a U200 (`reasons`), so a consumer can identify the lock without knowing its
@@ -32,7 +32,7 @@ from .gatt import GattClient
 
 # Import GATT identity constants DOWNWARD from the leaf module (not from session):
 # this is what keeps the radio layer independent of session/auth/kdf. Re-exported
-# below so ``from aqara_u200_ble.transport import U200_SERVICE_UUIDS`` keeps working.
+# below so ``from aqara_ble.transport import U200_SERVICE_UUIDS`` keeps working.
 from .gatt_uuids import U200_SERVICE_UUID16, U200_SERVICE_UUIDS
 from .models import decode_manufacturer_payload
 
@@ -190,7 +190,7 @@ class Transport(Protocol):
 def _missing_extra(module: str, extra: str) -> ImportError:
     return ImportError(
         f"Falta la dependencia opcional '{module}'. Instala el extra: "
-        f"pip install 'aqara-u200-ble[{extra}]'"
+        f"pip install 'aqara-ble[{extra}]'"
     )
 
 
@@ -316,7 +316,7 @@ class BumbleTransport:
         self._transport = await self._bumble_transport.open_transport(self.port)
         source, sink = self._transport.source, self._transport.sink
         device = self._bumble_device.Device.with_hci(
-            "aqara-u200-ble",
+            "aqara-ble",
             self.local_address,  # type: ignore[arg-type]  # str is accepted at runtime
             source,
             sink,

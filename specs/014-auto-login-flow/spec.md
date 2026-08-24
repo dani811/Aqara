@@ -37,7 +37,7 @@ será el hito para publicar release y versión oficial.
 ### Session 2026-08-15
 
 - Q: ¿Qué hace la 014 con lo que no es librería (from_env, CLI, PoCs)? → A:
-  **Purificar y reubicar ahora**. El paquete `aqara_u200_ble/` queda puro
+  **Purificar y reubicar ahora**. El paquete `aqara_ble/` queda puro
   (credenciales inyectadas); como parte de esta feature, `from_env` sale del
   paquete y `refresh_token.py` + `poc_*.py` se mueven a `examples/` (o `tools/`).
 - Q: ¿Cómo recibe el flujo las credenciales del consumidor? → A: mediante un
@@ -215,7 +215,7 @@ nivel DEBUG, ningún secreto aparece en la salida, ni en éxito ni en fallo.
   almacenamiento seguro es responsabilidad del consumidor (en Home Assistant, el
   *config entry* de HA). Los secretos MUST NOT aparecer en código ni en commits
   (Principio I).
-- **FR-014**: El paquete `aqara_u200_ble/` MUST quedar **puro**: sin utilidades que
+- **FR-014**: El paquete `aqara_ble/` MUST quedar **puro**: sin utilidades que
   no sean librería. La conveniencia de carga de credenciales (`from_env`) y las
   utilidades CLI/PoC (`refresh_token.py`, `poc_*.py`, runners) MUST vivir **fuera**
   del paquete (en `examples/` o `tools/`). Como parte de esta feature MUST
@@ -279,7 +279,7 @@ nivel DEBUG, ningún secreto aparece en la salida, ni en éxito ni en fallo.
   existentes del flujo permanecen verdes).
 - **SC-006**: Ninguna ruta del flujo invoca lectura interactiva (sin
   `input`/`getpass`), verificable de forma estática.
-- **SC-007**: El paquete `aqara_u200_ble/` no contiene utilidades no-librería: no
+- **SC-007**: El paquete `aqara_ble/` no contiene utilidades no-librería: no
   hay CLI/PoC ni carga de `.env`/`from_env` dentro del paquete; esas piezas viven
   en `examples/`/`tools/`.
 - **SC-008**: Si el token expira **después** de despachar el comando actuador, la

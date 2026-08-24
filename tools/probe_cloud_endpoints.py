@@ -29,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "examples"))
 from auth_from_env import auth_from_env
 
-from aqara_u200_ble.kdf import REGION_BASE_URLS, _tls_context
+from aqara_ble.kdf import REGION_BASE_URLS, _tls_context
 
 # Candidate inventory paths (all GET, read-only). Extend with --path. These are
 # the endpoints observed in the original capture notes plus common list shapes.

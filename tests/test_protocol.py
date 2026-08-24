@@ -10,7 +10,7 @@ import binascii
 
 import pytest
 
-from aqara_u200_ble import (
+from aqara_ble import (
     ControlRequest,
     control_command_name,
     parse_control_request,

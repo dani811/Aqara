@@ -2,7 +2,7 @@
 
 Kept in their own module so `scanner.py` (which raises the scan errors) and
 `client.py` (which raises the rest) do not import each other circularly. The
-public names are re-exported from `aqara_u200_ble`.
+public names are re-exported from `aqara_ble`.
 """
 
 from __future__ import annotations

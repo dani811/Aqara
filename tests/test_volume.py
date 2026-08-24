@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from aqara_u200_ble import (
+from aqara_ble import (
     VoiceVolumePreset,
     build_voice_volume_write,
     normalize_voice_volume_preset,

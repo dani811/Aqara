@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from aqara_u200_ble import session
+from aqara_ble import session
 from test_session_flow import (  # noqa: F401 - fixtures
     FakeLockClient,
     LockScript,

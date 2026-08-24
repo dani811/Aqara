@@ -1,6 +1,6 @@
 # Examples
 
-Runnable, **dev-only** helpers. They are **not** part of the `aqara_u200_ble`
+Runnable, **dev-only** helpers. They are **not** part of the `aqara_ble`
 API — the library never reads the environment, prompts, or persists secrets. In
 production (e.g. Home Assistant) the consumer injects credentials from its own
 secure storage and constructs a `CloudAuthManager` directly.
@@ -8,7 +8,7 @@ secure storage and constructs a `CloudAuthManager` directly.
 | File | What it does |
 | --- | --- |
 | [`auth_from_env.py`](auth_from_env.py) | Build a `CloudAuthManager` from environment variables (a `.env` convenience). |
-| [`lock_cli.py`](lock_cli.py) | Compat shim → the packaged **`aqara`** command (`aqara_u200_ble.cli:main`). Prefer `aqara …`. `scan` / `lock` / `unlock` / `operate <name>` through the library facade (`U200Client`), with `--transport bleak` (host Bluetooth) or `--transport bumble` (ESP32‑S3 controller, see [`../tools/esp32s3_hci_usb`](../tools/esp32s3_hci_usb/README.md)). |
+| [`lock_cli.py`](lock_cli.py) | Compat shim → the packaged **`aqara`** command (`aqara_ble.cli:main`). Prefer `aqara …`. `scan` / `lock` / `unlock` / `operate <name>` through the library facade (`U200Client`), with `--transport bleak` (host Bluetooth) or `--transport bumble` (ESP32‑S3 controller, see [`../tools/esp32s3_hci_usb`](../tools/esp32s3_hci_usb/README.md)). |
 
 ```bash
 .venv/bin/python examples/lock_cli.py --transport bleak scan

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from aqara_u200_ble import (
+from aqara_ble import (
     MODEL_BY_PRODUCT_ID,
     decode_manufacturer_payload,
     identify_candidate,

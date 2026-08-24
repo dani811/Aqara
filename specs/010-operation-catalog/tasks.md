@@ -26,8 +26,8 @@ description: "Task list for feature 010 — lock operation & settings catalog"
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-- [ ] T002 Create `aqara_u200_ble/operations_catalog.py` with `CommandFamily`, `OperationStatus`, `OperationEntry` per data-model.md
-- [ ] T003 Export the new public names from `aqara_u200_ble/__init__.py` (`CommandFamily`, `OperationStatus`, `OperationEntry`, `OPERATIONS_CATALOG`, `find_operation`, `operations_in_family`, `build_control_frame`)
+- [ ] T002 Create `aqara_ble/operations_catalog.py` with `CommandFamily`, `OperationStatus`, `OperationEntry` per data-model.md
+- [ ] T003 Export the new public names from `aqara_ble/__init__.py` (`CommandFamily`, `OperationStatus`, `OperationEntry`, `OPERATIONS_CATALOG`, `find_operation`, `operations_in_family`, `build_control_frame`)
 
 **Checkpoint**: types + exports exist; stories can build on them.
 
@@ -39,9 +39,9 @@ description: "Task list for feature 010 — lock operation & settings catalog"
 
 **Independent Test**: catalog contains all 8 families with sub-commands, each labelled confirmed/catalogued.
 
-- [ ] T004 [US1] Populate `OPERATIONS_CATALOG` with all eight families from `operaciones-u200.md` (SYSTEM/USER/LOG/ALARM/DEVICELOG/XXQ/SYSTEM_EXT/LONG), all sub-commands, in `aqara_u200_ble/operations_catalog.py`
+- [ ] T004 [US1] Populate `OPERATIONS_CATALOG` with all eight families from `operaciones-u200.md` (SYSTEM/USER/LOG/ALARM/DEVICELOG/XXQ/SYSTEM_EXT/LONG), all sub-commands, in `aqara_ble/operations_catalog.py`
 - [ ] T005 [US1] Mark open/close/keepalive as `CONFIRMED` with their `confirmed_frame`; everything else `CATALOGUED` (FR-002)
-- [ ] T006 [US1] Implement `find_operation` and `operations_in_family` lookups (never raise on unknown), in `aqara_u200_ble/operations_catalog.py`
+- [ ] T006 [US1] Implement `find_operation` and `operations_in_family` lookups (never raise on unknown), in `aqara_ble/operations_catalog.py`
 - [ ] T007 [P] [US1] Tests: all 8 families present, sub-commands non-empty, confirmed set == {open, close, keepalive}, lookups behave, in tests/test_operations_catalog.py
 
 **Checkpoint**: catalog is browsable and correctly labelled.
@@ -54,7 +54,7 @@ description: "Task list for feature 010 — lock operation & settings catalog"
 
 **Independent Test**: generic builder equals open/close for `0x74`; emits `main sub data` otherwise.
 
-- [ ] T008 [US2] Add `build_control_frame(main_cmd, sub_cmd, data=b"", seq=1)` in `aqara_u200_ble/lock_ops.py`, delegating `SYSTEM 0x74` to `build_operate_frame` and emitting `main+sub+data` otherwise, with byte-range validation (FR-003)
+- [ ] T008 [US2] Add `build_control_frame(main_cmd, sub_cmd, data=b"", seq=1)` in `aqara_ble/lock_ops.py`, delegating `SYSTEM 0x74` to `build_operate_frame` and emitting `main+sub+data` otherwise, with byte-range validation (FR-003)
 - [ ] T009 [P] [US2] Tests: `build_control_frame(0x01,0x74,...)` == `build_operate_frame(...)`; generic case emits `main sub data`; out-of-range rejected, in tests/test_operations_catalog.py
 
 **Checkpoint**: any frame can be built; confirmed frames stay byte-exact.

@@ -1,7 +1,7 @@
 # Contract: account-login envelope
 
 The public surface this feature touches is the account-login call and the pure
-password-encryption helper. Both are exported from `aqara_u200_ble`.
+password-encryption helper. Both are exported from `aqara_ble`.
 
 ## `encrypt_login_password(password: str) -> str`
 

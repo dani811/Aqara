@@ -16,7 +16,7 @@ buildable on the already-working session.
 The control channel is AES-CCM with `tag_length=4` (`operaciones-u200.md:11`,
 `ble-control-handoff.md:142`; the original decrypted ~20 real frames cleanly,
 `§190`). The volume frame `01d3 02d13e15 d5fddfe4` is 10 bytes = 6 ciphertext +
-**4-byte tag** (`d5fddfe4`). Our [`encrypt_control_payload`](../../aqara_u200_ble/session.py)
+**4-byte tag** (`d5fddfe4`). Our [`encrypt_control_payload`](../../aqara_ble/session.py)
 already produces exactly this tag. So the premise "reverse an unknown CRC
 trailer" was wrong — there is nothing to reverse for the tag. The repo's
 `volume.py` frames are captured **encrypted replay blobs**, and

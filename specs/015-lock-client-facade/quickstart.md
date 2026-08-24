@@ -8,7 +8,7 @@
 ## 1. Tests sin hardware
 ```bash
 .venv/bin/pytest -q            # toda la suite verde; incluye test_client_facade / test_scanner_identify / test_transport_contract
-.venv/bin/ruff check . && .venv/bin/mypy aqara_u200_ble
+.venv/bin/ruff check . && .venv/bin/mypy aqara_ble
 ```
 
 ## 2. Escaneo (nativo)
@@ -35,7 +35,7 @@ Con `AQARA_TOKEN` caducado o ausente el flujo debe seguir funcionando (login por
 
 ## Resultados (2026-08-17)
 
-- §1 tests: **189 passed**; `ruff check` / `mypy aqara_u200_ble` limpios.
+- §1 tests: **189 passed**; `ruff check` / `mypy aqara_ble` limpios.
 - §2 `lock_cli.py --transport bleak scan` (macOS): la U200 sale como
   `name='DoorLocker' score=7 reasons={manufacturer,name,service} preferred=True`;
   el dispositivo ajeno `vuart:ktunnel` sale con `score=1 reasons={manufacturer}

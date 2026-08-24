@@ -59,7 +59,7 @@ Evidence & Reproducibility principle.
 **Why this priority**: Dangling references mislead a third party trying to
 reproduce the work; lower than removing dead code but still a correctness issue.
 
-**Independent Test**: No tracked source file under `aqara_u200_ble/` or `tools/`
+**Independent Test**: No tracked source file under `aqara_ble/` or `tools/`
 references `ble-control-handoff.md` or `protocolo.md`; `gatt-map.md` no longer
 labels cells with removed code-constant names.
 
@@ -90,7 +90,7 @@ labels cells with removed code-constant names.
 - **FR-002**: Remove the corresponding names from `__all__`, keeping every
   `*_UUID` name and all still-live symbols.
 - **FR-003**: Repoint every `ble-control-handoff.md` / `protocolo.md` reference in
-  `aqara_u200_ble/` and `tools/` to `docs/reference/`.
+  `aqara_ble/` and `tools/` to `docs/reference/`.
 - **FR-004**: Update `docs/devices/u200/gatt-map.md` so it no longer presents the
   removed constants as code symbols (handles = informational; UUID-resolved).
 - **FR-005**: No wire byte, framing, or cryptographic path changes; no live code
@@ -113,7 +113,7 @@ labels cells with removed code-constant names.
 - **SC-001**: 0 occurrences of the removed symbols in the package; `__all__`
   shrinks from 94 to 85 with every remaining name resolving.
 - **SC-002**: 0 references to `ble-control-handoff.md` / `protocolo.md` in
-  `aqara_u200_ble/` and `tools/`.
+  `aqara_ble/` and `tools/`.
 - **SC-003**: `protocol.py` and `gatt.py` shrink (no dead defs) with the full suite
   still green (226 tests) + guard; ruff + mypy clean.
 - **SC-004**: No behavioural or wire change (framing/codec/crypto outputs unchanged).

@@ -26,7 +26,7 @@ existing `cryptography`/transport stack is untouched)
 
 **Target Platform**: cross-platform CPython
 
-**Project Type**: single Python library (`aqara_u200_ble`)
+**Project Type**: single Python library (`aqara_ble`)
 
 **Performance Goals**: N/A (in-memory lookups and byte assembly)
 
@@ -78,7 +78,7 @@ specs/010-operation-catalog/
 ### Source Code (repository root)
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 ├── operations_catalog.py   # NEW: CommandFamily, OperationEntry, CATALOG, lookups
 └── lock_ops.py             # build_control_frame() generalising build_operate_frame
 

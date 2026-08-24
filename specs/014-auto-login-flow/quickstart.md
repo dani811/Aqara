@@ -6,9 +6,9 @@ repo. Los tests no hacen I/O real (cloud simulado, `FakeLockClient`).
 ## Gates automáticos
 
 ```bash
-ruff check aqara_u200_ble tests examples
-ruff format --check aqara_u200_ble tests examples
-mypy aqara_u200_ble
+ruff check aqara_ble tests examples
+ruff format --check aqara_ble tests examples
+mypy aqara_ble
 pytest -q
 ```
 
@@ -31,7 +31,7 @@ pytest -q
 ```bash
 # El paquete no debe cargar credenciales, pedir input, ni exponer CLI
 # (los flags de runtime U200_DEBUG / U200_INSECURE_TLS sí están permitidos):
-grep -rInE 'getpass|input\(|def from_env|if __name__ == "__main__"' aqara_u200_ble/ \
+grep -rInE 'getpass|input\(|def from_env|if __name__ == "__main__"' aqara_ble/ \
   && echo "FAIL: utilidad/interactividad en el paquete" \
   || echo "OK: paquete sin utilidades/interactividad"
 # Las conveniencias viven fuera:
@@ -42,13 +42,13 @@ test ! -f poc_real_lock_unlock.py && echo "OK PoC fuera de la raíz"
 ## Gate de no-interactividad (SC-006)
 
 ```bash
-grep -rInE 'input\(|getpass' aqara_u200_ble/ && echo "FAIL: interactividad en el paquete" || echo "OK: no interactivo"
+grep -rInE 'input\(|getpass' aqara_ble/ && echo "FAIL: interactividad en el paquete" || echo "OK: no interactivo"
 ```
 
 ## Comprobación manual (estilo Home Assistant)
 
 ```python
-from aqara_u200_ble import CloudAuthManager, run_authenticated_lock_operation
+from aqara_ble import CloudAuthManager, run_authenticated_lock_operation
 
 # El consumidor (HA) inyecta credenciales desde su almacenamiento seguro:
 auth = CloudAuthManager(

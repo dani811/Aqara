@@ -4,7 +4,7 @@
 
 **Date**: 2026-08-15
 
-**Audience**: Consumers of `aqara_u200_ble` library (Home Assistant, CLI tools, scripts)
+**Audience**: Consumers of `aqara_ble` library (Home Assistant, CLI tools, scripts)
 
 ---
 
@@ -49,7 +49,7 @@ async def run_authenticated_lock_operation(
 **Usage**:
 
 ```python
-from aqara_u200_ble import OperationInProgressError, run_authenticated_lock_operation
+from aqara_ble import OperationInProgressError, run_authenticated_lock_operation
 
 try:
     material, write, response = await run_authenticated_lock_operation(

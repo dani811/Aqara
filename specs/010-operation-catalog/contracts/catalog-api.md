@@ -1,6 +1,6 @@
 # Contract: operation catalog & generic builder
 
-Public surface added by feature 010, exported from `aqara_u200_ble`.
+Public surface added by feature 010, exported from `aqara_ble`.
 
 ## Data
 

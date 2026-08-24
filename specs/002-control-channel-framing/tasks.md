@@ -24,7 +24,7 @@ description: "Task list for feature 002 — Control channel framing"
 
 ## Phase 2: Foundational
 
-- [X] T002 Migrate the dataclasses and constants into `aqara_u200_ble/protocol.py`
+- [X] T002 Migrate the dataclasses and constants into `aqara_ble/protocol.py`
   unchanged: `ATTPacket`, `ControlRequest`, the ATT handle constants
   (`AUTH_WRITE`/`AUTH_NOTIFY`/`CONTROL_WRITE`/`CONTROL_NOTIFY`/`BULK_WRITE`/
   `BULK_NOTIFY` and the `ATT_CONTROL_*` aliases).
@@ -87,7 +87,7 @@ description: "Task list for feature 002 — Control channel framing"
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [X] T012 Extend `aqara_u200_ble/__init__.py` to export the control-framing
+- [X] T012 Extend `aqara_ble/__init__.py` to export the control-framing
   surface (`ATTPacket`, `ControlRequest`, `parse_control_request`,
   `control_command_name`, `valid_crc`, ATT handle constants).
 - [X] T013 [P] Author `docs/protocol/control-channel.md`: frame shape

@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from aqara_u200_ble import BumbleGattAdapter
-from aqara_u200_ble.scanner import AQARA_COMPANY_ID, EXPECTED_NAME
+from aqara_ble import BumbleGattAdapter
+from aqara_ble.scanner import AQARA_COMPANY_ID, EXPECTED_NAME
 
 
 class FakeChar:

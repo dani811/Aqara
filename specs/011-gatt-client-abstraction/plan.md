@@ -7,7 +7,7 @@
 ## Summary
 
 Introduce `GattClient`/`AdvancedGattClient` `typing.Protocol`s in a new
-`aqara_u200_ble/gatt.py`; retype `run_authenticated_lock_operation`'s parameter
+`aqara_ble/gatt.py`; retype `run_authenticated_lock_operation`'s parameter
 from `bleak_client: Any` to `client: GattClient`; keep optional low-level
 capabilities as best-effort `getattr` discovery declared by the extended protocol.
 No wire behavior changes.
@@ -34,9 +34,9 @@ public API, tests without radio/network).
 ## Project Structure
 
 ```text
-aqara_u200_ble/gatt.py       # NEW: GattClient + AdvancedGattClient protocols
-aqara_u200_ble/session.py    # bleak_client: Any -> client: GattClient (+ getattr on client)
-aqara_u200_ble/__init__.py   # export GattClient
+aqara_ble/gatt.py       # NEW: GattClient + AdvancedGattClient protocols
+aqara_ble/session.py    # bleak_client: Any -> client: GattClient (+ getattr on client)
+aqara_ble/__init__.py   # export GattClient
 tests/test_gatt_abstraction.py  # NEW: structural conformance + best-effort optional
 ```
 

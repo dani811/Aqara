@@ -21,7 +21,7 @@ none of them performs network or radio I/O (Principle V).
 
 ## Path Conventions
 
-Library layout: package at `aqara_u200_ble/`, tests at `tests/`, docs at `docs/`.
+Library layout: package at `aqara_ble/`, tests at `tests/`, docs at `docs/`.
 
 ---
 
@@ -31,10 +31,10 @@ Library layout: package at `aqara_u200_ble/`, tests at `tests/`, docs at `docs/`
 
 - [X] T001 Confirm `run_authenticated_lock_operation` consumes its client by duck
   typing (`bleak_client: Any`, optional members probed with `getattr`) in
-  `aqara_u200_ble/session.py`, so no production seam must be added (FR-010).
+  `aqara_ble/session.py`, so no production seam must be added (FR-010).
 - [X] T002 Confirm `session.py` binds `cloud_get_public_key` /
   `get_session_material` in its own namespace (`from .kdf import …`), fixing the
-  monkeypatch target as `aqara_u200_ble.session`, not `aqara_u200_ble.kdf`.
+  monkeypatch target as `aqara_ble.session`, not `aqara_ble.kdf`.
 
 ---
 
@@ -58,7 +58,7 @@ exists.
   notify callbacks (contracts/transport-surface.md).
 - [X] T006 Add the shared `run_unlock(...)` helper to `tests/test_session_flow.py`:
   patches `asyncio.sleep` to a no-op, patches the two cloud functions on
-  `aqara_u200_ble.session`, and drives the coroutine with `asyncio.run` (FR-009).
+  `aqara_ble.session`, and drives the coroutine with `asyncio.run` (FR-009).
 
 **Checkpoint**: A scripted lock can be driven end to end; assertions can begin.
 
@@ -153,7 +153,7 @@ a wrong verify ACK fails clearly.
 - [X] T020 [P] `tests/test_session_flow.py::test_truncated_control_response_is_rejected`
   — a 1-byte answer raises rather than decrypting garbage (FR-007).
 - [X] T021 Verify no production module changed: `git diff develop --stat --
-  aqara_u200_ble/` is empty (FR-010, SC-007).
+  aqara_ble/` is empty (FR-010, SC-007).
 - [X] T022 Run the guard-the-guard check from quickstart scenario 2 — break
   `PRE_AUTH_NOTIFY_ORDER`, confirm a test fails, restore (SC-002).
 - [X] T023 [P] Narrow the "live BLE flow is not unit-tested" limitation in
@@ -161,7 +161,7 @@ a wrong verify ACK fails clearly.
 - [X] T024 [P] Point `docs/protocol/auth-handshake.md` at the executable
   choreography as evidence (Principle IV).
 - [X] T025 Run the gates: `ruff check . && ruff format --check .`,
-  `mypy aqara_u200_ble`, `pytest -q --durations=5` (SC-006).
+  `mypy aqara_ble`, `pytest -q --durations=5` (SC-006).
 - [X] T026 Secret scan the diff (Principle I) and merge into `develop` with
   `--no-ff` (Principle VI).
 

@@ -11,14 +11,14 @@ from __future__ import annotations
 
 import pytest
 
-from aqara_u200_ble import (
+from aqara_ble import (
     build_auth_message,
     crc16_aqara,
     decrypt_control_payload,
     encrypt_control_payload,
     parse_auth_message,
 )
-from aqara_u200_ble.session import assemble_auth_fragments, fragment_auth_message
+from aqara_ble.session import assemble_auth_fragments, fragment_auth_message
 
 # A captured 0610 frame: 18-byte header + 65-byte public-key body.
 # Header[7:9] = ed15 = CRC-16/ARC of the body (little-endian) — the discovery.

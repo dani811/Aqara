@@ -30,8 +30,8 @@
 
 - [X] T001 Create feature branch `012-cloud-io-async` (git branch already created via setup-plan)
 - [X] T002 Verify test suite still passes (baseline): `pytest tests/ -q` (135 tests passing)
-- [X] T003 [P] Define `OperationInProgressError` exception in `aqara_u200_ble/session.py` (temporary location before moving to __init__)
-- [X] T004 Export `OperationInProgressError` from `aqara_u200_ble/__init__.py` public API
+- [X] T003 [P] Define `OperationInProgressError` exception in `aqara_ble/session.py` (temporary location before moving to __init__)
+- [X] T004 Export `OperationInProgressError` from `aqara_ble/__init__.py` public API
 
 **Checkpoint**: ✅ Library structure ready; new exception type defined and exported; 135 tests still green
 
@@ -43,23 +43,23 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [X] T005 Add per-device concurrency guard to `run_authenticated_lock_operation()` in `aqara_u200_ble/session.py`
+- [X] T005 Add per-device concurrency guard to `run_authenticated_lock_operation()` in `aqara_ble/session.py`
   - ✅ Created module-level dict: `_device_operation_in_progress: dict[str, bool]` (keyed by device_id)
   - ✅ Implemented fail-fast check: raise `OperationInProgressError` if already in progress
   - ✅ Flag release in outer try/finally (structurally independent from BLE/cloud cleanup)
-- [X] T006 Implement fail-fast concurrency check in `aqara_u200_ble/session.py`
+- [X] T006 Implement fail-fast concurrency check in `aqara_ble/session.py`
   - ✅ Fail-fast check: `if _device_operation_in_progress.get(device_id, False): raise OperationInProgressError`
   - ✅ Release flag in outer try/finally (structurally independent from BLE/cloud cleanup)
   - ✅ Nested try/finally ensures flag release even if cleanup fails
   - ✅ Flag release MUST NOT be blocked by cleanup; cleanup failures MUST NOT jam concurrency state
   - ✅ Task cancellation propagates normally (not suppressed by cleanup)
-- [X] T007 `cloud_get_public_key()` already wrapped with `asyncio.to_thread()` in `aqara_u200_ble/session.py` (line 523)
+- [X] T007 `cloud_get_public_key()` already wrapped with `asyncio.to_thread()` in `aqara_ble/session.py` (line 523)
   - ✅ Implementation: `cloud_public_key_hex = await asyncio.to_thread(cloud_get_public_key, ...)`
   - ✅ Worker thread executed; cancellation does NOT terminate thread (network timeout present)
-- [X] T008 `get_session_material()` already wrapped with `asyncio.to_thread()` in `aqara_u200_ble/session.py` (line 563)
+- [X] T008 `get_session_material()` already wrapped with `asyncio.to_thread()` in `aqara_ble/session.py` (line 563)
   - ✅ Implementation: `session = await asyncio.to_thread(get_session_material, ...)`
   - ✅ Worker thread executed; cancellation does NOT terminate thread (network timeout present)
-- [X] T009 Add DEBUG-level whitelist logging to `aqara_u200_ble/session.py` per FR-008
+- [X] T009 Add DEBUG-level whitelist logging to `aqara_ble/session.py` per FR-008
   - [X] Import: `import logging` and `logger = logging.getLogger(__name__)`
   - [X] WHITELIST ONLY: operation phase, duration (ms), execution context (thread ID), outcome, exception type
   - [X] EXPLICITLY FORBIDDEN: URLs, request/response bodies, headers, device IDs, auth material, crypto material, BLE payloads, raw exception messages
@@ -144,7 +144,7 @@
 
 ### Implementation for User Story 3
 
-- [X] T018 [US3] Verify function signature unchanged in `aqara_u200_ble/session.py`
+- [X] T018 [US3] Verify function signature unchanged in `aqara_ble/session.py`
   - ✅ Check: 8 parameters match pre-feature-012 (client, device_id, auth_headers, region, base_url, operation, notify_timeout=8.0, signer=None)
   - ✅ Assert: Return type unchanged: `tuple[SessionMaterial, LockOperationWrite, str | None]`
   - Test: `test_function_signature_unchanged`
@@ -178,13 +178,13 @@
   - ✅ Fixed line-length issues (docstring, print statements)
   - ✅ Formatted code: 2 files reformatted, all checks pass
 - [X] T023 [P] Run type checker: `mypy .`
-  - ✅ No type errors in `aqara_u200_ble/session.py` (main changes)
+  - ✅ No type errors in `aqara_ble/session.py` (main changes)
   - ✅ `mypy` passes with full success
 - [X] T024 Run full test suite one final time: `pytest tests/ -v --tb=short`
   - ✅ All 140 tests pass
   - ✅ No test output changes (same as Phase 5)
   - ✅ Session flow, async boundary, and transport tests all green
-- [X] T025 Update docstring for `run_authenticated_lock_operation()` in `aqara_u200_ble/session.py`
+- [X] T025 Update docstring for `run_authenticated_lock_operation()` in `aqara_ble/session.py`
   - ✅ Documented: Cloud calls execute in worker threads via `asyncio.to_thread()`
   - ✅ Documented: `OperationInProgressError` raised on concurrent calls
   - ✅ Documented: Exception propagation (unwrapped, original type preserved)
@@ -290,7 +290,7 @@ Deploy after **Phase 3 (User Story 1)** only:
 
 ## Notes
 
-- All tasks use absolute file paths from `aqara_u200_ble/` root
+- All tasks use absolute file paths from `aqara_ble/` root
 - No external dependencies added (asyncio is stdlib)
 - Backward compatibility is P3 (tested but not blocking)
 - Security (no secrets in logs) integrated into each phase test

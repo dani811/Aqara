@@ -35,7 +35,7 @@ docs de release, tag.
 ## Project Structure
 
 ```text
-aqara_u200_ble/session.py            # _run_cloud_phase: capturar worker id dentro del hilo
+aqara_ble/session.py            # _run_cloud_phase: capturar worker id dentro del hilo
 tests/test_async_cloud_boundary.py   # #2 aserto ≥80% genérico; #3 test worker≠loop
 pyproject.toml                       # URLs correctas (repo real); versión 0.5.0 (ya)
 docs/ or RELEASE notes               # artefacto/versión para HA manifest.json

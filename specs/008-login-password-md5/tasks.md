@@ -55,8 +55,8 @@ document the unit of change, per Constitution Principle III.
 
 ### Implementation for User Story 1
 
-- [X] T007 [US1] Fix `encrypt_login_password` to RSA-encrypt `MD5(password).hexdigest()` (lowercase hex), in aqara_u200_ble/kdf.py (FR-001)
-- [X] T008 [US1] Update `kdf.login` docstring to record the verified `code=0` status and the MD5 transform, in aqara_u200_ble/kdf.py (FR-007)
+- [X] T007 [US1] Fix `encrypt_login_password` to RSA-encrypt `MD5(password).hexdigest()` (lowercase hex), in aqara_ble/kdf.py (FR-001)
+- [X] T008 [US1] Update `kdf.login` docstring to record the verified `code=0` status and the MD5 transform, in aqara_ble/kdf.py (FR-007)
 
 **Checkpoint**: Autonomous login returns a real token, verified end-to-end (SC-001..SC-003).
 

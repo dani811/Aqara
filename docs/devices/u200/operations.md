@@ -329,7 +329,7 @@ The decrypted control response of a command carries state. Confirmed samples
 | `keepalive` (`2f012f`) | `2f00 2c06` |
 | `unlock` (open) | `7400 7706` |
 
-`aqara_u200_ble.LockState` exposes the raw response; decoded fields
+`aqara_ble.LockState` exposes the raw response; decoded fields
 (`locked`, `battery_percent`) stay `None` until a **labelled** sample set pins
 them down. **Decode is pending** — capture procedure in
 [validation.md](validation.md). Spontaneous event reports (manual unlock, keypad)

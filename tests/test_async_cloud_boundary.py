@@ -25,7 +25,7 @@ from typing import Any
 
 import pytest
 
-from aqara_u200_ble import OperationInProgressError, session
+from aqara_ble import OperationInProgressError, session
 from test_session_flow import FakeLockClient, LockScript
 
 
@@ -613,7 +613,7 @@ class TestWorkerThreadTelemetry:
             # The real blocking work runs here, on the worker thread.
             return threading.get_ident()
 
-        with caplog.at_level(logging.DEBUG, logger="aqara_u200_ble.session"):
+        with caplog.at_level(logging.DEBUG, logger="aqara_ble.session"):
             worker_id = asyncio.run(session._run_cloud_phase("probe", cloud_helper))
 
         # The helper actually ran off-loop.
@@ -631,7 +631,7 @@ class TestWorkerThreadTelemetry:
         def cloud_helper(*, device_id: str) -> str:
             return device_id
 
-        with caplog.at_level(logging.DEBUG, logger="aqara_u200_ble.session"):
+        with caplog.at_level(logging.DEBUG, logger="aqara_ble.session"):
             asyncio.run(session._run_cloud_phase("probe", cloud_helper, device_id=secret))
 
         assert all(secret not in r.getMessage() for r in caplog.records)

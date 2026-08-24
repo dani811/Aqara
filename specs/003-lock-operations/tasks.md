@@ -20,7 +20,7 @@ and `volume.py` unchanged, plus their pytest suites.
 ## Phase 1: Setup
 
 - [X] T001 Confirm both modules are stdlib-only except `volume.py`'s import of
-  `aqara_u200_ble.protocol.ControlRequest` (feature 002); no new dependencies.
+  `aqara_ble.protocol.ControlRequest` (feature 002); no new dependencies.
 
 ## Phase 2: Foundational
 
@@ -89,7 +89,7 @@ and `volume.py` unchanged, plus their pytest suites.
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [X] T013 Extend `aqara_u200_ble/__init__.py` to export the operations surface
+- [X] T013 Extend `aqara_ble/__init__.py` to export the operations surface
   (`LockOperation`, `LockOperationWrite`, `build_lock_operation_write`,
   `normalize_lock_operation`, `send_lock_operation`, `VoiceVolumePreset`,
   `VoiceVolumeWrite`, `build_voice_volume_write`, `normalize_voice_volume_preset`,

@@ -1,7 +1,7 @@
 name: Publish to PyPI
 
 # Trusted Publishing (PyPI OIDC) — no API token stored. Requires a pending
-# publisher registered on PyPI for: project aqara-u200-ble, owner dani811,
+# publisher registered on PyPI for: project aqara-ble, owner dani811,
 # repo Aqara, workflow publish.yml, environment pypi (issue #5).
 #
 # Triggers: automatically when a GitHub Release is published, or manually

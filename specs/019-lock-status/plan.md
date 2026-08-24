@@ -4,7 +4,7 @@
 
 ## Summary
 
-Nuevo `aqara_u200_ble/lock_state.py` con `LockState` + `decode_lock_state()`
+Nuevo `aqara_ble/lock_state.py` con `LockState` + `decode_lock_state()`
 (honesto: `raw` siempre, campos confirmados sólo con evidencia). `U200Client`
 gana `status()` (keepalive confirmado, read-only) y `OperationResult`/operaciones
 pueden exponer `LockState(source="operation")`. CLI `aqara state`. Sin cambios de
@@ -36,10 +36,10 @@ V (tipado, tests sin I/O). **Scope**: `lock_state.py` nuevo, `client.py`
 ## Project Structure
 
 ```text
-aqara_u200_ble/lock_state.py   # NUEVO: LockState + decode_lock_state()
-aqara_u200_ble/client.py       # status() (keepalive) + LockState desde operaciones
-aqara_u200_ble/cli.py          # subcomando `state`
-aqara_u200_ble/__init__.py     # export LockState, decode_lock_state
+aqara_ble/lock_state.py   # NUEVO: LockState + decode_lock_state()
+aqara_ble/client.py       # status() (keepalive) + LockState desde operaciones
+aqara_ble/cli.py          # subcomando `state`
+aqara_ble/__init__.py     # export LockState, decode_lock_state
 tests/test_lock_state.py       # decode honesto + status() con fake
 docs/devices/u200/operations.md / validation.md  # muestras + captura; límite eventos
 ```

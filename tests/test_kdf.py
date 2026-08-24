@@ -19,7 +19,7 @@ from cryptography.hazmat.primitives.asymmetric import padding as _pad
 from cryptography.hazmat.primitives.asymmetric import rsa as _rsa
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
-from aqara_u200_ble import (
+from aqara_ble import (
     aes128gcm_decrypt_body,
     aes128gcm_encrypt_body,
     cloud_crypto,

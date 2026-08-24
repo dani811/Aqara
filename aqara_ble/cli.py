@@ -6,7 +6,7 @@ the public objects (`CloudAuthManager`, a `Transport`, `U200Client`) and calls
 their methods, then prints. **No protocol, network or BLE logic lives here** — an
 integration couples to the same public API this CLI uses, without importing `cli`.
 
-Purity invariant: `import aqara_u200_ble` must NOT import this module (it is not
+Purity invariant: `import aqara_ble` must NOT import this module (it is not
 imported by the package ``__init__``) and importing the library reads no
 environment. This module is loaded only when the ``aqara`` command runs.
 
@@ -232,7 +232,7 @@ async def _run(args: argparse.Namespace) -> int:  # noqa: PLR0911 - one exit per
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="aqara",
-        description="Control an Aqara U200 lock through the aqara_u200_ble library.",
+        description="Control an Aqara U200 lock through the aqara_ble library.",
     )
     p.add_argument("--transport", choices=("bleak", "bumble"), default="bleak")
     p.add_argument("--port", help="bumble transport spec, e.g. serial:/dev/cu.usbmodemNNNN,115200")

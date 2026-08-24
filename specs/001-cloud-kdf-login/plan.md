@@ -35,7 +35,7 @@ password encryption shape. No network in unit tests (Principle V).
 
 **Target Platform**: Any OS with Python 3.11+; the cloud client is transport-only.
 
-**Project Type**: Library (single package `aqara_u200_ble`).
+**Project Type**: Library (single package `aqara_ble`).
 
 **Performance Goals**: Not performance-sensitive; one request per key-exchange step.
 Correctness and fidelity dominate.
@@ -78,7 +78,7 @@ specs/001-cloud-kdf-login/
 ### Source Code (repository root)
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 ├── __init__.py          # Public exports
 ├── kdf.py               # THIS FEATURE — cloud client: HKDF, signer, login,
 │                        #   x-aes128gcm codec, publickey/verify calls

@@ -42,7 +42,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from aqara_u200_ble.kdf import login
+from aqara_ble.kdf import login
 
 ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 

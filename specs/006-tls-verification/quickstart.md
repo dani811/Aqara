@@ -16,7 +16,7 @@ No lock, no credentials, and no network are needed for scenarios 1–3.
 
 ```bash
 ruff check . && ruff format --check .
-mypy aqara_u200_ble
+mypy aqara_ble
 pytest -q
 ```
 
@@ -27,7 +27,7 @@ pytest count.
 
 ```bash
 python -c "
-from aqara_u200_ble.kdf import _tls_context
+from aqara_ble.kdf import _tls_context
 ctx = _tls_context()
 print('check_hostname:', ctx.check_hostname)
 print('verify_mode  :', ctx.verify_mode)
@@ -50,13 +50,13 @@ verify_mode  : 2          # ssl.CERT_REQUIRED
 
 ```bash
 U200_INSECURE_TLS=1 python -c "
-from aqara_u200_ble.kdf import _tls_context
+from aqara_ble.kdf import _tls_context
 ctx = _tls_context()
 print('check_hostname:', ctx.check_hostname, '| verify_mode:', ctx.verify_mode)
 "
 
 U200_INSECURE_TLS=0 python -c "
-from aqara_u200_ble.kdf import _tls_context
+from aqara_ble.kdf import _tls_context
 print(_tls_context().verify_mode)
 "
 ```
@@ -74,7 +74,7 @@ opt-out -> check_hostname: False | verify_mode: 0
 falsey  -> 2
 ```
 
-Scenario 1 on the same run: `ruff check` clean, `mypy aqara_u200_ble` clean,
+Scenario 1 on the same run: `ruff check` clean, `mypy aqara_ble` clean,
 `pytest` 70 passed. (`ruff format --check .` flags 7 files that already failed on
 a clean `develop` — pre-existing, recorded in [docs/roadmap.md](../../docs/roadmap.md).)
 

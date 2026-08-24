@@ -79,7 +79,7 @@ and `bumble_transport.py` unchanged, plus the composition into a live flow.
 
 ### Implementation for User Story 3
 
-- [X] T010 [US3] Extend `aqara_u200_ble/__init__.py` to export `scan` and
+- [X] T010 [US3] Extend `aqara_ble/__init__.py` to export `scan` and
   `BumbleGattAdapter`; the end-to-end entrypoint `run_authenticated_lock_operation`
   is already exported (feature 004).
 - [X] T011 [US3] (live, not unit-tested) The composed flow — discover → connect via

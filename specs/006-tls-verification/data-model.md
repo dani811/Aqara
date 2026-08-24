@@ -10,7 +10,7 @@ policy decision and its single input.
 ### Connection security policy
 
 The `ssl.SSLContext` handed to every cloud request. Produced by exactly one
-factory, `_tls_context()` in `aqara_u200_ble/kdf.py`.
+factory, `_tls_context()` in `aqara_ble/kdf.py`.
 
 | Attribute | Secure (default) | Downgraded (opt-out active) |
 | --- | --- | --- |

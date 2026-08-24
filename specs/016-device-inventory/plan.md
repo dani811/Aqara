@@ -35,7 +35,7 @@ modelos, `tools/probe_cloud_endpoints.py`, docs de referencia, ~8 tests.
 ## Project Structure
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 ├── transport.py     # ScanCandidate += manufacturer_payload/product_id/model; decode en identify_candidate
 ├── models.py        # NUEVO: MODEL_BY_PRODUCT_ID {0x9C03:"U200"} + decode_manufacturer_payload()
 tools/

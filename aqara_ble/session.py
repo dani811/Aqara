@@ -28,7 +28,7 @@ from .gatt import GattClient
 
 # GATT identity constants live in the leaf module ``gatt_uuids`` so the low-level
 # transport can import them without depending on this (higher) module. Re-exported
-# from here so ``from aqara_u200_ble.session import AUTH_SERVICE_UUID`` etc. keep
+# from here so ``from aqara_ble.session import AUTH_SERVICE_UUID`` etc. keep
 # working. See gatt_uuids.py.
 from .gatt_uuids import (
     AUTH_NOTIFY_UUID,

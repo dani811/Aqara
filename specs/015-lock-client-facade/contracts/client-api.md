@@ -1,7 +1,7 @@
-# Contract — API pública de la fachada (aqara_u200_ble)
+# Contract — API pública de la fachada (aqara_ble)
 
 ```python
-from aqara_u200_ble import CloudAuthManager, U200Client, BleakTransport, BumbleTransport, scan
+from aqara_ble import CloudAuthManager, U200Client, BleakTransport, BumbleTransport, scan
 
 auth = CloudAuthManager(
     account=..., password=..., appid=..., appkey=..., client_id=..., phone_id=..., region="EU"
@@ -40,7 +40,7 @@ candidates = await scan(
 - `lock() / unlock() -> str | None`; `operate(op: LockOperation | str) -> OperationResult`.
 - `close()`; `__aenter__/__aexit__`; `connected: bool`; `candidate`.
 - Excepciones: `U200ClientError(phase)`, `NoDeviceFoundError`, `AmbiguousDeviceError`, y se propagan sin envolver `OperationInProgressError` y `CloudServiceError` (810) tal como hoy.
-- Dependencia opcional ausente → `ImportError("Instala aqara-u200-ble[ble]")` / `[bumble]` al construir el transporte.
+- Dependencia opcional ausente → `ImportError("Instala aqara-ble[ble]")` / `[bumble]` al construir el transporte.
 
 ## Invariantes
 

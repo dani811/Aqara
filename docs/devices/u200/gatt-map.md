@@ -84,7 +84,7 @@ string. On Linux/BlueZ or the ESP32-S3 HCI transport a plain discovery works.
 
 These are the concrete handle values observed on the reference firmware. The code
 does **not** reference handles directly — every characteristic is resolved by UUID
-(see `aqara_u200_ble/gatt_uuids.py`), so handles are not stable across firmware and
+(see `aqara_ble/gatt_uuids.py`), so handles are not stable across firmware and
 are listed here only for orientation when reading a capture.
 
 | Role | Handle |

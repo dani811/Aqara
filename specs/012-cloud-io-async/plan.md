@@ -77,7 +77,7 @@ specs/[###-feature]/
 ### Source Code (repository root)
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 ├── session.py            # MODIFIED: wrap cloud calls with asyncio.to_thread()
 ├── __init__.py           # MODIFIED: export OperationInProgressError
 └── [other modules unchanged]

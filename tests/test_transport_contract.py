@@ -19,9 +19,9 @@ from typing import Any, ClassVar
 
 import pytest
 
-from aqara_u200_ble import BleakTransport, BumbleTransport, ScanCandidate, Transport
-from aqara_u200_ble.bumble_transport import BumbleGattAdapter
-from aqara_u200_ble.transport import U200_SERVICE_UUIDS
+from aqara_ble import BleakTransport, BumbleTransport, ScanCandidate, Transport
+from aqara_ble.bumble_transport import BumbleGattAdapter
+from aqara_ble.transport import U200_SERVICE_UUIDS
 
 MAC = "CA:FE:00:00:00:01"
 
@@ -36,13 +36,13 @@ def _block_import(monkeypatch: pytest.MonkeyPatch, *names: str) -> None:
 
 def test_bleak_transport_names_extra_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     _block_import(monkeypatch, "bleak")
-    with pytest.raises(ImportError, match=r"aqara-u200-ble\[ble\]"):
+    with pytest.raises(ImportError, match=r"aqara-ble\[ble\]"):
         BleakTransport()
 
 
 def test_bumble_transport_names_extra_when_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     _block_import(monkeypatch, "bumble", "bumble.device", "bumble.hci", "bumble.transport")
-    with pytest.raises(ImportError, match=r"aqara-u200-ble\[bumble\]"):
+    with pytest.raises(ImportError, match=r"aqara-ble\[bumble\]"):
         BumbleTransport("serial:/dev/null")
 
 

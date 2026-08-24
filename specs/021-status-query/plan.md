@@ -38,10 +38,10 @@ nunca `SET_*`. **Scope**: `lock_ops.py` (passthrough + `build_control_query_writ
 ## Project Structure
 
 ```text
-aqara_u200_ble/lock_ops.py    # build_lock_operation_write passthrough; build_control_query_write(); operation: LockOperation|str
-aqara_u200_ble/client.py      # U200Client.query(sub_cmd, data) -> LockState(source="query")
-aqara_u200_ble/lock_state.py  # SOURCE_QUERY
-aqara_u200_ble/cli.py         # `aqara query <name|hex>` acotado (whitelist STATUS_QUERIES)
+aqara_ble/lock_ops.py    # build_lock_operation_write passthrough; build_control_query_write(); operation: LockOperation|str
+aqara_ble/client.py      # U200Client.query(sub_cmd, data) -> LockState(source="query")
+aqara_ble/lock_state.py  # SOURCE_QUERY
+aqara_ble/cli.py         # `aqara query <name|hex>` acotado (whitelist STATUS_QUERIES)
 tests/test_status_query.py    # query bytes; passthrough; actuador byte-equal; CLI whitelist
 docs/devices/u200/operations.md / validation.md  # opcodes permitidos + procedimiento
 ```

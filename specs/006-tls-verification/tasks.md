@@ -23,7 +23,7 @@ livable.
 
 ## Path Conventions
 
-Library layout: package at `aqara_u200_ble/`, tests at `tests/`, docs at `docs/`.
+Library layout: package at `aqara_ble/`, tests at `tests/`, docs at `docs/`.
 
 ---
 
@@ -31,11 +31,11 @@ Library layout: package at `aqara_u200_ble/`, tests at `tests/`, docs at `docs/`
 
 **Purpose**: Confirm the ground truth the fix depends on.
 
-- [X] T001 Verify `aqara_u200_ble/kdf.py` is the only SSL construction site —
-  `grep -rn "ssl\." aqara_u200_ble --include="*.py"` returns solely the
+- [X] T001 Verify `aqara_ble/kdf.py` is the only SSL construction site —
+  `grep -rn "ssl\." aqara_ble --include="*.py"` returns solely the
   `_post_json` context block (FR-007 precondition).
 - [X] T002 Confirm no new dependency is required: the fix uses only `ssl`, `os`,
-  `sys`, already imported in `aqara_u200_ble/kdf.py`.
+  `sys`, already imported in `aqara_ble/kdf.py`.
 
 ---
 
@@ -47,9 +47,9 @@ Library layout: package at `aqara_u200_ble/`, tests at `tests/`, docs at `docs/`
 
 - [X] T003 Add the truthy-value constant `_TRUTHY_ENV_VALUES` and the flag name
   constant `_INSECURE_TLS_ENV = "U200_INSECURE_TLS"` near the other module
-  constants in `aqara_u200_ble/kdf.py`.
+  constants in `aqara_ble/kdf.py`.
 - [X] T004 Add the private factory `_tls_context() -> ssl.SSLContext` to
-  `aqara_u200_ble/kdf.py`, returning `ssl.create_default_context()` unchanged,
+  `aqara_ble/kdf.py`, returning `ssl.create_default_context()` unchanged,
   with a docstring stating the policy and the opt-out (data-model.md).
 
 **Checkpoint**: A single function owns the policy; call sites can adopt it.
@@ -75,7 +75,7 @@ behaviour is otherwise unchanged.
 ### Implementation for User Story 1
 
 - [X] T007 [US1] Replace the inline three-line insecure context in `_post_json`
-  (`aqara_u200_ble/kdf.py`) with `ssl_context = _tls_context()`, deleting the
+  (`aqara_ble/kdf.py`) with `ssl_context = _tls_context()`, deleting the
   "TEMPORARY for development/testing on macOS" comment and its override lines.
 - [X] T008 [US1] Confirm nothing else in the request changes — same `data`,
   headers, encoding negotiation, and timeout path (FR-006).
@@ -107,7 +107,7 @@ warning; set it to `0`/empty/unset → verification on, no warning.
 
 ### Implementation for User Story 2
 
-- [X] T013 [US2] In `_tls_context()` (`aqara_u200_ble/kdf.py`), read the flag,
+- [X] T013 [US2] In `_tls_context()` (`aqara_ble/kdf.py`), read the flag,
   normalize with `.strip().lower()`, and when affirmative set `check_hostname =
   False` **before** `verify_mode = ssl.CERT_NONE`, printing the warning to stderr.
 
@@ -126,7 +126,7 @@ and `U200_INSECURE_TLS`.
 ### Tests for User Story 3
 
 - [X] T014 [P] [US3] `tests/test_kdf.py::test_certificate_failure_message_names_the_flag`
-  — monkeypatch `urlrequest.urlopen` in `aqara_u200_ble.kdf` to raise
+  — monkeypatch `urlrequest.urlopen` in `aqara_ble.kdf` to raise
   `URLError(ssl.SSLCertVerificationError(...))`, call `_post_json`, and assert the
   raised `RuntimeError` mentions the URL, the verification failure, and
   `U200_INSECURE_TLS` (no socket is opened).
@@ -134,7 +134,7 @@ and `U200_INSECURE_TLS`.
 ### Implementation for User Story 3
 
 - [X] T015 [US3] In `_post_json`'s `except urlerror.URLError` handler
-  (`aqara_u200_ble/kdf.py`), detect `isinstance(exc.reason,
+  (`aqara_ble/kdf.py`), detect `isinstance(exc.reason,
   ssl.SSLCertVerificationError)` and raise the enriched message per
   `contracts/tls-policy.md`; leave all other `URLError` cases byte-identical.
 
@@ -153,7 +153,7 @@ and `U200_INSECURE_TLS`.
 - [X] T019 Close roadmap debt item 1 in `docs/roadmap.md` — move it from "Pending
   work" to a resolved note referencing this feature.
 - [X] T020 Run the quality gates: `ruff check . && ruff format --check .`,
-  `mypy aqara_u200_ble`, `pytest` (SC-006).
+  `mypy aqara_ble`, `pytest` (SC-006).
 - [X] T021 Run `specs/006-tls-verification/quickstart.md` scenarios 1–3 and record
   the observed output.
 - [X] T022 Secret scan the diff (Principle I) — no credentials, MACs, or IDs.

@@ -24,7 +24,7 @@
 
 **Validation Rules**:
 - Must be a new exception class inheriting from `RuntimeError` or `asyncio.InvalidStateError`
-- Must be importable from `aqara_u200_ble` (public API)
+- Must be importable from `aqara_ble` (public API)
 
 ---
 

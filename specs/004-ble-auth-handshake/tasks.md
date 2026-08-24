@@ -95,7 +95,7 @@ unchanged, plus its pytest suite pinning the CRC breakthrough.
 
 ## Phase 7: Polish & Cross-Cutting
 
-- [X] T013 Extend `aqara_u200_ble/__init__.py` with the handshake/session surface
+- [X] T013 Extend `aqara_ble/__init__.py` with the handshake/session surface
   (CRC, build/parse/fragment/assemble, AES-CCM, `SessionMaterial`, UUID + order
   constants, `run_authenticated_lock_operation`).
 - [X] T014 [P] Author `docs/protocol/auth-handshake.md`: header layout, the

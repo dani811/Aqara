@@ -23,7 +23,7 @@ pure-logic tests, and documenting the wire contract.
 
 ## Path Conventions
 
-Single library project: package at `aqara_u200_ble/`, tests at `tests/`, protocol
+Single library project: package at `aqara_ble/`, tests at `tests/`, protocol
 docs at `docs/protocol/`.
 
 ---
@@ -34,8 +34,8 @@ docs at `docs/protocol/`.
 
 - [X] T001 Add `pyproject.toml` with package metadata, `cryptography>=43` runtime
   dependency, and a `dev` extra (`pytest`, `ruff`, `mypy`).
-- [X] T002 [P] Create the package skeleton: `aqara_u200_ble/__init__.py` and
-  `aqara_u200_ble/py.typed` (PEP 561 typed marker).
+- [X] T002 [P] Create the package skeleton: `aqara_ble/__init__.py` and
+  `aqara_ble/py.typed` (PEP 561 typed marker).
 - [X] T003 [P] Configure `ruff` + `mypy` settings in `pyproject.toml`.
 
 ---
@@ -47,9 +47,9 @@ docs at `docs/protocol/`.
 **⚠️ CRITICAL**: These must land before any story's cloud call is meaningful.
 
 - [X] T004 Migrate the HKDF-SHA256 primitives (`hkdf_extract`, `hkdf_expand`,
-  `hkdf_sha256`) into `aqara_u200_ble/kdf.py` — unchanged, behavior-preserving.
+  `hkdf_sha256`) into `aqara_ble/kdf.py` — unchanged, behavior-preserving.
 - [X] T005 Migrate the request-signing core (`compute_nonce`, `compute_sign`) into
-  `aqara_u200_ble/kdf.py`, preserving the exact formula and the token-omitted
+  `aqara_ble/kdf.py`, preserving the exact formula and the token-omitted
   login variant (Principle II).
 
 **Checkpoint**: Primitives importable; ready for per-story cloud calls.
@@ -78,7 +78,7 @@ retrieval and assert a 65-byte `04`-prefixed point; a mis-signed request is reje
   (`_post_json`), result unwrapping (`_unwrap_aqara_result`), and
   `cloud_get_public_key` — unchanged.
 - [X] T010 [US1] Export the public-key call and signer from
-  `aqara_u200_ble/__init__.py`.
+  `aqara_ble/__init__.py`.
 
 **Checkpoint**: US1 functional — public key retrievable end-to-end.
 
@@ -103,7 +103,7 @@ failure (not a crypto/transport error).
 - [X] T013 [US2] Migrate `encrypt_login_password`, the `x-aes128gcm` codec
   (`_aes128gcm_nonce`, `aes128gcm_encrypt_body`, `aes128gcm_decrypt_body`),
   `_PATH_LOGIN`, and `login` — unchanged (Principle II).
-- [X] T014 [US2] Export `login` from `aqara_u200_ble/__init__.py`.
+- [X] T014 [US2] Export `login` from `aqara_ble/__init__.py`.
 
 **Checkpoint**: US1 AND US2 both work independently.
 
@@ -132,7 +132,7 @@ returns session key + nonce + verify data of documented sizes.
   `x-aes128gcm` encoding, endpoint set — with sanitized examples only (Principle IV).
 - [X] T018 Secret-hygiene sweep: confirm no token/appkey/device id/capture appears
   in `kdf.py`, tests, or docs; all sensitive values are parameters (Principle I).
-- [X] T019 [P] `mypy aqara_u200_ble/kdf.py` and `ruff check` pass clean.
+- [X] T019 [P] `mypy aqara_ble/kdf.py` and `ruff check` pass clean.
 - [X] T020 Run `pytest tests/test_kdf.py` — all pure-logic tests green, no network.
 - [X] T021 [P] Cover FR-008 (service-level error codes): `tests/test_kdf.py::test_service_error_code_is_surfaced_with_its_details`,
   `::test_success_codes_unwrap_the_result`, `::test_payload_without_result_is_returned_whole`,

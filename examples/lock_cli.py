@@ -5,7 +5,7 @@
 `python examples/lock_cli.py …` working by delegating to the same entry point.
 """
 
-from aqara_u200_ble.cli import main
+from aqara_ble.cli import main
 
 if __name__ == "__main__":
     raise SystemExit(main())

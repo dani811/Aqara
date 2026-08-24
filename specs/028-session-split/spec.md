@@ -10,7 +10,7 @@
 
 ## Overview
 
-`aqara_u200_ble/session.py` mixed pure, byte-exact wire logic (the CRC-16/ARC
+`aqara_ble/session.py` mixed pure, byte-exact wire logic (the CRC-16/ARC
 table + `crc16_aqara`, the `0610`/`0710` auth-message builder, the 5a/da fragment
 (de)serialisers, and the AES-CCM control codec) with the large asynchronous
 `run_authenticated_lock_operation` orchestrator that drives the real BLE
@@ -72,15 +72,15 @@ behavioural test edits.
    pre-split values, **Then** they are identical.
 2. **Given** the public package, **When** `__all__` is enumerated, **Then** it is
    the same set as before (0 added, 0 removed).
-3. **Given** existing tests that import framing helpers from `aqara_u200_ble` or
-   from `aqara_u200_ble.session`, **When** they run, **Then** they pass unchanged —
+3. **Given** existing tests that import framing helpers from `aqara_ble` or
+   from `aqara_ble.session`, **When** they run, **Then** they pass unchanged —
    the orchestrator still imports (and thus re-exposes) the helpers it uses, and
    `__init__` sources them from the leaves.
 
 ### Edge Cases
 
 - Tests import `assemble_auth_fragments`/`fragment_auth_message`/
-  `build_auth_message`/`parse_auth_message` from `aqara_u200_ble.session`; those are
+  `build_auth_message`/`parse_auth_message` from `aqara_ble.session`; those are
   used by the orchestrator so they remain module attributes of `session` and keep
   resolving. `crc16_aqara` is imported top-level and sourced from `framing`.
 - `control_codec` keeps the lazy `cryptography` import inside the functions, so
@@ -91,10 +91,10 @@ behavioural test edits.
 
 ### Functional Requirements
 
-- **FR-001**: `aqara_u200_ble/framing.py` MUST contain `AuthMessage`, the CRC-16
+- **FR-001**: `aqara_ble/framing.py` MUST contain `AuthMessage`, the CRC-16
   table, `crc16_aqara`, `build_auth_message`, `fragment_auth_message`,
   `assemble_auth_fragments`, `parse_auth_message` — pure, no package import.
-- **FR-002**: `aqara_u200_ble/control_codec.py` MUST contain
+- **FR-002**: `aqara_ble/control_codec.py` MUST contain
   `encrypt_control_payload` and `decrypt_control_payload` (lazy `cryptography`
   import preserved), pure, no package import.
 - **FR-003**: `session.py` MUST define none of the moved functions, MUST import the
@@ -123,10 +123,10 @@ behavioural test edits.
 ### Measurable Outcomes
 
 - **SC-001**: `framing.py` and `control_codec.py` each contain 0 imports of other
-  `aqara_u200_ble` modules and 0 network/radio I/O.
+  `aqara_ble` modules and 0 network/radio I/O.
 - **SC-002**: `session.py` contains 0 definitions of the moved functions.
 - **SC-003**: Deterministic framing/codec outputs are 100% identical before/after.
-- **SC-004**: `aqara_u200_ble.__all__` is identical before/after.
+- **SC-004**: `aqara_ble.__all__` is identical before/after.
 - **SC-005**: Full suite passes (same count, 0 skipped) + guard; ruff + mypy clean.
 - **SC-006**: A pending "verify real-lock lock/unlock at the physical test" item is
   recorded (memory / physical-test checklist).
@@ -137,7 +137,7 @@ behavioural test edits.
   pure leaves are extracted, so the live handshake choreography is unchanged.
 - `__init__` sources the moved names from the leaves (single source of truth);
   `session` re-exposes those the orchestrator uses so existing
-  `from aqara_u200_ble.session import ...` test imports keep resolving.
+  `from aqara_ble.session import ...` test imports keep resolving.
 - The session-only connection-tuning constants and `SessionMaterial` stay in
   `session.py` (not identity/framing/codec data).
 - Real-device verification is a separate, user-gated physical step; byte-identity

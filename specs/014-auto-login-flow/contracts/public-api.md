@@ -1,6 +1,6 @@
 # Contract — Public API changes
 
-Cambios de superficie pública de `aqara_u200_ble`. Criterio de verificación de la
+Cambios de superficie pública de `aqara_ble`. Criterio de verificación de la
 implementación y de los tests.
 
 ## 1. `run_authenticated_lock_operation` — nuevo parámetro `auth`
@@ -44,7 +44,7 @@ class CloudServiceError(RuntimeError):
 - **C2.1**: La lanza `_unwrap_aqara_result` cuando `code ∉ {0, "0", None}`.
 - **C2.2**: MUST heredar de `RuntimeError` y conservar el texto actual del mensaje
   (retrocompat con `except RuntimeError`).
-- **C2.3**: Exportada en `aqara_u200_ble.__all__`.
+- **C2.3**: Exportada en `aqara_ble.__all__`.
 
 ## 3. `CloudAuthManager` (existente, ajustes)
 

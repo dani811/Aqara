@@ -31,7 +31,7 @@ exact parse results, round-trip identity, and CRC pass/fail. No network, no BLE.
 
 **Target Platform**: Any OS with Python 3.11+.
 
-**Project Type**: Library (module `aqara_u200_ble/protocol.py`).
+**Project Type**: Library (module `aqara_ble/protocol.py`).
 
 **Performance Goals**: Not performance-sensitive; per-frame parsing.
 
@@ -72,7 +72,7 @@ specs/002-control-channel-framing/
 ### Source Code (repository root)
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 ├── protocol.py          # THIS FEATURE — ATTPacket, ControlRequest, parsing,
 │                        #   command names, ATT handles, CRC-HQX validation
 └── __init__.py          # extended to export the control-framing surface

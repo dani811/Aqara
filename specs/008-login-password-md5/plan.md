@@ -26,7 +26,7 @@ transform, and documentation is corrected to match verified reality.
 
 **Target Platform**: cross-platform CPython (developed on macOS)
 
-**Project Type**: single Python library (`aqara_u200_ble`) with companion tools
+**Project Type**: single Python library (`aqara_ble`) with companion tools
 
 **Performance Goals**: N/A (a single login round-trip)
 
@@ -81,7 +81,7 @@ specs/008-login-password-md5/
 ### Source Code (repository root)
 
 ```text
-aqara_u200_ble/
+aqara_ble/
 └── kdf.py               # encrypt_login_password (the fix) + login (docstring)
 
 tools/
@@ -97,7 +97,7 @@ tests/
 ```
 
 **Structure Decision**: Single-library layout (existing). The fix lives in the
-one crypto module `aqara_u200_ble/kdf.py`; everything else is tests and docs that
+one crypto module `aqara_ble/kdf.py`; everything else is tests and docs that
 track the same fact.
 
 ## Complexity Tracking

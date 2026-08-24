@@ -20,8 +20,8 @@ byte-idéntico (default 0.0).
 
 ## Project Structure
 ```text
-aqara_u200_ble/session.py   # listen_after/on_report + report_queue + listen loop
-aqara_u200_ble/client.py    # U200Client.listen()
-aqara_u200_ble/cli.py       # aqara listen --seconds
+aqara_ble/session.py   # listen_after/on_report + report_queue + listen loop
+aqara_ble/client.py    # U200Client.listen()
+aqara_ble/cli.py       # aqara listen --seconds
 tests/test_listen_window.py # reenvío + default off + sin callback
 ```

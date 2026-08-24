@@ -1,6 +1,6 @@
 """Dev-only: build a CloudAuthManager from environment variables.
 
-This helper lives **outside** the `aqara_u200_ble` package on purpose: the library
+This helper lives **outside** the `aqara_ble` package on purpose: the library
 never reads the environment. In production (e.g. Home Assistant) the consumer
 injects credentials from its own secure storage and constructs `CloudAuthManager`
 directly. This is a convenience for local runs that keep secrets in a git-ignored
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 
-from aqara_u200_ble import CloudAuthManager
+from aqara_ble import CloudAuthManager
 
 
 def _env(name: str) -> str:

@@ -34,7 +34,7 @@ class GattClient(Protocol):
 
     Implementations:
     - `BleakClient` (from the bleak library) satisfies this protocol structurally
-    - `BumbleGattAdapter` (aqara_u200_ble.bumble_transport) wraps Bumble's Peer
+    - `BumbleGattAdapter` (aqara_ble.bumble_transport) wraps Bumble's Peer
     - Test mocks can implement this interface without external dependencies
     """
 

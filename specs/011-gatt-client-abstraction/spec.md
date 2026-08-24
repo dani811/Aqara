@@ -119,7 +119,7 @@ optional methods; their absence triggers the documented best-effort skip.
   only the three required methods (proved without radio).
 - **SC-002**: The existing Bumble path and all prior session-flow tests remain
   green — zero behavior change.
-- **SC-003**: `GattClient` is importable from `aqara_u200_ble` and in `__all__`.
+- **SC-003**: `GattClient` is importable from `aqara_ble` and in `__all__`.
 - **SC-004**: The session no longer references a concrete Bleak type in its
   signature.
 

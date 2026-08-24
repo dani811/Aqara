@@ -26,8 +26,8 @@ from typing import Any
 
 import pytest
 
-from aqara_u200_ble import decrypt_control_payload, encrypt_control_payload, session
-from aqara_u200_ble.session import (
+from aqara_ble import decrypt_control_payload, encrypt_control_payload, session
+from aqara_ble.session import (
     AUTH_NOTIFY_UUID,
     AUTH_WRITE_UUID,
     CONTROL_WRITE_UUID,
@@ -428,7 +428,7 @@ def test_truncated_control_response_is_rejected(_fake_cloud: list[str]) -> None:
 
 
 def test_debug_report_logs_only_under_env(monkeypatch, capsys) -> None:
-    from aqara_u200_ble.session import _debug_report
+    from aqara_ble.session import _debug_report
 
     monkeypatch.delenv("U200_DEBUG", raising=False)
     _debug_report("ff64", bytes.fromhex("deadbeef"))

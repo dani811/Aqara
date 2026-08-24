@@ -20,7 +20,7 @@ the tracked tree.
 | `CA:FE:00:00:00:01` / `:02` | tests | synthetic "cafe" test device (allow-listed) |
 | `F0:F1:F2:F3:F4:F5` | `transport.py` | bumble local-address placeholder (allow-listed) |
 | SHA-256 hashes | `.specify/integrations/claude.manifest.json` | speckit skill integrity hashes — not secrets |
-| RSA public key (DER b64) | `aqara_u200_ble/kdf.py` | Aqara login **public** key — not a secret |
+| RSA public key (DER b64) | `aqara_ble/kdf.py` | Aqara login **public** key — not a secret |
 | `000102030405` | docs (System ID) | SoC default, not a device secret |
 | `dani811` | `pyproject.toml` | package author identity (allow-listed) |
 

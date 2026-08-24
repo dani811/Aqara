@@ -12,13 +12,13 @@ from __future__ import annotations
 
 import pytest
 
-from aqara_u200_ble import (
+from aqara_ble import (
     LockOperation,
     build_lock_operation_write,
     normalize_lock_operation,
     send_lock_operation,
 )
-from aqara_u200_ble.lock_ops import build_operate_frame
+from aqara_ble.lock_ops import build_operate_frame
 
 
 class FakeTransport:

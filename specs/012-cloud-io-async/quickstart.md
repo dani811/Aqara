@@ -9,7 +9,7 @@
 ## Prerequisites
 
 - Python 3.10+
-- `aqara_u200_ble` library installed (or running from source)
+- `aqara_ble` library installed (or running from source)
 - A test BLE client (mock or real)
 - `pytest` for running validation tests
 
@@ -29,7 +29,7 @@
 
 ```python
 import asyncio
-from aqara_u200_ble import run_authenticated_lock_operation
+from aqara_ble import run_authenticated_lock_operation
 from tests.test_async_cloud_boundary import SlowCloudHelper, FakeLockClient, LockScript
 
 
@@ -45,7 +45,7 @@ async def test_event_loop_remains_responsive():
         completed_tasks.append(task_id)
 
     # Monkey-patch cloud helpers
-    import aqara_u200_ble.session as session
+    import aqara_ble.session as session
 
     session.cloud_get_public_key = slow_cloud.get_public_key
     session.get_session_material = slow_cloud.get_session_material
@@ -102,7 +102,7 @@ asyncio.run(test_event_loop_remains_responsive())
 
 ```python
 import asyncio
-from aqara_u200_ble import run_authenticated_lock_operation, OperationInProgressError
+from aqara_ble import run_authenticated_lock_operation, OperationInProgressError
 from tests.test_async_cloud_boundary import SlowCloudHelper, FakeLockClient, LockScript
 
 
@@ -111,7 +111,7 @@ async def test_concurrent_operations_rejected():
 
     slow_cloud = SlowCloudHelper(delay_seconds=0.5)
 
-    import aqara_u200_ble.session as session
+    import aqara_ble.session as session
 
     session.cloud_get_public_key = slow_cloud.get_public_key
     session.get_session_material = slow_cloud.get_session_material
@@ -175,7 +175,7 @@ asyncio.run(test_concurrent_operations_rejected())
 
 ```python
 import logging
-from aqara_u200_ble import run_authenticated_lock_operation
+from aqara_ble import run_authenticated_lock_operation
 from tests.test_async_cloud_boundary import FakeLockClient, LockScript
 
 # Enable DEBUG logging to capture everything
@@ -247,7 +247,7 @@ test_no_secrets_in_logs()
 
 ```python
 import asyncio
-from aqara_u200_ble import run_authenticated_lock_operation
+from aqara_ble import run_authenticated_lock_operation
 
 
 class CustomCloudError(Exception):
@@ -260,7 +260,7 @@ async def test_exception_propagation():
     def fake_public_key_fails(**kwargs):
         raise CustomCloudError("Cloud API returned 500")
 
-    import aqara_u200_ble.session as session
+    import aqara_ble.session as session
 
     session.cloud_get_public_key = fake_public_key_fails
 

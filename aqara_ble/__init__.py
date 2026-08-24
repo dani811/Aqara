@@ -113,7 +113,7 @@ from .volume import (
 )
 
 try:
-    __version__ = version("aqara-u200-ble")
+    __version__ = version("aqara-ble")
 except PackageNotFoundError:  # pragma: no cover - running from a source checkout
     __version__ = "0.0.0+unknown"
 
