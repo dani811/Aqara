@@ -2,6 +2,24 @@
 
 All notable changes to aqara-ble are documented in this file.
 
+## [1.1.0] — Account + password only (2026-08-23)
+
+### Changed
+- `CloudAuthManager` now needs only **account + password** (+ optional region).
+  The app-global `appid`/`appkey` default to baked constants and
+  `client_id`/`phone_id` are generated per install (new `aqara_ble.app_constants`).
+  All four remain optional keyword args to override with captured values.
+  Confirmed live: login succeeds with baked app ids + random phone/client ids.
+
+### Why
+- Consumers (e.g. Home Assistant) should ask a user only for their Aqara account
+  and password — never for `appid`/`appkey`/`client_id`/`phone_id`, which a normal
+  user cannot obtain. Backward compatible: passing all values still works.
+
+### Note
+- The lock's `device_id` still has to be supplied until cloud `list_devices()`
+  lands (feature 016), which needs the device-inventory endpoint captured.
+
 ## [1.0.0] — First stable release (2026-08-23)
 
 ### Summary

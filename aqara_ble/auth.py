@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+from .app_constants import APP_ID, APP_KEY, generate_client_id, generate_phone_id
 from .cloud_crypto import Signer, make_local_signer
 from .kdf import CloudServiceError, login
 
@@ -29,31 +30,37 @@ class CloudAuthManager:
         *,
         account: str,
         password: str,
-        appid: str,
-        appkey: str,
-        client_id: str,
-        phone_id: str,
+        appid: str | None = None,
+        appkey: str | None = None,
+        client_id: str | None = None,
+        phone_id: str | None = None,
         region: str = "EU",
         district: str = "ES",
     ) -> None:
         """Initialize auth manager with account credentials.
 
+        Only ``account`` and ``password`` are required. The app-global ``appid``/
+        ``appkey`` default to the baked constants and ``client_id``/``phone_id``
+        are generated per install (see ``app_constants``), so a consumer never has
+        to supply values a user cannot obtain. Any of them may still be passed
+        explicitly (e.g. from a captured app session) to override the defaults.
+
         Args:
             account: Aqara account (email or phone)
             password: Aqara account password
-            appid: Aqara app ID
-            appkey: Aqara app key
-            client_id: Firebase Cloud Messaging client ID
-            phone_id: Device phone ID
+            appid: Aqara app ID (defaults to the app-global constant)
+            appkey: Aqara app key (defaults to the app-global constant)
+            client_id: FCM client ID (generated if omitted)
+            phone_id: Device phone ID (generated if omitted)
             region: Aqara region (EU, CN, etc.)
             district: Aqara district (ES, CN, etc.)
         """
         self.account = account
         self.password = password
-        self.appid = appid
-        self.appkey = appkey
-        self.client_id = client_id
-        self.phone_id = phone_id
+        self.appid = appid or APP_ID
+        self.appkey = appkey or APP_KEY
+        self.client_id = client_id or generate_client_id()
+        self.phone_id = phone_id or generate_phone_id()
         self.region = region
         self.district = district
 
