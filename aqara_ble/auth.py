@@ -7,10 +7,27 @@ Handles login, token refresh on 108 errors, and transparent credential loading.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from .app_constants import APP_ID, APP_KEY, generate_client_id, generate_phone_id
 from .cloud_crypto import Signer, make_local_signer
-from .kdf import CloudServiceError, login
+from .errors import FlowPhase, NoDeviceFoundError, U200ClientError
+from .kdf import (
+    REGION_BASE_URLS,
+    CloudServiceError,
+    cloud_device_mac,
+    cloud_list_devices,
+    login,
+)
+
+
+def _mac_forms(mac: str) -> set[str]:
+    """Return comparable forms of a MAC (bare hex + byte-reversed) for matching."""
+    hexed = "".join(c for c in mac.lower() if c in "0123456789abcdef")
+    reversed_bytes = "".join(
+        hexed[i : i + 2] for i in range(len(hexed) - 2, -2, -2) if hexed[i : i + 2]
+    )
+    return {hexed, reversed_bytes}
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +158,46 @@ class CloudAuthManager:
         """
         logger.debug("cloud token: refreshing (expired)")
         return self.get_token(force_refresh=True)
+
+    def list_devices(self) -> list[dict[str, Any]]:
+        """List the devices registered on this Aqara account (logs in if needed).
+
+        Each dict carries ``deviceId`` (the ``matt.<...>`` DID the BLE flow needs),
+        ``model``, ``name``, etc. Blocking HTTP — call via a worker thread on an
+        event loop.
+        """
+        signer = self.build_signer()
+        base = REGION_BASE_URLS.get(self.region, REGION_BASE_URLS["EU"])
+        return cloud_list_devices(None, base, signer=signer)
+
+    def resolve_device_id(self, *, mac: str | None = None) -> str:
+        """Resolve the lock's device id from the account — no manual id needed.
+
+        A single registered device is returned directly; with several, the given
+        BLE ``mac`` is matched against each device's cloud MAC. This is what lets a
+        consumer configure with only an account + password. Blocking HTTP.
+        """
+        devices = self.list_devices()
+        ids = [str(d["deviceId"]) for d in devices if d.get("deviceId")]
+        if not ids:
+            raise NoDeviceFoundError("no devices registered on this Aqara account")
+        if len(ids) == 1:
+            return ids[0]
+        if mac:
+            signer = self.build_signer()
+            base = REGION_BASE_URLS.get(self.region, REGION_BASE_URLS["EU"])
+            target = _mac_forms(mac)
+            for did in ids:
+                try:
+                    device_mac = cloud_device_mac(did, None, base, signer=signer)
+                except Exception:  # noqa: BLE001 - non-lock devices error; skip them
+                    continue
+                if device_mac and target & _mac_forms(device_mac):
+                    return did
+        raise U200ClientError(
+            FlowPhase.LOGIN,
+            f"{len(ids)} devices on this account; a MAC is needed to pick the lock",
+        )
 
     # NOTE: environment-based construction lives OUTSIDE the library, in
     # examples/auth_from_env.py (Feature 014). The library never reads the

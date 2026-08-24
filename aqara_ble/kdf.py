@@ -91,6 +91,8 @@ REGION_BASE_URLS: dict[str, str] = {
 # API paths (relative; append to base URL)
 _PATH_PUBLICKEY = "/dev/bluetooth/login/assure/publickey"
 _PATH_VERIFY = "/dev/bluetooth/login/assure/verify"
+#: Account device inventory (POST, empty body) → result: {data: [...], totalCount}.
+_PATH_DEVICE_LIST = "/dev/query"
 _REQUIRED_AUTH_HEADERS = (
     "Lang",
     "Cuty",
@@ -497,6 +499,56 @@ def cloud_get_public_key(
     if not cloud_pub:
         raise RuntimeError(f"No cloudPublicKey in response: {data}")
     return cast("str", cloud_pub)
+
+
+def cloud_list_devices(
+    auth_headers: Mapping[str, str] | None,
+    base_url: str,
+    signer: Signer | None = None,
+) -> list[dict[str, Any]]:
+    """List the account's devices (``POST /dev/query``).
+
+    Returns the raw device dicts (``result.data``); each carries ``deviceId``
+    (the ``matt.<...>`` DID), ``model``, ``name``, ``positionId``, etc. The DID is
+    the value the BLE auth flow needs, so this is how a consumer resolves the lock
+    from just an account + password — no manually supplied device id.
+    """
+    data = _post_json(
+        f"{base_url}{_PATH_DEVICE_LIST}",
+        {},
+        auth_headers,
+        signer=signer,
+        path_rel=_PATH_DEVICE_LIST,
+    )
+    result = _unwrap_aqara_result(data, endpoint=_PATH_DEVICE_LIST)
+    if isinstance(result, dict):
+        devices = result.get("data")
+        if isinstance(devices, list):
+            return [d for d in devices if isinstance(d, dict)]
+    return []
+
+
+def cloud_device_mac(
+    device_id: str,
+    auth_headers: Mapping[str, str] | None,
+    base_url: str,
+    signer: Signer | None = None,
+) -> str:
+    """Return the lock's MAC for ``device_id`` (from the publickey response).
+
+    Used to disambiguate when an account has more than one lock: match this
+    against the MAC discovered over BLE.
+    """
+    data = _post_json(
+        f"{base_url}{_PATH_PUBLICKEY}",
+        {"deviceId": device_id},
+        auth_headers,
+        signer=signer,
+        path_rel=_PATH_PUBLICKEY,
+    )
+    unwrapped = _unwrap_aqara_result(data, endpoint=_PATH_PUBLICKEY)
+    mac = unwrapped.get("mac") if isinstance(unwrapped, dict) else None
+    return cast("str", mac) if mac else ""
 
 
 def cloud_verify(
