@@ -44,6 +44,7 @@ from .lock_state import (
     SOURCE_QUERY,
     LockState,
     decode_lock_state,
+    decode_state_report,
 )
 from .scanner import scan, select_preferred
 from .session import (
@@ -68,6 +69,9 @@ class OperationResult:
     response_hex: str | None
     write: LockOperationWrite
     session: SessionMaterial
+    #: Real bolt position observed on the ff62 report channel during a
+    #: post-command listen window (True locked / False unlocked / None not seen).
+    observed_locked: bool | None = None
 
     @property
     def state(self) -> LockState:
@@ -206,14 +210,30 @@ class U200Client:
     def connected(self) -> bool:
         return self._gatt is not None and not self._closed
 
-    async def operate(self, operation: LockOperation | str) -> OperationResult:
-        """Run any catalogued `LockOperation` (by member, name or hex value)."""
+    async def operate(
+        self, operation: LockOperation | str, *, listen_after: float = 0.0
+    ) -> OperationResult:
+        """Run any catalogued `LockOperation` (by member, name or hex value).
+
+        With ``listen_after > 0`` the session stays open that many seconds after
+        the command and reads the lock's real bolt position from the ff62 report
+        channel — ``OperationResult.observed_locked`` carries it (True/False, or
+        None if nothing was pushed in the window).
+        """
 
         if not self.connected or self._gatt is None:
             raise U200ClientError(
                 FlowPhase.OPERATION, "el cliente está cerrado/desconectado; vuelve a conectar"
             )
         op = normalize_lock_operation(operation)
+        observed: list[bool] = []
+
+        def on_report(channel: str, data: bytes) -> None:
+            if channel == "ff62":
+                position = decode_state_report(data)
+                if position is not None:
+                    observed.append(position)
+
         try:
             material, write, response = await run_authenticated_lock_operation(
                 client=self._gatt,
@@ -224,18 +244,26 @@ class U200Client:
                 operation=op,
                 notify_timeout=self.notify_timeout,
                 auth=self.auth,
+                listen_after=listen_after,
+                on_report=on_report if listen_after > 0 else None,
             )
         except (OperationInProgressError, CloudServiceError, U200ClientError):
             raise
         except Exception as exc:
             raise U200ClientError(FlowPhase.OPERATION, f"{op.name}: {exc}") from exc
-        return OperationResult(operation=op, response_hex=response, write=write, session=material)
+        return OperationResult(
+            operation=op,
+            response_hex=response,
+            write=write,
+            session=material,
+            observed_locked=observed[-1] if observed else None,
+        )
 
-    async def lock(self) -> str | None:
-        return (await self.operate(LockOperation.LOCK)).response_hex
+    async def lock(self, *, listen_after: float = 0.0) -> str | None:
+        return (await self.operate(LockOperation.LOCK, listen_after=listen_after)).response_hex
 
-    async def unlock(self) -> str | None:
-        return (await self.operate(LockOperation.UNLOCK)).response_hex
+    async def unlock(self, *, listen_after: float = 0.0) -> str | None:
+        return (await self.operate(LockOperation.UNLOCK, listen_after=listen_after)).response_hex
 
     async def status(self) -> LockState:
         """Read the lock state without actuating, via the confirmed keepalive poll.

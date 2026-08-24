@@ -28,7 +28,31 @@ from dataclasses import dataclass
 SOURCE_KEEPALIVE = "keepalive"
 SOURCE_OPERATION = "operation"
 SOURCE_QUERY = "query"
-SOURCE_EVENT = "event"  # reserved for spontaneous reports (needs a persistent session)
+SOURCE_EVENT = "event"  # spontaneous ff62 report (needs an open session)
+
+#: ff62 spontaneous-report opcodes (first byte). CONFIRMED live 2026-08-24
+#: against this project's own lock: the lock pushes 0x1d when it becomes locked
+#: and 0xdd when unlocked; 0x15 is a periodic status heartbeat (no position here).
+REPORT_LOCKED = 0x1D
+REPORT_UNLOCKED = 0xDD
+REPORT_STATUS = 0x15
+
+
+def decode_state_report(raw: bytes | None) -> bool | None:
+    """Decode a spontaneous ff62 report frame into the bolt position.
+
+    Returns ``True`` (locked, first byte ``0x1d``), ``False`` (unlocked,
+    ``0xdd``), or ``None`` when the frame is not a position report (e.g. the
+    ``0x15`` heartbeat). Confirmed live — see the opcode constants above.
+    """
+    if not raw:
+        return None
+    first = raw[0]
+    if first == REPORT_LOCKED:
+        return True
+    if first == REPORT_UNLOCKED:
+        return False
+    return None
 
 
 @dataclass(frozen=True)
@@ -70,10 +94,14 @@ def decode_lock_state(raw: bytes | None, source: str) -> LockState:
 
 
 __all__ = [
+    "REPORT_LOCKED",
+    "REPORT_STATUS",
+    "REPORT_UNLOCKED",
     "SOURCE_EVENT",
     "SOURCE_KEEPALIVE",
     "SOURCE_OPERATION",
     "SOURCE_QUERY",
     "LockState",
     "decode_lock_state",
+    "decode_state_report",
 ]

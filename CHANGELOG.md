@@ -2,6 +2,23 @@
 
 All notable changes to aqara-ble are documented in this file.
 
+## [1.2.0] — Real lock state from the ff62 report channel (2026-08-24)
+
+### Added
+- **Real bolt position** decoded from the spontaneous ff62 report channel:
+  `decode_state_report()` (first byte `0x1d` = locked, `0xdd` = unlocked,
+  `0x15` = heartbeat). CONFIRMED live against a real lock, including manual
+  key/keypad operations.
+- `U200Client.operate(op, listen_after=<s>)` now keeps the session open after
+  the command and returns the real observed position in
+  `OperationResult.observed_locked` — a consumer gets true state, not a guess.
+
+### Why
+- Consumers (e.g. Home Assistant) can now show the actual locked/unlocked state
+  read from the lock over BLE, and confirm an actuation really happened, instead
+  of an optimistic assumption. Groundwork for a persistent-session real-time
+  state sensor (yalexs_ble style).
+
 ## [1.1.0] — Account + password only, device id auto-resolved (2026-08-23)
 
 ### Changed
