@@ -277,14 +277,25 @@ class U200Client:
         raw = bytes.fromhex(result.response_hex) if result.response_hex else None
         return decode_lock_state(raw, source=SOURCE_KEEPALIVE)
 
-    async def listen(self, seconds: float = 15.0) -> list[tuple[str, str]]:
+    async def listen(
+        self,
+        seconds: float = 15.0,
+        *,
+        on_state: Callable[[bool], None] | None = None,
+        low_power: bool = False,
+    ) -> list[tuple[str, str]]:
         """Keep the session open after a keepalive and collect spontaneous frames.
 
         Returns ``(channel, hex)`` for every extra frame the lock pushes within the
         window — control ff62 (decrypted), report ff64/ff92 (raw). Non-actuating
-        (uses the keepalive poll). This is the diagnostic seed of real-time state /
-        events: run it and see whether the lock reports position or a keypad/manual
-        event after the immediate ACK (feature 023).
+        (uses the keepalive poll).
+
+        ``on_state`` fires **in real time** with the decoded bolt position each
+        time the lock pushes an ff62 position report (0x1d/0xdd) — this is how a
+        consumer keeps a persistent, real-time state session. ``low_power``
+        requests a slow connection interval + slave latency so holding the session
+        open costs little battery (honoured only where the BLE stack allows it,
+        e.g. BlueZ; ignored on CoreBluetooth).
         """
 
         if not self.connected or self._gatt is None:
@@ -293,6 +304,10 @@ class U200Client:
 
         def collect(channel: str, data: bytes) -> None:
             reports.append((channel, data.hex()))
+            if on_state is not None and channel == "ff62":
+                position = decode_state_report(data)
+                if position is not None:
+                    on_state(position)
 
         try:
             await run_authenticated_lock_operation(
@@ -306,6 +321,7 @@ class U200Client:
                 auth=self.auth,
                 listen_after=seconds,
                 on_report=collect,
+                low_power_connection=low_power,
             )
         except (OperationInProgressError, CloudServiceError, U200ClientError):
             raise

@@ -2,6 +2,20 @@
 
 All notable changes to aqara-ble are documented in this file.
 
+## [1.3.0] — Real-time state streaming + low-power hold (2026-08-24)
+
+### Added
+- `U200Client.listen(seconds, on_state=cb, low_power=True)` streams the real bolt
+  position via a callback in real time (fires per ff62 report), and can request
+  **low-power connection parameters** (slow interval + slave latency) so a HELD
+  state-listening session costs little lock battery. `run_authenticated_lock_operation`
+  gains `low_power_connection`.
+
+### Why
+- Enables a persistent, real-time state session (yalexs_ble style) that catches
+  external changes (Matter/key/keypad) without the per-window reconnect churn —
+  one held low-power connection instead of many fast reconnects.
+
 ## [1.2.0] — Real lock state from the ff62 report channel (2026-08-24)
 
 ### Added

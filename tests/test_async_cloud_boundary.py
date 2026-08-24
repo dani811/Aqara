@@ -437,6 +437,7 @@ class TestBackwardCompatibility:
             "auth",  # Feature 014: optional CloudAuthManager for auto-login
             "listen_after",  # Feature 023: post-command listen window (default 0.0)
             "on_report",  # Feature 023: callback for spontaneous frames
+            "low_power_connection",  # 1.3.0: slow conn params for a held state session
         ]
 
         assert params == expected_params

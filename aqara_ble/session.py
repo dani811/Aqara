@@ -161,6 +161,14 @@ POST_AUTH_CONNECTION_INTERVAL_MS = 15.0
 POST_AUTH_CONNECTION_LATENCY = 0
 POST_AUTH_SUPERVISION_TIMEOUT_MS = 4000.0
 
+# Low-power connection params for a HELD state-listening session: a long interval
+# plus slave latency lets the lock's radio sleep between events, so keeping the
+# session open costs little battery (the lock still wakes to push an ff62 report).
+# supervision must exceed (1+latency)*interval*2 = 10 s, so 12 s is safe.
+LOW_POWER_CONNECTION_INTERVAL_MS = 1000.0
+LOW_POWER_CONNECTION_LATENCY = 4
+LOW_POWER_SUPERVISION_TIMEOUT_MS = 12000.0
+
 @dataclass(frozen=True)
 class SessionMaterial:
     session_key_hex: str
@@ -188,6 +196,7 @@ async def run_authenticated_lock_operation(
     auth: CloudAuthManager | None = None,
     listen_after: float = 0.0,
     on_report: Callable[[str, bytes], None] | None = None,
+    low_power_connection: bool = False,
 ) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
     """
     Authenticate with the lock, send a command, and receive the response.
@@ -239,6 +248,7 @@ async def run_authenticated_lock_operation(
                 actuation_state=actuation_state,
                 listen_after=listen_after,
                 on_report=on_report,
+                low_power_connection=low_power_connection,
             )
         except CloudServiceError as exc:
             can_retry = (
@@ -270,6 +280,7 @@ async def _run_authenticated_lock_operation_once(
     actuation_state: dict[str, bool],
     listen_after: float = 0.0,
     on_report: Callable[[str, bytes], None] | None = None,
+    low_power_connection: bool = False,
 ) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
     """
     Single attempt of the authenticated lock operation (see the public wrapper
@@ -513,16 +524,24 @@ async def _run_authenticated_lock_operation_once(
                         file=sys.stderr,
                     )
                 return
+            if low_power_connection:
+                interval_ms = LOW_POWER_CONNECTION_INTERVAL_MS
+                latency = LOW_POWER_CONNECTION_LATENCY
+                supervision_ms = LOW_POWER_SUPERVISION_TIMEOUT_MS
+            else:
+                interval_ms = POST_AUTH_CONNECTION_INTERVAL_MS
+                latency = POST_AUTH_CONNECTION_LATENCY
+                supervision_ms = POST_AUTH_SUPERVISION_TIMEOUT_MS
             try:
                 await update(
-                    interval_ms=POST_AUTH_CONNECTION_INTERVAL_MS,
-                    latency=POST_AUTH_CONNECTION_LATENCY,
-                    supervision_timeout_ms=POST_AUTH_SUPERVISION_TIMEOUT_MS,
+                    interval_ms=interval_ms,
+                    latency=latency,
+                    supervision_timeout_ms=supervision_ms,
                 )
                 if os.environ.get("U200_DEBUG"):
                     print(
-                        f"[BLE] connection update solicitado: "
-                        f"interval={POST_AUTH_CONNECTION_INTERVAL_MS}ms",
+                        f"[BLE] connection update solicitado: interval={interval_ms}ms "
+                        f"latency={latency} low_power={low_power_connection}",
                         file=sys.stderr,
                     )
             except Exception as exc:
