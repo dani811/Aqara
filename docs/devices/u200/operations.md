@@ -382,6 +382,14 @@ Confirmed live 2026-08-25 (own lock, own account):
 | --- | --- | --- | --- |
 | `GET_BATTERY_INFO` `0xde` | `de 00 158b3609` | `de00 07000101 30 0000 c70a` | **byte 6 = 0x30 = 48 %** ✅ |
 | `BATTERY` `0x4f` | `4f 00 158b3609` | `4f00 0000 a812` | payload 0 (a different, unused metric) |
+| `LOCK_STATUS` `0x07` | `07 00 158b3609` | `07 00 <s> 00000000 00 <crc16>` | **byte 2 bit `0x02`: set = unlocked, clear = locked** ✅ |
+| `TONGUE_STATUS` `0x08` | `08 00 158b3609` | `08 00 0000 ba17` | responds (payload `0000` in both states so far) |
+| `GET_LIMIT_INFO` `0xe2` | `e2 00 158b3609` | `e2 00 0100 c71b` | responds (calibration limits) |
+
+`LOCK_STATUS` (`0x07`) correlated live with ff62 (0x1d/0xdd): `0x04` = locked,
+`0x06`/`0x0b` = unlocked — the discriminator is **bit `0x02`** of the status byte
+(bolt-retracted flag). `GET_DOOR_LOCK_STATUS` (`0xe5`), `REPORT_LOCK_STATUS`
+(`0x15`) and `HANDLE_DIRECTION` (`0x30`) do **not** answer an on-demand read.
 
 `0x4f` (BATTERY) answers but reports `0`; the live-usable charge is `0xde`
 (GET_BATTERY_INFO). The `REPORT_*` battery opcodes (`0x0a`/`0x50`/`0x77`) do **not**

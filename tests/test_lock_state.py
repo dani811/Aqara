@@ -7,6 +7,7 @@ from aqara_ble.lock_state import (
     SOURCE_KEEPALIVE,
     SOURCE_OPERATION,
     decode_battery_info,
+    decode_lock_status,
 )
 
 # Real samples captured 2026-08-17.
@@ -48,6 +49,19 @@ def test_lockstate_is_frozen_and_exported() -> None:
 def test_decode_battery_info_from_confirmed_frame() -> None:
     # de 00 07 00 01 01 <pct=0x30> 00 00 <crc16> -> 48%
     assert decode_battery_info(BATTERY_RESP) == 48
+
+
+def test_decode_lock_status_from_confirmed_frames() -> None:
+    # Correlated live with ff62 (2026-08-25): bit 0x02 of byte 2 = unlocked.
+    assert decode_lock_status(bytes.fromhex("07000400000000000095a5")) is True  # locked
+    assert decode_lock_status(bytes.fromhex("0700060000000000001556")) is False  # unlocked
+    assert decode_lock_status(bytes.fromhex("07000b000000000000970d")) is False  # unlocked (0x0b)
+
+
+def test_decode_lock_status_rejects_non_status() -> None:
+    assert decode_lock_status(None) is None
+    assert decode_lock_status(bytes.fromhex("de0007000101300000c70a")) is None  # battery, not 0x07
+    assert decode_lock_status(bytes.fromhex("0700")) is None  # too short
 
 
 def test_decode_battery_info_rejects_non_battery_and_out_of_range() -> None:

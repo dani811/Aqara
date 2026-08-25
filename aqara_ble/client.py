@@ -47,6 +47,7 @@ from .lock_state import (
     LockState,
     decode_battery_info,
     decode_lock_state,
+    decode_lock_status,
     decode_state_report,
 )
 from .scanner import scan, select_preferred
@@ -398,6 +399,42 @@ class U200Client:
             source=SOURCE_BATTERY,
             responded=raw is not None,
             battery_percent=decode_battery_info(raw),
+        )
+
+    async def read_lock_status(self) -> LockState:
+        """Read the real bolt position on demand over BLE (LOCK_STATUS, 0x07).
+
+        Sends the well-formed read frame `07 00 <trailer>` and returns a
+        :class:`LockState` whose ``locked`` is decoded from bit 0x02 of the status
+        byte (confirmed live, correlated with ff62). Unlike :meth:`status`
+        (keepalive, static), this reports the actual bolt position without waiting
+        for a spontaneous ff62 report. Returns ``responded=False`` if unanswered.
+        """
+
+        if not self.connected or self._gatt is None:
+            raise U200ClientError(FlowPhase.OPERATION, "el cliente está cerrado; vuelve a conectar")
+        write = build_read_query_write(0x07)
+        try:
+            _material, _write, response = await run_authenticated_lock_operation(
+                client=self._gatt,
+                device_id=self.device_id,
+                auth_headers=None,
+                region=self.region,
+                base_url=self.base_url,
+                operation=write,
+                notify_timeout=self.notify_timeout,
+                auth=self.auth,
+            )
+        except (OperationInProgressError, CloudServiceError, U200ClientError):
+            raise
+        except Exception as exc:
+            raise U200ClientError(FlowPhase.OPERATION, f"lock-status read: {exc}") from exc
+        raw = bytes.fromhex(response) if response else None
+        return LockState(
+            raw_hex=raw.hex() if raw else None,
+            source=SOURCE_QUERY,
+            responded=raw is not None,
+            locked=decode_lock_status(raw),
         )
 
     # ── lifecycle ───────────────────────────────────────────────────────────

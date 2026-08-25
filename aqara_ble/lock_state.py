@@ -37,6 +37,29 @@ SOURCE_BATTERY = "battery"  # GET_BATTERY_INFO (0xde) read response
 GET_BATTERY_INFO_REPLY = 0xDE
 
 
+#: LOCK_STATUS (0x07) reply. CONFIRMED live 2026-08-25 against this project's own
+#: lock, correlated with ff62 (0x1d locked / 0xdd unlocked): the read `07 00 158b3609`
+#: returns `07 00 <status> 00 00 00 00 00 00 <crc16>` where **bit 0x02 of `status`
+#: (byte 2) is the bolt-retracted flag** — set = unlocked, clear = locked. Samples:
+#: 0x06 & 0x0b = unlocked, 0x04 = locked (ff62-confirmed).
+LOCK_STATUS_REPLY = 0x07
+STATUS_UNLOCKED_BIT = 0x02
+
+
+def decode_lock_status(raw: bytes | None) -> bool | None:
+    """Decode a LOCK_STATUS (0x07) response into the bolt position.
+
+    Returns ``True`` (locked), ``False`` (unlocked), or ``None`` when the frame is
+    not a recognised LOCK_STATUS reply. Bit ``0x02`` of the status byte is the
+    bolt-retracted flag: set → unlocked, clear → locked.
+    """
+    if not raw or len(raw) < 3:
+        return None
+    if raw[0] != LOCK_STATUS_REPLY or raw[1] != 0x00:
+        return None
+    return (raw[2] & STATUS_UNLOCKED_BIT) == 0
+
+
 def decode_battery_info(raw: bytes | None) -> int | None:
     """Extract the battery percentage from a GET_BATTERY_INFO (0xde) response.
 
@@ -116,6 +139,7 @@ def decode_lock_state(raw: bytes | None, source: str) -> LockState:
 
 __all__ = [
     "GET_BATTERY_INFO_REPLY",
+    "LOCK_STATUS_REPLY",
     "REPORT_LOCKED",
     "REPORT_STATUS",
     "REPORT_UNLOCKED",
@@ -124,8 +148,10 @@ __all__ = [
     "SOURCE_KEEPALIVE",
     "SOURCE_OPERATION",
     "SOURCE_QUERY",
+    "STATUS_UNLOCKED_BIT",
     "LockState",
     "decode_battery_info",
     "decode_lock_state",
+    "decode_lock_status",
     "decode_state_report",
 ]
