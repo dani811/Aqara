@@ -28,7 +28,7 @@ try:
     print("system parameters:", {k: params.get(k) for k in ("os", "platform", "arch", "name") if k in params})
     procs = dev.enumerate_processes()
     print("processes:", [(p.pid, p.name) for p in procs][:5])
-except Exception as exc:  # noqa: BLE001
+except Exception as exc:
     msg = str(exc)
     print("NOT COMPATIBLE / not reachable:")
     print(" ", type(exc).__name__, "-", msg)
