@@ -391,6 +391,41 @@ Confirmed live 2026-08-25 (own lock, own account):
 (bolt-retracted flag). `GET_DOOR_LOCK_STATUS` (`0xe5`), `REPORT_LOCK_STATUS`
 (`0x15`) and `HANDLE_DIRECTION` (`0x30`) do **not** answer an on-demand read.
 
+### Full SYSTEM read sweep (feature 030)
+
+All 50 SYSTEM read-only opcodes were swept live with `build_read_query_write`
+(`0x01` prefix), read-only, no actuation. **21 answer**; the rest (WiFi/Zigbee/UWB
+/face/temp-open) return nothing — features this U200 lacks or that use another
+family. Response shape is always `<opcode> 00 <payload> <crc16>`.
+
+| Opcode | Name | Response | Notes |
+| --- | --- | --- | --- |
+| `0x4d` | DEVICE_MTU | `4d00 f700 d311` | `0x00f7` LE = **247** (ATT MTU) |
+| `0xde` | GET_BATTERY_INFO | `de00 07000101 30 0000 c70a` | **48 %** |
+| `0x07` | LOCK_STATUS | `0700 06 …` | bit 0x02 = unlocked |
+| `0x0d` | FIRMWARE_VERSION | `0d00 03000000 0055 00 3b44` | version block |
+| `0xe0` | GET_DOOR_LOCK_TYPE | `e000 0101 4b19` | payload `01 01` |
+| `0xee` | GET_LOCK_WORK_MODE | `ee00 0004 6e` | payload `00 04` |
+| `0xae` | GET_AUTO_LOCK_TIME | `ae00 05 000000… adbe` | byte2 `0x05` |
+| `0xd6` | GET_AUTO_LOCKUP_DELAY_TIME | `d600 0000 fe18` | payload `00 00` |
+| `0x8e` | QUERY_MOTOR_DIRECTION_AND_TORQUE | `8e00 00ff 2ee1` | payload `00 ff` |
+| `0xc0` | GET_OPEN_DOOR_DIRECTION | `c000 0004 8a` | payload `00 04` |
+| `0xc5` | GET_AUXILIARY_LOCKING | `c500 0000 141b` | payload `00 00` |
+| `0xe9` | GET_ASSIST_TURN | `e900 0084 7f` | payload `00 84` |
+| `0xe4` | GET_PULL_SPRING | `e400 010200 9be9` | payload `01 02 00` |
+| `0xec` | GET_SILENT_CONTROL_LOCK | `ec00 03 0000… 6899` | byte2 `0x03` |
+| `0xe2` | GET_LIMIT_INFO | `e200 0100 c71b` | calibration limits |
+| `0xcb` | GET_ALARM_ENABLE | `cb00 0084 b3` | payload `00 84` |
+| `0xd8` | GET_ADVANCED_MODE | `d800 0004 da` | payload `00 04` |
+| `0x33` | TIMEZONE_TIME | `3300 3006` | payload `30` |
+| `0x08` | TONGUE_STATUS | `0800 0000 ba17` | constant so far |
+| `0xf3` | GET_GOOGLE_VOICE_UNLOCK_STATE | `f300 00000000000000 04 62` | |
+
+`DEVICE_MTU` (247) and battery/lock-status decode cleanly; the rest have raw
+payloads whose units/enums need either a labelled sample (change the setting in the
+app, re-read) or the app's decoder. `U200Client.read(opcode)` and `aqara read
+<name>` expose all of them raw; `system_read_opcodes()` lists them.
+
 `0x4f` (BATTERY) answers but reports `0`; the live-usable charge is `0xde`
 (GET_BATTERY_INFO). The `REPORT_*` battery opcodes (`0x0a`/`0x50`/`0x77`) do **not**
 answer an on-demand read (they are push-only). This same shape should unlock the

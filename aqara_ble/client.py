@@ -438,6 +438,44 @@ class U200Client:
             locked=decode_lock_status(raw),
         )
 
+    async def read(self, opcode: int) -> LockState:
+        """Read any SYSTEM read opcode over BLE and return the decrypted response.
+
+        Sends the well-formed read frame `<opcode> 00 <trailer>` and returns a
+        :class:`LockState` with the raw hex; ``locked`` and ``battery_percent`` are
+        filled in when ``opcode`` is LOCK_STATUS (0x07) / GET_BATTERY_INFO (0xde).
+        Intended for **read-only** opcodes — see
+        :func:`aqara_ble.operations_catalog.system_read_opcodes`; the caller is
+        responsible for not passing a mutating opcode.
+        """
+
+        if not self.connected or self._gatt is None:
+            raise U200ClientError(FlowPhase.OPERATION, "el cliente está cerrado; vuelve a conectar")
+        write = build_read_query_write(opcode)
+        try:
+            _material, _write, response = await run_authenticated_lock_operation(
+                client=self._gatt,
+                device_id=self.device_id,
+                auth_headers=None,
+                region=self.region,
+                base_url=self.base_url,
+                operation=write,
+                notify_timeout=self.notify_timeout,
+                auth=self.auth,
+            )
+        except (OperationInProgressError, CloudServiceError, U200ClientError):
+            raise
+        except Exception as exc:
+            raise U200ClientError(FlowPhase.OPERATION, f"read 0x{opcode:02x}: {exc}") from exc
+        raw = bytes.fromhex(response) if response else None
+        return LockState(
+            raw_hex=raw.hex() if raw else None,
+            source=SOURCE_QUERY,
+            responded=raw is not None,
+            locked=decode_lock_status(raw),
+            battery_percent=decode_battery_info(raw),
+        )
+
     # ── lifecycle ───────────────────────────────────────────────────────────
 
     async def close(self) -> None:
