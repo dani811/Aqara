@@ -61,6 +61,8 @@ STATUS_QUERIES: dict[str, int] = {
     "report_lock_status": 0x15,
     "battery": 0x4F,
     "lithium_battery": 0x78,
+    "battery_info": 0xDE,
+    "battery_power": 0x50,
 }
 
 
@@ -199,6 +201,24 @@ async def _run(args: argparse.Namespace) -> int:  # noqa: PLR0911 - one exit per
                     f"raw={st.raw_hex or '(none)'} total={time.monotonic() - started:.1f}s"
                 )
                 return EXIT_OK
+            if args.command == "battery":
+                st = await lock.battery()
+                print(
+                    f"[battery] responded={st.responded} raw={st.raw_hex or '(none)'} "
+                    f"percent={st.battery_percent if st.battery_percent is not None else '?'} "
+                    f"total={time.monotonic() - started:.1f}s"
+                )
+                return EXIT_OK
+            if args.command == "lockstatus":
+                st = await lock.read_lock_status()
+                shown = (
+                    "LOCKED" if st.locked else "UNLOCKED" if st.locked is False else "?"
+                )
+                print(
+                    f"[lockstatus] responded={st.responded} raw={st.raw_hex or '(none)'} "
+                    f"locked={shown} total={time.monotonic() - started:.1f}s"
+                )
+                return EXIT_OK
             if args.command == "state":
                 st = await lock.status()
                 print(
@@ -241,7 +261,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--account", help="account (overrides AQARA_ACCOUNT)")
     p.add_argument("--password", help="password (overrides AQARA_PASSWORD)")
     sub = p.add_subparsers(dest="command", required=True)
-    for name in ("login", "scan", "state", "lock", "unlock"):
+    for name in ("login", "scan", "state", "battery", "lockstatus", "lock", "unlock"):
         sub.add_parser(name)
     ls = sub.add_parser("listen", help="keep the session open and print spontaneous frames")
     ls.add_argument("--seconds", type=float, default=15.0, help="listen window (seconds)")

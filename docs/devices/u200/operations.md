@@ -328,6 +328,7 @@ The decrypted control response of a command carries state. Confirmed samples
 | --- | --- |
 | `keepalive` (`2f012f`) | `2f00 2c06` |
 | `unlock` (open) | `7400 7706` |
+| `battery` (`de00 158b3609`) | `de00 07000101 30 0000 c70a` → **48 %** |
 
 `aqara_ble.LockState` exposes the raw response; decoded fields
 (`locked`, `battery_percent`) stay `None` until a **labelled** sample set pins
@@ -357,3 +358,41 @@ These are **unconfirmed** probes (the payload is guessed as the bare opcode). Th
 CLI only exposes these read-only names — `SET_*` opcodes are never sendable from
 `aqara query`. Run each in a known physical state (locked vs unlocked) and compare
 the `raw=`; whichever differs carries the position and feeds `LockState` decoding.
+
+## Reading status/battery — the frame shape that works (feature 030)
+
+The feature-021 probes above got **no response** because they sent only the bare
+opcode byte. The lock ignores that. A **read** must have the full control-frame
+shape (see [control-channel.md](../../reference/control-channel.md)):
+
+```text
+wire   = 0x01 (write-prefix) + AES-CCM( command + body + trailer[4] )
+```
+
+The `0x01` write-prefix is **not** part of the encrypted plaintext — the plaintext
+starts at the `command` byte (confirmed live: `0x01`+enc(`4f00158b3609`) answers;
+`0x01`+enc(`014f00158b3609`) is ignored). The 4-byte trailer is a session/sequence
+tail the lock **does not validate** for reads — a captured cross-session value
+(`158b3609`) elicits valid responses for `0x4f` and `0xde`. `build_read_query_write`
+emits this shape; `U200Client.battery()` uses it.
+
+Confirmed live 2026-08-25 (own lock, own account):
+
+| Read | Sent plaintext | Decrypted response | Decode |
+| --- | --- | --- | --- |
+| `GET_BATTERY_INFO` `0xde` | `de 00 158b3609` | `de00 07000101 30 0000 c70a` | **byte 6 = 0x30 = 48 %** ✅ |
+| `BATTERY` `0x4f` | `4f 00 158b3609` | `4f00 0000 a812` | payload 0 (a different, unused metric) |
+| `LOCK_STATUS` `0x07` | `07 00 158b3609` | `07 00 <s> 00000000 00 <crc16>` | **byte 2 bit `0x02`: set = unlocked, clear = locked** ✅ |
+| `TONGUE_STATUS` `0x08` | `08 00 158b3609` | `08 00 0000 ba17` | responds (payload `0000` in both states so far) |
+| `GET_LIMIT_INFO` `0xe2` | `e2 00 158b3609` | `e2 00 0100 c71b` | responds (calibration limits) |
+
+`LOCK_STATUS` (`0x07`) correlated live with ff62 (0x1d/0xdd): `0x04` = locked,
+`0x06`/`0x0b` = unlocked — the discriminator is **bit `0x02`** of the status byte
+(bolt-retracted flag). `GET_DOOR_LOCK_STATUS` (`0xe5`), `REPORT_LOCK_STATUS`
+(`0x15`) and `HANDLE_DIRECTION` (`0x30`) do **not** answer an on-demand read.
+
+`0x4f` (BATTERY) answers but reports `0`; the live-usable charge is `0xde`
+(GET_BATTERY_INFO). The `REPORT_*` battery opcodes (`0x0a`/`0x50`/`0x77`) do **not**
+answer an on-demand read (they are push-only). This same shape should unlock the
+other catalogued reads (status, settings) — send `command + body + trailer` behind
+the `0x01` prefix, not the bare opcode.
