@@ -6,8 +6,11 @@ from aqara_ble import LockState, decode_lock_state
 from aqara_ble.lock_state import (
     SOURCE_KEEPALIVE,
     SOURCE_OPERATION,
+    decode_assist_turn,
     decode_battery_info,
+    decode_door_type,
     decode_lock_status,
+    decode_pull_spring,
 )
 
 # Real samples captured 2026-08-17.
@@ -62,6 +65,23 @@ def test_decode_lock_status_rejects_non_status() -> None:
     assert decode_lock_status(None) is None
     assert decode_lock_status(bytes.fromhex("de0007000101300000c70a")) is None  # battery, not 0x07
     assert decode_lock_status(bytes.fromhex("0700")) is None  # too short
+
+
+def test_decode_feature_settings_from_app_correlated_frames() -> None:
+    # Correlated live with the phone app (2026-08-25).
+    assert decode_door_type(bytes.fromhex("e0000101")) == "eu"
+    assert decode_door_type(bytes.fromhex("e0000201")) == "uk"
+    assert decode_door_type(bytes.fromhex("e0000901")) == "type-9"  # unknown → labelled
+    assert decode_assist_turn(bytes.fromhex("e90000847f")) is False
+    assert decode_assist_turn(bytes.fromhex("e90001847f")) is True
+    assert decode_pull_spring(bytes.fromhex("e400010200")) == (True, 2)
+    assert decode_pull_spring(bytes.fromhex("e400000000")) == (False, 0)
+
+
+def test_decode_feature_settings_reject_wrong_opcode() -> None:
+    assert decode_door_type(bytes.fromhex("de0007000101300000c70a")) is None
+    assert decode_assist_turn(None) is None
+    assert decode_pull_spring(bytes.fromhex("e400")) is None  # too short
 
 
 def test_decode_battery_info_rejects_non_battery_and_out_of_range() -> None:

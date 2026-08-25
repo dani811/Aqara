@@ -74,6 +74,44 @@ def decode_battery_info(raw: bytes | None) -> int | None:
     pct = raw[6]
     return pct if 0 <= pct <= 100 else None
 
+
+# ── Feature settings decoded from the app (feature 032) ──────────────────────
+# Correlated live 2026-08-25 by driving the phone app while reading each opcode:
+# door type "EU" ↔ e0000101, pull-spring ON+2s ↔ e400010200, assist-turn OFF ↔ e9000084.
+
+GET_DOOR_LOCK_TYPE_REPLY = 0xE0
+GET_PULL_SPRING_REPLY = 0xE4
+GET_ASSIST_TURN_REPLY = 0xE9
+_DOOR_TYPES = {0x01: "eu", 0x02: "uk", 0x03: "us"}
+
+
+def decode_door_type(raw: bytes | None) -> str | None:
+    """Decode GET_DOOR_LOCK_TYPE (0xe0) → 'eu' | 'uk' | 'us' (or None).
+
+    Confirmed live: `e0 00 01 01` = EU (byte 2 = 0x01). UK/US map from the app's
+    option order; an unrecognised value returns ``f"type-{n}"`` rather than None.
+    """
+    if not raw or len(raw) < 3 or raw[0] != GET_DOOR_LOCK_TYPE_REPLY or raw[1] != 0x00:
+        return None
+    return _DOOR_TYPES.get(raw[2], f"type-{raw[2]}")
+
+
+def decode_assist_turn(raw: bytes | None) -> bool | None:
+    """Decode GET_ASSIST_TURN (0xe9) → enabled flag (byte 2). Confirmed OFF = 0x00."""
+    if not raw or len(raw) < 3 or raw[0] != GET_ASSIST_TURN_REPLY or raw[1] != 0x00:
+        return None
+    return raw[2] != 0x00
+
+
+def decode_pull_spring(raw: bytes | None) -> tuple[bool, int] | None:
+    """Decode GET_PULL_SPRING (0xe4) → (enabled, retraction_seconds).
+
+    Confirmed live: `e4 00 01 02 00` = ON, 2 s (byte 2 = enabled, byte 3 = seconds).
+    """
+    if not raw or len(raw) < 4 or raw[0] != GET_PULL_SPRING_REPLY or raw[1] != 0x00:
+        return None
+    return (raw[2] != 0x00, raw[3])
+
 #: ff62 spontaneous-report opcodes (first byte). CONFIRMED live 2026-08-24
 #: against this project's own lock: the lock pushes 0x1d when it becomes locked
 #: and 0xdd when unlocked; 0x15 is a periodic status heartbeat (no position here).
@@ -150,8 +188,11 @@ __all__ = [
     "SOURCE_QUERY",
     "STATUS_UNLOCKED_BIT",
     "LockState",
+    "decode_assist_turn",
     "decode_battery_info",
+    "decode_door_type",
     "decode_lock_state",
     "decode_lock_status",
+    "decode_pull_spring",
     "decode_state_report",
 ]
