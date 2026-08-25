@@ -46,9 +46,12 @@ from .lock_state import (
     SOURCE_OPERATION,
     SOURCE_QUERY,
     LockState,
+    decode_assist_turn,
     decode_battery_info,
+    decode_door_type,
     decode_lock_state,
     decode_lock_status,
+    decode_pull_spring,
     decode_state_report,
 )
 from .scanner import scan, select_preferred
@@ -475,6 +478,22 @@ class U200Client:
             locked=decode_lock_status(raw),
             battery_percent=decode_battery_info(raw),
         )
+
+    async def _read_raw(self, opcode: int) -> bytes | None:
+        st = await self.read(opcode)
+        return bytes.fromhex(st.raw_hex) if st.raw_hex else None
+
+    async def read_door_type(self) -> str | None:
+        """Read the configured door-lock type over BLE ('eu'/'uk'/'us'; 0xe0)."""
+        return decode_door_type(await self._read_raw(0xE0))
+
+    async def read_assist_turn(self) -> bool | None:
+        """Read whether turn-assist is enabled over BLE (0xe9)."""
+        return decode_assist_turn(await self._read_raw(0xE9))
+
+    async def read_pull_spring(self) -> tuple[bool, int] | None:
+        """Read the pull-spring setting over BLE → (enabled, retraction_seconds) (0xe4)."""
+        return decode_pull_spring(await self._read_raw(0xE4))
 
     # ── lifecycle ───────────────────────────────────────────────────────────
 
