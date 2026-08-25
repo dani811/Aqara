@@ -2,6 +2,15 @@
 
 All notable changes to aqara-ble are documented in this file.
 
+## [1.6.0] — Feature-setting decoders (2026-08-25)
+
+### Added
+- `U200Client.read_door_type()` ('eu'/'uk'/'us', 0xe0), `read_assist_turn()`
+  (bool, 0xe9), `read_pull_spring()` ((enabled, retraction_seconds), 0xe4), plus
+  `decode_door_type`/`decode_assist_turn`/`decode_pull_spring`.
+- Correlated live against the phone app (EU / OFF / ON+2s ↔ `e0000101` /
+  `e9000084` / `e400010200`).
+
 ## [1.5.0] — Generic SYSTEM reads (2026-08-25)
 
 ### Added
