@@ -140,6 +140,36 @@ class LockOperationWrite:
         return self.payload.hex()
 
 
+# Read-query trailer (feature 030). A control read is `command + body +
+# trailer(4B)` on the wire behind the `0x01` write-prefix (see
+# docs/reference/control-channel.md). The 4-byte trailer is a session/sequence
+# tail the lock does **not** validate for read queries: a captured cross-session
+# value elicits a valid response. Confirmed live 2026-08-25 on this project's own
+# lock — `0xde` GET_BATTERY_INFO returned `de0007000101300000c70a` (byte 6 = the
+# battery %), and `0x4f` answered too, both with this exact trailer reused across
+# fresh sessions. We reuse a known-good captured trailer so the frame has the
+# required shape without recomputing a value the lock ignores.
+READ_QUERY_TRAILER = bytes.fromhex("158b3609")
+
+
+def build_read_query_write(sub_cmd: int, body: bytes = b"\x00") -> LockOperationWrite:
+    """Build a well-formed **read** query: ``sub_cmd + body + trailer(4B)``.
+
+    Unlike :func:`build_control_query_write` (which sent only the bare opcode and
+    the lock silently ignores), this emits the full control-frame shape the lock
+    actually parses, so status/info reads elicit a response. ``body`` defaults to
+    a single ``0x00`` byte (the value the confirmed battery read used); the lock
+    is insensitive to it for the reads probed so far. The write-prefix is ``0x01``
+    (the ``kind`` byte, unencrypted on the wire).
+    """
+
+    return LockOperationWrite(
+        operation=f"read:0x{sub_cmd:02x}",
+        payload=bytes([sub_cmd]) + body + READ_QUERY_TRAILER,
+        write_prefix=0x01,
+    )
+
+
 def build_control_query_write(sub_cmd: int, data: bytes = b"") -> LockOperationWrite:
     """Build a generic **read-only-intended** control query write (feature 021).
 

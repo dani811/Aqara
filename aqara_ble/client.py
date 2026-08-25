@@ -36,13 +36,16 @@ from .lock_ops import (
     LockOperation,
     LockOperationWrite,
     build_control_query_write,
+    build_read_query_write,
     normalize_lock_operation,
 )
 from .lock_state import (
+    SOURCE_BATTERY,
     SOURCE_KEEPALIVE,
     SOURCE_OPERATION,
     SOURCE_QUERY,
     LockState,
+    decode_battery_info,
     decode_lock_state,
     decode_state_report,
 )
@@ -293,9 +296,11 @@ class U200Client:
         ``on_state`` fires **in real time** with the decoded bolt position each
         time the lock pushes an ff62 position report (0x1d/0xdd) — this is how a
         consumer keeps a persistent, real-time state session. ``low_power``
-        requests a slow connection interval + slave latency so holding the session
-        open costs little battery (honoured only where the BLE stack allows it,
-        e.g. BlueZ; ignored on CoreBluetooth).
+        requests a slow connection interval + slave latency, but **only transports
+        that expose ``update_connection_parameters`` honour it** (the Bumble /
+        ESP32-S3 central). Plain ``bleak`` — both CoreBluetooth and BlueZ — does
+        not expose that call, so on a Home Assistant host the OS/controller (or a
+        Bluetooth proxy) decides the interval; the request is a no-op there.
         """
 
         if not self.connected or self._gatt is None:
@@ -358,6 +363,42 @@ class U200Client:
             raise U200ClientError(FlowPhase.OPERATION, f"query 0x{sub_cmd:02x}: {exc}") from exc
         raw = bytes.fromhex(response) if response else None
         return decode_lock_state(raw, source=SOURCE_QUERY)
+
+    async def battery(self) -> LockState:
+        """Read the lock's battery over BLE (GET_BATTERY_INFO, 0xde).
+
+        Sends the well-formed read frame `de 00 <trailer>` (see
+        :func:`build_read_query_write`) and returns a :class:`LockState` whose
+        ``battery_percent`` is decoded from the reply. Confirmed live: the lock
+        answers `de0007000101300000c70a` → 48% (feature 030). Returns
+        ``responded=False`` if the lock does not answer.
+        """
+
+        if not self.connected or self._gatt is None:
+            raise U200ClientError(FlowPhase.OPERATION, "el cliente está cerrado; vuelve a conectar")
+        write = build_read_query_write(0xDE)
+        try:
+            _material, _write, response = await run_authenticated_lock_operation(
+                client=self._gatt,
+                device_id=self.device_id,
+                auth_headers=None,
+                region=self.region,
+                base_url=self.base_url,
+                operation=write,
+                notify_timeout=self.notify_timeout,
+                auth=self.auth,
+            )
+        except (OperationInProgressError, CloudServiceError, U200ClientError):
+            raise
+        except Exception as exc:
+            raise U200ClientError(FlowPhase.OPERATION, f"battery read: {exc}") from exc
+        raw = bytes.fromhex(response) if response else None
+        return LockState(
+            raw_hex=raw.hex() if raw else None,
+            source=SOURCE_BATTERY,
+            responded=raw is not None,
+            battery_percent=decode_battery_info(raw),
+        )
 
     # ── lifecycle ───────────────────────────────────────────────────────────
 

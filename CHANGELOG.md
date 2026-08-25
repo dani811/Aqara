@@ -2,6 +2,21 @@
 
 All notable changes to aqara-ble are documented in this file.
 
+## [1.4.0] — Battery over BLE (2026-08-25)
+
+### Added
+- `U200Client.battery()` reads the lock's charge over BLE (GET_BATTERY_INFO, `0xde`)
+  and returns a `LockState` with `battery_percent`. `aqara battery` on the CLI.
+  Confirmed live: `de0007000101300000c70a` → **48 %**.
+- `build_read_query_write(sub_cmd, body)` and `decode_battery_info(raw)`.
+
+### Fixed
+- Status/battery **reads** got no response because they sent only the bare opcode.
+  The lock needs the full control frame `command + body + trailer(4B)` behind the
+  `0x01` write-prefix (the prefix is not part of the encrypted plaintext; the 4-byte
+  trailer is not validated for reads). This shape should also unlock the other
+  catalogued reads. See `docs/devices/u200/operations.md` (feature 030).
+
 ## [1.3.0] — Real-time state streaming + low-power hold (2026-08-24)
 
 ### Added

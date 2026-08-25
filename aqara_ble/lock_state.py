@@ -29,6 +29,27 @@ SOURCE_KEEPALIVE = "keepalive"
 SOURCE_OPERATION = "operation"
 SOURCE_QUERY = "query"
 SOURCE_EVENT = "event"  # spontaneous ff62 report (needs an open session)
+SOURCE_BATTERY = "battery"  # GET_BATTERY_INFO (0xde) read response
+
+#: GET_BATTERY_INFO (0xde) reply. CONFIRMED live 2026-08-25 against this project's
+#: own lock: the read `de 00 158b3609` returns `de 00 07 00 01 01 <pct> 00 00 <crc16>`
+#: — e.g. `de0007000101300000c70a`, byte 6 = 0x30 = 48% (Matter reported 49%, ±1).
+GET_BATTERY_INFO_REPLY = 0xDE
+
+
+def decode_battery_info(raw: bytes | None) -> int | None:
+    """Extract the battery percentage from a GET_BATTERY_INFO (0xde) response.
+
+    The confirmed reply is ``de 00 07 00 01 01 <pct> 00 00 <crc16>`` where byte 6
+    is the charge percentage. Returns the percentage (0..100) or ``None`` when the
+    frame is not a recognised battery reply or the value is out of range.
+    """
+    if not raw or len(raw) < 7:
+        return None
+    if raw[0] != GET_BATTERY_INFO_REPLY or raw[1] != 0x00:
+        return None
+    pct = raw[6]
+    return pct if 0 <= pct <= 100 else None
 
 #: ff62 spontaneous-report opcodes (first byte). CONFIRMED live 2026-08-24
 #: against this project's own lock: the lock pushes 0x1d when it becomes locked
@@ -94,14 +115,17 @@ def decode_lock_state(raw: bytes | None, source: str) -> LockState:
 
 
 __all__ = [
+    "GET_BATTERY_INFO_REPLY",
     "REPORT_LOCKED",
     "REPORT_STATUS",
     "REPORT_UNLOCKED",
+    "SOURCE_BATTERY",
     "SOURCE_EVENT",
     "SOURCE_KEEPALIVE",
     "SOURCE_OPERATION",
     "SOURCE_QUERY",
     "LockState",
+    "decode_battery_info",
     "decode_lock_state",
     "decode_state_report",
 ]
