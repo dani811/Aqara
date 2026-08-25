@@ -51,6 +51,12 @@ EXIT_TIMEOUT = 5
 
 _REQUIRED_APP_IDS = ("AQARA_APPID", "AQARA_APPKEY", "AQARA_CLIENT_ID", "AQARA_PHONE_ID")
 
+# All SYSTEM read-only opcodes, name -> opcode (mutating/actuating ones excluded
+# at the source). `aqara read <name>` sends the correct read frame for each.
+from .operations_catalog import system_read_opcodes  # noqa: E402
+
+READ_OPCODES = system_read_opcodes()
+
 # Read-only status/battery opcodes safe to probe (feature 021). Names -> opcode.
 # These are query/report opcodes from the app's decompiled enum; SET_* opcodes are
 # deliberately NOT here (probing them could change lock settings). UNCONFIRMED.
@@ -209,6 +215,19 @@ async def _run(args: argparse.Namespace) -> int:  # noqa: PLR0911 - one exit per
                     f"total={time.monotonic() - started:.1f}s"
                 )
                 return EXIT_OK
+            if args.command == "read":
+                opcode = READ_OPCODES[args.read_name]
+                st = await lock.read(opcode)
+                extra = ""
+                if st.locked is not None:
+                    extra += f" locked={'LOCKED' if st.locked else 'UNLOCKED'}"
+                if st.battery_percent is not None:
+                    extra += f" battery={st.battery_percent}%"
+                print(
+                    f"[read] {args.read_name} (0x{opcode:02x}) responded={st.responded} "
+                    f"raw={st.raw_hex or '(none)'}{extra} total={time.monotonic() - started:.1f}s"
+                )
+                return EXIT_OK
             if args.command == "lockstatus":
                 st = await lock.read_lock_status()
                 shown = (
@@ -267,6 +286,11 @@ def _build_parser() -> argparse.ArgumentParser:
     ls.add_argument("--seconds", type=float, default=15.0, help="listen window (seconds)")
     q = sub.add_parser("query", help="probe a read-only status/battery opcode")
     q.add_argument("query_name", choices=sorted(STATUS_QUERIES), help="which status opcode to read")
+    rd = sub.add_parser("read", help="read any SYSTEM read-only opcode (correct frame)")
+    rd.add_argument(
+        "read_name", choices=sorted(READ_OPCODES),
+        help="which read opcode (see the list); mutating opcodes are not offered",
+    )
     op = sub.add_parser("operate")
     op.add_argument("operation", help="LockOperation name or hex (e.g. keepalive)")
     return p

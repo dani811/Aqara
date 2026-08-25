@@ -337,3 +337,37 @@ def operations_in_family(main_cmd: int) -> list[OperationEntry]:
         (e for e in OPERATIONS_CATALOG if e.family.main_cmd == main_cmd),
         key=lambda e: e.sub_cmd,
     )
+
+
+# Substrings that mark a mutating/actuating command — never sent by a read.
+_NON_READ_MARKERS = (
+    "SET_", "DEL_", "ADD_", "MODIFY_", "ABORT_", "QUIT_", "REMOVE_", "SYNC_",
+    "STOP_", "OTA", "APDU", "BIND", "REGISTER", "INSTALL", "UPGRADE",
+    "CALIBRATION", "OPEN_LOCK", "UN_LOCK", "CONFIG_", "ENABLE", "REPORT",
+)
+
+
+def _is_read_name(name: str) -> bool:
+    if any(marker in name for marker in _NON_READ_MARKERS):
+        return False
+    return name.startswith(("GET_", "QUERY_", "READ_")) or name.endswith(
+        ("_STATUS", "_INFO", "_VERSION", "_TIME")
+    ) or name in {
+        "SYSTEM_TIME", "DEVICE_MTU", "VOLUME", "LANGUAGE", "BATTERY",
+        "LOCK_SETTING", "LOCAL_SETTING", "HANDLE_DIRECTION", "TIMEZONE_TIME",
+    }
+
+
+def system_read_opcodes() -> dict[str, int]:
+    """Return SYSTEM-family **read-only** opcodes as ``{lowercase_name: sub_cmd}``.
+
+    These are safe to send with the ``0x01`` write-prefix (the SYSTEM family byte)
+    via :func:`aqara_ble.lock_ops.build_read_query_write`. Mutating commands
+    (``SET_*``/``DEL_*``/…) and push-only ``REPORT_*`` opcodes are excluded, so a
+    caller can never actuate or change a setting through this map.
+    """
+    out: dict[str, int] = {}
+    for entry in OPERATIONS_CATALOG:
+        if entry.family is CommandFamily.SYSTEM and _is_read_name(entry.name):
+            out.setdefault(entry.name.lower(), entry.sub_cmd)
+    return out
