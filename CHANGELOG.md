@@ -2,6 +2,20 @@
 
 All notable changes to aqara-ble are documented in this file.
 
+## [1.5.0] — Generic SYSTEM reads (2026-08-25)
+
+### Added
+- `U200Client.read(opcode)` reads any SYSTEM read-only opcode with the correct
+  frame and returns the decrypted response (locked/battery filled in for
+  `0x07`/`0xde`). `aqara read <name>` on the CLI.
+- `operations_catalog.system_read_opcodes()` — the 50 read-only SYSTEM opcodes as
+  `{name: opcode}` (mutating/actuating opcodes excluded at source).
+
+### Notes
+- Live sweep: 21/50 answer (WiFi/Zigbee/UWB/face/temp absent on this U200).
+  Response shape `<opcode> 00 <payload> <crc16>`; `DEVICE_MTU` decodes to 247.
+  See `docs/devices/u200/operations.md`.
+
 ## [1.4.0] — Battery + lock status over BLE (2026-08-25)
 
 ### Added
