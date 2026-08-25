@@ -190,7 +190,7 @@ class CloudAuthManager:
             for did in ids:
                 try:
                     device_mac = cloud_device_mac(did, None, base, signer=signer)
-                except Exception:  # noqa: BLE001 - non-lock devices error; skip them
+                except Exception:
                     continue
                 if device_mac and target & _mac_forms(device_mac):
                     return did
