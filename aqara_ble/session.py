@@ -169,6 +169,11 @@ LOW_POWER_CONNECTION_INTERVAL_MS = 1000.0
 LOW_POWER_CONNECTION_LATENCY = 4
 LOW_POWER_SUPERVISION_TIMEOUT_MS = 12000.0
 
+#: The lock stops pushing spontaneous ff62 reports ~30 s after the last keepalive.
+#: During a `listen_after` window we re-send the confirmed keepalive on this
+#: interval (the app does the same) so events keep flowing for the whole window.
+LISTEN_KEEPALIVE_INTERVAL_S = 20.0
+
 @dataclass(frozen=True)
 class SessionMaterial:
     session_key_hex: str
@@ -673,15 +678,33 @@ async def _run_authenticated_lock_operation_once(
                 # keypad operation) become observable.
                 loop = asyncio.get_running_loop()
                 deadline = loop.time() + listen_after
+                # Keep the lock pushing: it goes quiet ~30 s after the last
+                # keepalive, so re-send the confirmed keepalive periodically (same
+                # session key/nonce as the initial command). Its ACK echoes the
+                # 0x2f opcode and is filtered out below so it never reaches consumers.
+                keepalive_write = bytes((0x01,)) + encrypt_control_payload(
+                    session["sessionKey"],
+                    session["nonce"],
+                    plaintext=bytes.fromhex("2f012f"),
+                )
+                next_keepalive = loop.time() + LISTEN_KEEPALIVE_INTERVAL_S
                 while True:
-                    remaining = deadline - loop.time()
+                    now = loop.time()
+                    remaining = deadline - now
                     if remaining <= 0:
                         break
+                    if now >= next_keepalive:
+                        with contextlib.suppress(Exception):
+                            await client.write_gatt_char(
+                                CONTROL_WRITE_UUID, keepalive_write, response=False
+                            )
+                        next_keepalive = now + LISTEN_KEEPALIVE_INTERVAL_S
+                    wait_timeout = min(remaining, max(0.1, next_keepalive - now))
                     get_control = asyncio.ensure_future(control_queue.get())
                     get_report = asyncio.ensure_future(report_queue.get())
                     done, pending = await asyncio.wait(
                         {get_control, get_report},
-                        timeout=remaining,
+                        timeout=wait_timeout,
                         return_when=asyncio.FIRST_COMPLETED,
                     )
                     for fut in pending:
@@ -689,14 +712,14 @@ async def _run_authenticated_lock_operation_once(
                     if get_control in done:
                         frame = get_control.result()
                         if len(frame) >= 2:
-                            on_report(
-                                "ff62",
-                                decrypt_control_payload(
-                                    session["sessionKey"],
-                                    session["nonce"],
-                                    ciphertext=frame[1:],
-                                ),
+                            decoded = decrypt_control_payload(
+                                session["sessionKey"],
+                                session["nonce"],
+                                ciphertext=frame[1:],
                             )
+                            # Drop the keepalive's own ACK (echoes 0x2f).
+                            if not decoded or decoded[0] != 0x2F:
+                                on_report("ff62", decoded)
                     if get_report in done:
                         channel, data = get_report.result()
                         on_report(channel, data)
