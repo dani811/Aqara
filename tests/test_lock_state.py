@@ -9,6 +9,7 @@ from aqara_ble.lock_state import (
     decode_assist_turn,
     decode_battery_info,
     decode_door_type,
+    decode_event,
     decode_lock_status,
     decode_pull_spring,
 )
@@ -82,6 +83,28 @@ def test_decode_feature_settings_reject_wrong_opcode() -> None:
     assert decode_door_type(bytes.fromhex("de0007000101300000c70a")) is None
     assert decode_assist_turn(None) is None
     assert decode_pull_spring(bytes.fromhex("e400")) is None  # too short
+
+
+def test_decode_event_from_captured_ff62_stream() -> None:
+    # Captured live 2026-08-26 holding the connection while operating the lock.
+    unlock = decode_event(bytes.fromhex("dd010be58e6a927f"))
+    assert unlock.kind == "unlocked" and unlock.locked is False
+    assert unlock.timestamp == 0x6A8EE50B
+
+    lock = decode_event(bytes.fromhex("1dff0900dec0cae58e6ab9cd"))
+    assert lock.kind == "locked" and lock.locked is True and lock.source == "manual"
+
+    other = decode_event(bytes.fromhex("1d2002000180f3e28e6a3c01"))
+    assert other.kind == "locked" and other.source == "source-0x20"
+
+    batt = decode_event(bytes.fromhex("de070001012f0000d65f"))
+    assert batt.kind == "battery" and batt.battery_percent == 47
+
+    status = decode_event(bytes.fromhex("1506cae58e6ab43d"))
+    assert status.kind == "status"
+
+    assert decode_event(None) is None
+    assert decode_event(b"\x00") is None
 
 
 def test_decode_battery_info_rejects_non_battery_and_out_of_range() -> None:

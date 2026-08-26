@@ -112,6 +112,52 @@ def decode_pull_spring(raw: bytes | None) -> tuple[bool, int] | None:
         return None
     return (raw[2] != 0x00, raw[3])
 
+
+# ── ff62 spontaneous event stream (feature 034) ──────────────────────────────
+# Captured live 2026-08-26 by holding the connection while operating the lock.
+# Frame shape: <opcode:1> <arg:1> [payload] <unix_ts:4 LE> <crc:2>.
+#   0xdd unlock, 0x1d lock (arg = source; 0xff = manual, payload byte = lock
+#   counter), 0x15 status/heartbeat. Battery is pushed separately as a 0xde frame
+#   `de 07 00 01 01 <pct> 00 00 <crc>` (no timestamp).
+LOCK_SOURCES = {0xFF: "manual"}
+
+
+@dataclass(frozen=True)
+class LockEvent:
+    """One spontaneous ff62 report decoded into a typed event."""
+
+    raw_hex: str
+    kind: str  # "locked" | "unlocked" | "battery" | "status" | "unknown"
+    locked: bool | None = None
+    battery_percent: int | None = None
+    source: str | None = None  # for lock events: "manual" / "source-0xNN"
+    timestamp: int | None = None  # Unix seconds, when the frame carries one
+
+
+def decode_event(raw: bytes | None) -> LockEvent | None:
+    """Decode a spontaneous ff62 frame into a :class:`LockEvent` (or None).
+
+    Confirmed live: `dd…` unlock, `1d ff <ctr>00dec0…` manual lock, `de…<pct>…`
+    battery push, `15…` status. The 4 bytes before the 2-byte CRC are a Unix
+    timestamp for the state/status frames.
+    """
+    if not raw or len(raw) < 6:
+        return None
+    op = raw[0]
+    ts = int.from_bytes(raw[-6:-2], "little") if len(raw) >= 8 else None
+    if op == REPORT_UNLOCKED:
+        return LockEvent(raw.hex(), "unlocked", locked=False, timestamp=ts)
+    if op == REPORT_LOCKED:
+        source = LOCK_SOURCES.get(raw[1], f"source-0x{raw[1]:02x}")
+        return LockEvent(raw.hex(), "locked", locked=True, source=source, timestamp=ts)
+    if op == GET_BATTERY_INFO_REPLY and len(raw) >= 5:
+        pct = raw[-5]  # `… <pct> 00 00 <crc:2>` — same offset pushed or read
+        if 0 <= pct <= 100:
+            return LockEvent(raw.hex(), "battery", battery_percent=pct)
+    if op == REPORT_STATUS:
+        return LockEvent(raw.hex(), "status", timestamp=ts)
+    return LockEvent(raw.hex(), "unknown")
+
 #: ff62 spontaneous-report opcodes (first byte). CONFIRMED live 2026-08-24
 #: against this project's own lock: the lock pushes 0x1d when it becomes locked
 #: and 0xdd when unlocked; 0x15 is a periodic status heartbeat (no position here).
@@ -187,10 +233,12 @@ __all__ = [
     "SOURCE_OPERATION",
     "SOURCE_QUERY",
     "STATUS_UNLOCKED_BIT",
+    "LockEvent",
     "LockState",
     "decode_assist_turn",
     "decode_battery_info",
     "decode_door_type",
+    "decode_event",
     "decode_lock_state",
     "decode_lock_status",
     "decode_pull_spring",
