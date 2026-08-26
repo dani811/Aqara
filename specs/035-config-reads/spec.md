@@ -4,9 +4,32 @@
 
 **Created**: 2026-08-26
 
-**Status**: Draft
+**Status**: Draft — **premise revised 2026-08-26** (see note below)
 
 **Input**: User description: "Fase A — lecturas de configuración restantes del U200 por BLE (solo lectura, sin actuar ni escribir): volumen (0xC3), dirección de apertura (0xC0), auto-lock (0xAE), idioma (0x68). Reutilizar el frame de lectura genérico existente. Decodificar honestamente (None hasta confirmar con captura real correlacionada con la app). Exponer como entidades read-only en haos_aqara. Sin escrituras ni gestión de usuarios/contraseñas."
+
+> **⚠️ Revised understanding (2026-08-26).** The original premise — "reuse the
+> generic read frame; these may not be BLE-readable" — was **overturned** by
+> decrypting the official app's own BLE session (keystream-reuse attack; the app
+> uses a static AES-CCM nonce). Findings, now the basis for this feature (full
+> detail in [settings-protocol.md](../../docs/devices/u200/settings-protocol.md)):
+>
+> 1. A read frame is `<opcode> <KIND> <body>`, and the **KIND byte** (command
+>    family: 01 SYSTEM / 02 / 03 / 04) is required — the generic `build_read_query_write`
+>    (kind absent) only works for kind-01 opcodes. Volume is `0xc3` kind 04 / `0x02`
+>    kind 02; language `0x68` kind 01; alarm volume `0x84` kind 02.
+> 2. There are **two tiers**. Free reads (door type, battery, auto-lock `0xae`,
+>    direction `0xc0`, work mode `0xee`, verify-fail `0x94`, …) answer any
+>    authenticated session. **Elevation-gated** reads (volume, language, alarm
+>    volume, finger, lock-setting) answer only after the app's connect-time setup
+>    burst (set-time `0x33` and/or access-log sync `0x13`) — the exact trigger is
+>    an open A/B test.
+> 3. Reads therefore use a **persistent session** (one auth, many frames) —
+>    `U200Client.read_burst` / `follow_up_ops` (committed under this branch).
+>
+> So: NOT cloud-only, NOT Matter — genuinely BLE-readable. The requirements below
+> are updated accordingly; the "honest None until confirmed" rule still holds for
+> the value ENUMS (which need an app-correlated change-and-reread)."
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -86,9 +109,12 @@ or `unknown`, and no new polling task is introduced.
   reply for that opcode, and MUST return `None` (never an invented value) for any
   value byte not yet confirmed against a captured, app-correlated frame — the same
   honesty rule already applied to battery / door type / pull spring.
-- **FR-006**: Each read MUST reuse the existing read-only query frame
-  (`build_read_query_write` / the generic `read(opcode)` path) and MUST NOT send
-  any actuation or write command.
+- **FR-006**: Each read MUST send the correct `<opcode> <KIND> <body>` control
+  frame for its family (NOT the kind-less generic `build_read_query_write`, which
+  only answers for kind-01 opcodes), and MUST NOT send any actuation command
+  (`0x74`). Elevation-gated reads (volume/language/alarm volume) MUST run inside a
+  **persistent session** (`read_burst` / `follow_up_ops`) after the elevation
+  trigger, since a fresh per-command session reads them cold and gets nothing.
 - **FR-007**: The Home Assistant integration MUST expose each of the four settings
   as a **read-only** entity, updated only through the existing on-demand pull and
   Refresh button — no new background polling task.
