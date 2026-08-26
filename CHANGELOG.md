@@ -2,6 +2,22 @@
 
 All notable changes to aqara-ble are documented in this file.
 
+## [1.7.0] — ff62 event stream + keepalive (2026-08-26)
+
+### Added
+- `decode_event(raw) -> LockEvent`: decode a spontaneous ff62 report into a typed
+  event — unlock (`0xdd`), lock (`0x1d`, with `source`: manual / `source-0xNN`),
+  battery push (`0xde`, percentage), status heartbeat (`0x15`) — including the
+  Unix timestamp the state frames carry. `LockEvent`/`decode_event` exported from
+  the package root.
+- `U200Client.listen(..., on_event=...)`: receive typed `LockEvent`s live for
+  every ff62 frame, alongside the existing `on_state`.
+
+### Changed
+- `listen()` now sends a read-only keepalive (`2f012f`) every ~20 s so the lock
+  keeps pushing ff62 events past its ~30 s idle cut-off (validated: lock event at
+  +85 s). Keepalive ACKs are filtered out of the report stream.
+
 ## [1.6.0] — Feature-setting decoders (2026-08-25)
 
 ### Added

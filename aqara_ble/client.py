@@ -45,10 +45,12 @@ from .lock_state import (
     SOURCE_KEEPALIVE,
     SOURCE_OPERATION,
     SOURCE_QUERY,
+    LockEvent,
     LockState,
     decode_assist_turn,
     decode_battery_info,
     decode_door_type,
+    decode_event,
     decode_lock_state,
     decode_lock_status,
     decode_pull_spring,
@@ -290,6 +292,7 @@ class U200Client:
         seconds: float = 15.0,
         *,
         on_state: Callable[[bool], None] | None = None,
+        on_event: Callable[[LockEvent], None] | None = None,
         low_power: bool = False,
     ) -> list[tuple[str, str]]:
         """Keep the session open after a keepalive and collect spontaneous frames.
@@ -314,10 +317,16 @@ class U200Client:
 
         def collect(channel: str, data: bytes) -> None:
             reports.append((channel, data.hex()))
-            if on_state is not None and channel == "ff62":
+            if channel != "ff62":
+                return
+            if on_state is not None:
                 position = decode_state_report(data)
                 if position is not None:
                     on_state(position)
+            if on_event is not None:
+                event = decode_event(data)
+                if event is not None:
+                    on_event(event)
 
         try:
             await run_authenticated_lock_operation(
