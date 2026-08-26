@@ -75,7 +75,7 @@ from .lock_ops import (
     normalize_lock_operation,
     send_lock_operation,
 )
-from .lock_state import LockState, decode_lock_state
+from .lock_state import LockEvent, LockState, decode_event, decode_lock_state
 from .models import MODEL_BY_PRODUCT_ID, decode_manufacturer_payload
 from .operations_catalog import (
     OPERATIONS_CATALOG,
@@ -148,6 +148,7 @@ __all__ = [
     "GattClient",
     "LockOperation",
     "LockOperationWrite",
+    "LockEvent",
     "LockState",
     "NoDeviceFoundError",
     "OperationEntry",
@@ -180,6 +181,7 @@ __all__ = [
     "compute_sign",
     "control_command_name",
     "crc16_aqara",
+    "decode_event",
     "decode_lock_state",
     "decode_manufacturer_payload",
     "decrypt_control_payload",
