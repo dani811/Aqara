@@ -2,6 +2,27 @@
 
 All notable changes to aqara-ble are documented in this file.
 
+## [1.8.0] — Configuration-setting reads (2026-08-27)
+
+### Fixed
+- **Gated settings now read over BLE from our own session** — there was no cloud
+  "privilege tier" (specs 036/037 disproven; the `/verify` cloud grant is identical
+  to the official app's). Two client bugs hid it: (1) the persistent-session
+  follow-up loop matched replies by **arrival order**, so a spontaneous ff62 state
+  event (`0x1d`/`0xdd`/`0x15`) could steal a read's slot and desync the burst — now
+  each reply is correlated by **opcode** and event frames are skipped; (2)
+  `read_burst` forced ff61 write-prefix `0x01`, but finger `0x20`, log-sync `0x13`,
+  `0x1f` and voice-OTA `0xa6` need `0x03` — `read_burst` now accepts a `"PP:frame"`
+  spec for the per-frame prefix. Confirmed live 6/6 on fw 3.0.0_0085.
+
+### Added
+- `U200Client.read_settings() -> LockSettings`: reads volume (`0xc3`), language
+  (`0x68`), alarm volume (`0x84`) and the lock-setting blob (`0x1a`) in ONE
+  opcode-correlated burst.
+- `decode_alert_volume` (CONFIRMED enum from `0x1a` byte 4: high/medium/low/silent),
+  `decode_lock_volume`, `decode_language` ('es' confirmed), `decode_alarm_volume`,
+  and `LockSettings`, all exported from the package root.
+
 ## [1.7.0] — ff62 event stream + keepalive (2026-08-26)
 
 ### Added
