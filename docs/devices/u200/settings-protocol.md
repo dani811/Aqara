@@ -57,6 +57,16 @@ only the SecNeo-signed official app is granted it. Confirming/bypassing this nee
 an HTTPS MITM of the app's cloud session-grant — tracked in
 `specs/037-cloud-session-mitm`.
 
+**UPDATE 2026-08-27 (MITM breakthrough — body ruled out):** a Frida-16 **native**
+`SSL_read`/`SSL_write` hook (stable under SecNeo, unlike Java hooks) captured the
+app's `/dev/bluetooth/login/assure/verify` in clear. The **request body is
+byte-identical** to our `kdf.cloud_verify` (`{deviceId, devicePublicKey}`) and the
+**`deviceId` matches our `.env`** (`matt.73cb…`, a Matter id); the response
+structure matches too. So the privilege is **not in the `/verify` body or
+deviceId** — it can only be in the HPACK-compressed **HTTP request headers** (Token
+scope / `Sign` / `Appid`) which the native hook can't read, or bound to the
+SecNeo-signed app. See spec 037's 2026-08-27 breakthrough log.
+
 **Hypotheses tested and REFUTED** (do not re-try — evidence in spec 036 / memory
 `app-reads-settings-bulk-blob`): keypad-per-read; keypad held during read; set-time
 `0x33` then read; "log-sync `0x13` completes → elevates" (circular — `0x13` is

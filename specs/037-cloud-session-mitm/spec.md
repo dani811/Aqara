@@ -66,6 +66,87 @@ redirect) or app instrumentation (Frida SSL-unpin) — both blocked (unrooted ph
 SecNeo). Cleanup after the attempt: revert phone `http_proxy`, re-enable mobile
 data, remove the installed mitmproxy user CA, delete the WireGuard tunnel.
 
+## Attempt log — 2026-08-27 (Frida gadget-repack — got IN, /verify blocked by runtime)
+
+After the MITM walls, pivoted to Frida via **gadget-repack on the real phone**
+(no root). This got MUCH further than expected:
+
+- `objection patchapk` couldn't patch the launchable `SplashActivity` (SecNeo
+  encrypts the real dex) → injected into SecNeo's own loader class
+  **`com.secneo.apkwrapper.AW`** instead (`--target-class`). apktool decodes the
+  SecNeo stub fine.
+- Resigned base + arm64 split with the same key (objection.jks); fixed a packaging
+  bug (objection put the gadget in `lib/arm64/` but Android needs `lib/arm64-v8a/`).
+- **Result: the patched app RAN — SecNeo's load-time detection did NOT block it.**
+  `Frida: Listening on 127.0.0.1 TCP port 27042`, `frida-ps -U` shows `Aqara Home /
+  Gadget`. The app uses **okhttp3 + retrofit2** (+ Cronet), un-obfuscated.
+- **Captured the app's login + config HTTP in PLAINTEXT** (`/user/guard-code/login`,
+  `/app/config/*`, etc.) via an okhttp `RealInterceptorChain.proceed` hook — the
+  method works.
+- **BUT** SecNeo's RUNTIME anti-Frida makes Java hooking unstable: the process
+  crashes deep inside `libfrida-gadget.so` (280+ frame recursion / SIGSEGV) after a
+  few minutes, and re-attaches then hit `access violation at
+  _performPendingVmOpsWhenReady` (java.js) — SecNeo protects ART. We got ONE good
+  window (login), but could not hold a stable window long enough to also trigger the
+  BLE lock connection that fires `/publickey`+`/verify` — the exact call needed.
+
+**Conclusion:** gadget-repack defeats SecNeo's *load-time* checks and proves the
+HTTP-hook approach, but SecNeo's *runtime* anti-Frida (ART protection → gadget
+crashes) prevents reliably capturing the `/verify` session-grant. To finish would
+need Frida anti-anti-debug (hook SecNeo's detection/ptrace/timer routines to
+stabilise the gadget) or a native-layer hook that avoids the Java bridge — a
+further deep effort. The privileged-read tier stays app-only for now.
+
+## Attempt log — 2026-08-27 (BREAKTHROUGH — native SSL hook captured `/verify` in clear)
+
+Downgraded the gadget to **Frida 16.7.19** (user: "frida 16 secneo funcionaba")
+and, because SecNeo's runtime ART protection crashes any **Java** hook (SuspendAll
+conflict), pivoted to a **native** hook: `Interceptor.attach` on `SSL_read`/
+`SSL_write` (BoringSSL) across all loaded modules (`scratchpad/sslhook.js`). This is
+**stable** — no crash — because it never touches the Java bridge. It dumps the
+plaintext TLS buffers, i.e. the HTTP **bodies** (HTTP/2 DATA frames are not
+compressed).
+
+**Captured the app's `/dev/bluetooth/login/assure/verify` exchange in clear:**
+
+- **REQUEST body (SSL_write):**
+  `{"deviceId":"matt.73cb7865154223b90e81d000","devicePublicKey":"045f8401…e565"}`
+- **RESPONSE body (SSL_read):**
+  `{"sessionKey":"9adb2050f051c638e72536dcc93bec4d","verifyData":"24984d904e2c3b34",`
+  `"nonce":"d1cf53369e454d917e9ae77cfe","mac":"54ef44100124dcda","code":0}`
+  (a second capture gave the same `mac`, fresh sessionKey/nonce/verifyData.)
+
+**Decisive diff result:** the `/verify` **request body is byte-identical** to what
+`aqara_ble/kdf.py` (`cloud_verify`) sends — same two fields `{deviceId,
+devicePublicKey}` — and the **`deviceId` is identical** to our `.env`
+`AQARA_DEVICE_ID` (`matt.73cb7865154223b90e81d000`, a Matter-prefixed id). So the
+privilege is **NOT in the `/verify` request body nor the deviceId**. The response
+structure is also identical to ours (sessionKey/verifyData/nonce/mac/code).
+
+**What is left, and the residual wall:** the only place the grant can still differ
+is the **HTTP request headers** (Token scope, `Sign` preimage, `Appid`/`ClientId`)
+— and those ride in **HPACK-compressed HTTP/2 HEADERS frames** (Huffman literals),
+which the native SSL_read/SSL_write hook cannot read as plaintext. Reading them
+needs an **okhttp `Interceptor`/`Request` (Java) hook** — the exact hook SecNeo's
+runtime anti-Frida crashes (proven twice: `_performPendingVmOpsWhenReady` access
+violation, SuspendAll SIGSEGV). We DID once read okhttp request headers in a single
+brief Java window (the login capture), but cannot hold a window long enough to also
+fire `/verify`.
+
+**Status of the line:** narrowed to header-or-app-binding but **not closed**. The
+body/deviceId are ruled out. To finish would need either (a) a SecNeo
+anti-anti-Frida shim to stabilise a Java okhttp hook, or (b) an HPACK decoder over
+the captured SSL_write buffer to reconstruct the request headers offline — both
+non-trivial. Our library already sends a full owner-authenticated header set
+(`Lang…Appid/Appkey/ClientId/UserId/Token/Sign`, recovered from the app; login +
+free reads succeed), so if a privilege header exists it is a subtle scope/signature
+difference, not a missing credential.
+
+**Cleanup owed (security hygiene, pending):** uninstall the Frida-patched APK and
+reinstall the user's original Aqara app (`scratchpad/apk/base.apk` +
+`split_config.arm64_v8a.apk`); remove the mitmproxy user-CA; delete the WireGuard
+tunnel.
+
 ## Success Criteria
 
 - **SC-001**: Either the cloud field/step that grants privilege is identified and
