@@ -69,15 +69,38 @@ transient lock-side elevated state the app had just established.
 
 ### Candidate leads to analyze (ranked)
 
-1. **BLE central identity** — the app connects from the phone's real (registered)
-   BD_ADDR; our ESP32 uses a synthetic address (`F0:F1:F2:F3:F4:F5`). The lock may
-   gate the privileged tier to the registered central. Test: spoof the phone's
-   address on the ESP32 (phone BT off) and re-read a gated opcode.
-2. **Cloud session material** — diff the exact cloud `verify`/session-material
-   request+response the app makes vs ours (are we missing a role/scope field?).
-3. **A specific privileged command we never send** — exhaustively diff the app's
-   full command stream (already decrypted) against ours for any opcode/kind we
-   omit that precedes the FIRST gated success.
+1. ~~**BLE central identity**~~ — **REFUTED 2026-08-27 by btsnoop analysis** (no
+   live test needed). The phone connects with a **rotating RPA** (`LE Set Random
+   Address 4a:a9:6b:54:eb:06`, own_addr_type=1; MSB `4a` bits `01` = resolvable
+   private address), and the link is unbonded (no IRK). A rotating, unresolvable
+   central address gives the lock NO stable identity to gate on → the privilege
+   tier is NOT bound to the central address. Its public BD_ADDR (74:be:f3:16:77:f3)
+   is not used for the connection.
+2. **Cloud session material / cloud request (PRIME lead after 2026-08-27).** The
+   app is privileged from the FIRST post-auth command: its first gated op (log sync
+   0x13) is answered ~0.5 s after auth (clean session: auth done 11:19:50.97, RX
+   0x13 at 11:19:51.826). Since every BLE-observable is IDENTICAL to ours (auth
+   message format, 8-byte verifyData, RPA address, the cloud calls our library
+   reimplements), the privilege must be granted CLOUD-SIDE and is invisible on the
+   BLE link — either the session material (sessionKey/nonce/verifyData VALUES) is
+   privilege-bearing, or the app's cloud request to mint it carries a
+   role/scope/app-signature field our library's request omits. **To settle:**
+   capture the app's HTTPS to the Aqara cloud (the `get_public_key` + `verify`
+   calls) and diff request+response against `aqara_ble.kdf`. This needs an HTTPS
+   MITM proxy and will fight the SecNeo app's likely cert pinning — a new, harder
+   RE phase (its own spec when tackled).
+3. ~~Command-stream diff~~ — effectively done: the app's extra commands (set-time
+   0x33, log sync 0x13) were tested and do NOT elevate; 0x13 is itself gated. No
+   single BLE command elevates.
+
+### Leading conclusion (2026-08-27)
+
+The privileged tier is **granted cloud-side at session mint time**, not by any BLE
+command or the central address. Reproducing it likely requires diffing the app's
+HTTPS cloud session-grant against our library's (lead 2) — OR accepting that the
+Aqara cloud only mints a privileged session for the official (SecNeo-signed) app,
+which we cannot forge without breaking that signing. The one transient success we
+saw was our read riding the lock's short-lived elevated state left by the app.
 
 ## Success Criteria *(mandatory)*
 
