@@ -57,15 +57,22 @@ only the SecNeo-signed official app is granted it. Confirming/bypassing this nee
 an HTTPS MITM of the app's cloud session-grant — tracked in
 `specs/037-cloud-session-mitm`.
 
-**UPDATE 2026-08-27 (MITM breakthrough — body ruled out):** a Frida-16 **native**
-`SSL_read`/`SSL_write` hook (stable under SecNeo, unlike Java hooks) captured the
-app's `/dev/bluetooth/login/assure/verify` in clear. The **request body is
-byte-identical** to our `kdf.cloud_verify` (`{deviceId, devicePublicKey}`) and the
-**`deviceId` matches our `.env`** (`matt.73cb…`, a Matter id); the response
-structure matches too. So the privilege is **not in the `/verify` body or
-deviceId** — it can only be in the HPACK-compressed **HTTP request headers** (Token
-scope / `Sign` / `Appid`) which the native hook can't read, or bound to the
-SecNeo-signed app. See spec 037's 2026-08-27 breakthrough log.
+**UPDATE 2026-08-27 (MITM — cloud request proven IDENTICAL; "cloud-side privilege"
+hypothesis REFUTED):** a Frida-16 **native** `SSL_read`/`SSL_write` hook (stable
+under SecNeo, unlike Java hooks) captured the app's
+`/dev/bluetooth/login/assure/verify` **body**, and a full-hex dump + offline HPACK
+decoder (`scratchpad/sslfull.js` + `decode_h2.py`) recovered its **headers** too.
+Field-by-field the request is **functionally identical** to what our `kdf` sends:
+same `deviceId` + `devicePublicKey` body, same `appid` (`444c476ef7135e53330f46e7`),
+`userid`, `phoneid`, `account`, `area`, `sign` structure. The **only** difference
+is `clientid` — an **FCM push-registration token**, not a privilege field. So the
+cloud mints the app's session material from a request we already reproduce, and the
+gated-read difference is **not** granted by any distinguishing field in the
+session-mint request. Two live variables remain: (1) the **JWT scope** — the app's
+token is `tokenSource:UC / loginSource:USER_NEW`; ours (via `/user/guard-code/login`)
+is unverified; (2) a **timing / wake-window** artifact — the earlier "gated reads
+return silence" may be a mis-timed `read_burst`, not a real wall. See spec 037's
+2026-08-27 headers-decoded log.
 
 **Hypotheses tested and REFUTED** (do not re-try — evidence in spec 036 / memory
 `app-reads-settings-bulk-blob`): keypad-per-read; keypad held during read; set-time
