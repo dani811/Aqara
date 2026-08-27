@@ -1,8 +1,11 @@
-# U200 settings read protocol (2026-08-26)
+# U200 settings read protocol (2026-08-26, updated 2026-08-27)
 
-How the lock's configuration settings are read over the control channel, and why
-some answer freely while others are gated. Reconstructed by decrypting the official
-Aqara app's own BLE session (see "How this was obtained").
+How the lock's configuration settings are read over the control channel, why some
+answer freely while others are privilege-gated, and where that privilege lives.
+Reconstructed by decrypting the official Aqara app's own BLE session (see "How this
+was obtained"). The privileged tier is unsolved (granted cloud-side) — see
+investigation `specs/036-privilege-elevation` and the MITM follow-up
+`specs/037-cloud-session-mitm`.
 
 ## Control frame shape for a read
 
@@ -33,18 +36,41 @@ lock status `0x07`, battery `0xde`, tongue `0x08`, door type `0xe0`, pull spring
 `0xe4`, work mode `0xee`, advanced `0xd8`, limits `0xe2`, verify-fail `0x94`, alarm
 enable `0xcb`, timezone `0x33`.
 
-These return **nothing** cold — they are **session-elevation gated**: volume `0xc3`
-& `0x02`, language `0x68`, alarm volume `0x84`, finger count `0x20`, `0x1f`, voice
-OTA `0xa6`, lock-setting `0x1a`. The official app reads them fine **after** its
-connect-time setup burst (set-time `0x33` + access-log sync `0x13`); the exact
-elevation trigger within that burst is not yet pinned (leading candidate: the
-`0x33` set-time; alternative: completing the `0x13` log sync). Once elevated, the
-gated reads answer as fast as the free ones. See the memory
-`app-reads-settings-bulk-blob` for the open A/B test (set-time → read volume).
+These return **nothing** to our sessions — they are **privilege-gated**: volume
+`0xc3` & `0x02`, language `0x68`, alarm volume `0x84`, finger count `0x20`, `0x1f`,
+voice OTA `0xa6`, lock-setting `0x1a`, **and the access-log sync `0x13` itself**.
+The official app reads them all; our authenticated sessions (same account) do not.
 
-Reading the settings therefore needs a **persistent session** (one auth, many
-frames) after elevation — implemented as `U200Client.read_burst()` /
-`run_authenticated_lock_operation(follow_up_ops=…)`.
+### Where the privilege comes from — cloud-side (investigation 036)
+
+The app is privileged **from its first post-auth command** (clean capture: auth
+done 11:19:50.97, first gated `0x13` answered 11:19:51.826 — ~0.5 s later). And
+**every BLE-observable is identical** between the app and our library: the auth
+message format (`00 ft 10 01 00 <len_le> crc16(body) …`), the 8-byte verifyData,
+and the cloud calls (our library reimplements them). The phone even connects with a
+**rotating RPA** over an **unbonded** link, so the lock cannot gate on central
+identity either. Conclusion: **the privileged tier is granted CLOUD-SIDE at session
+mint time and is invisible on the BLE link** — the Aqara cloud hands the official
+app privilege-bearing session material (or accepts a role/scope/app-signature field
+in its mint request) that our reimplemented `kdf` request does not obtain. Likely
+only the SecNeo-signed official app is granted it. Confirming/bypassing this needs
+an HTTPS MITM of the app's cloud session-grant — tracked in
+`specs/037-cloud-session-mitm`.
+
+**Hypotheses tested and REFUTED** (do not re-try — evidence in spec 036 / memory
+`app-reads-settings-bulk-blob`): keypad-per-read; keypad held during read; set-time
+`0x33` then read; "log-sync `0x13` completes → elevates" (circular — `0x13` is
+itself gated); session age / settling delay; response latency / queueing (30 s
+listen, 0 frames); persistent session alone; BLE bonding/encryption (app's ATT is
+in the clear); BLE central address (rotating RPA + unbonded).
+
+### Reading them, if a privileged session is ever obtained
+
+Use a **persistent session** (one auth, many frames) — `U200Client.read_burst()` /
+`run_authenticated_lock_operation(follow_up_ops=…)`. A multi-frame burst needs the
+stabilized BLE link (2026-08-27 fix in `transport.py`: `supervision_timeout`
+5 s→20 s, connection interval 30–60 ms) — before it, the ESP32 link dropped
+mid-burst within ~10–16 s; after it, a held session survives 27 s+.
 
 ## How this was obtained (own device, own account)
 
