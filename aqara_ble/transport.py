@@ -385,10 +385,10 @@ class BumbleTransport:
         device = await self._ensure_device()
         mac = target.address if isinstance(target, ScanCandidate) else target
         prefs = self._bumble_device.ConnectionParametersPreferences(
-            connection_interval_min=45.0,
-            connection_interval_max=45.0,
+            connection_interval_min=30.0,
+            connection_interval_max=60.0,
             max_latency=0,
-            supervision_timeout=5000,
+            supervision_timeout=20000,
         )
         connection = await asyncio.wait_for(
             device.connect(

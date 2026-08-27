@@ -492,6 +492,51 @@ class U200Client:
         st = await self.read(opcode)
         return bytes.fromhex(st.raw_hex) if st.raw_hex else None
 
+    async def read_burst(self, frames_hex: list[str]) -> list[tuple[str, str | None]]:
+        """Read many control frames in ONE authenticated session (persistent).
+
+        Each item in ``frames_hex`` is a raw plaintext control frame in hex — the
+        bytes fed to AES-CCM (e.g. ``"c3044301"`` = volume, opcode 0xc3 / kind 0x04).
+        Authenticates once and sends them all on the same session, mirroring the
+        official app. This is REQUIRED for the presence-gated settings
+        (volume/language/alarm volume), which only answer within the lock's wake
+        window — a fresh session per read misses it. Returns ``(frame_hex,
+        response_hex_or_None)`` for each, in order. Run within ~40 s of a wake.
+        """
+        if not self.connected or self._gatt is None:
+            raise U200ClientError(FlowPhase.OPERATION, "el cliente está cerrado; vuelve a conectar")
+        if not frames_hex:
+            return []
+        from .lock_ops import LockOperationWrite  # noqa: PLC0415
+
+        def _mk(fh: str) -> LockOperationWrite:
+            return LockOperationWrite(operation=f"burst:{fh}", payload=bytes.fromhex(fh), write_prefix=0x01)
+
+        primary = _mk(frames_hex[0])
+        follow_ups = [_mk(fh) for fh in frames_hex[1:]]
+        follow_out: list[tuple[object, str | None]] = []
+        try:
+            _material, _write, primary_resp = await run_authenticated_lock_operation(
+                client=self._gatt,
+                device_id=self.device_id,
+                auth_headers=None,
+                region=self.region,
+                base_url=self.base_url,
+                operation=primary,
+                notify_timeout=self.notify_timeout,
+                auth=self.auth,
+                follow_up_ops=follow_ups,
+                follow_up_out=follow_out,
+            )
+        except (OperationInProgressError, CloudServiceError, U200ClientError):
+            raise
+        except Exception as exc:
+            raise U200ClientError(FlowPhase.OPERATION, f"read_burst: {exc}") from exc
+        out: list[tuple[str, str | None]] = [(frames_hex[0], primary_resp)]
+        for fh, (_op, resp) in zip(frames_hex[1:], follow_out, strict=False):
+            out.append((fh, resp))
+        return out
+
     async def read_door_type(self) -> str | None:
         """Read the configured door-lock type over BLE ('eu'/'uk'/'us'; 0xe0)."""
         return decode_door_type(await self._read_raw(0xE0))

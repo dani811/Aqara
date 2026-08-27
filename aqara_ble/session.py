@@ -202,6 +202,8 @@ async def run_authenticated_lock_operation(
     listen_after: float = 0.0,
     on_report: Callable[[str, bytes], None] | None = None,
     low_power_connection: bool = False,
+    follow_up_ops: list[LockOperationWrite] | None = None,
+    follow_up_out: list[tuple[Any, str | None]] | None = None,
 ) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
     """
     Authenticate with the lock, send a command, and receive the response.
@@ -254,6 +256,8 @@ async def run_authenticated_lock_operation(
                 listen_after=listen_after,
                 on_report=on_report,
                 low_power_connection=low_power_connection,
+                follow_up_ops=follow_up_ops,
+                follow_up_out=follow_up_out,
             )
         except CloudServiceError as exc:
             can_retry = (
@@ -286,6 +290,8 @@ async def _run_authenticated_lock_operation_once(
     listen_after: float = 0.0,
     on_report: Callable[[str, bytes], None] | None = None,
     low_power_connection: bool = False,
+    follow_up_ops: list[LockOperationWrite] | None = None,
+    follow_up_out: list[tuple[Any, str | None]] | None = None,
 ) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
     """
     Single attempt of the authenticated lock operation (see the public wrapper
@@ -669,6 +675,38 @@ async def _run_authenticated_lock_operation_once(
                     session["nonce"],
                     ciphertext=control_frame[1:],
                 ).hex()
+
+            # Persistent session: send follow-up control frames on the SAME
+            # authenticated session (one auth, many commands) — this mirrors the
+            # official app, which reads every setting inside one wake session.
+            # Settings like volume/language only answer within the lock's presence
+            # window, so re-authenticating per command (a fresh session each time)
+            # misses that window; keeping one session open reads them reliably.
+            if follow_up_ops and follow_up_out is not None:
+                for fop in follow_up_ops:
+                    fwrite = build_lock_operation_write(fop)
+                    fenc = encrypt_control_payload(
+                        session["sessionKey"], session["nonce"], plaintext=fwrite.payload
+                    )
+                    await client.write_gatt_char(
+                        CONTROL_WRITE_UUID,
+                        bytes((fwrite.write_prefix,)) + fenc,
+                        response=False,
+                    )
+                    try:
+                        fframe = await asyncio.wait_for(
+                            control_queue.get(), timeout=notify_timeout
+                        )
+                    except TimeoutError:
+                        fframe = b""
+                    fresp = (
+                        decrypt_control_payload(
+                            session["sessionKey"], session["nonce"], ciphertext=fframe[1:]
+                        ).hex()
+                        if len(fframe) >= 2
+                        else None
+                    )
+                    follow_up_out.append((fwrite.operation, fresp))
 
             if listen_after > 0 and on_report is not None:
                 # Feature 023: keep the connection open and forward every extra
