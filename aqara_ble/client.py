@@ -46,13 +46,18 @@ from .lock_state import (
     SOURCE_OPERATION,
     SOURCE_QUERY,
     LockEvent,
+    LockSettings,
     LockState,
+    decode_alarm_volume,
+    decode_alert_volume,
     decode_assist_turn,
     decode_battery_info,
     decode_door_type,
     decode_event,
+    decode_language,
     decode_lock_state,
     decode_lock_status,
+    decode_lock_volume,
     decode_pull_spring,
     decode_state_report,
 )
@@ -550,6 +555,31 @@ class U200Client:
         for fh, (_op, resp) in zip(frames_hex, follow_out, strict=False):
             out.append((fh, resp))
         return out
+
+    async def read_settings(self) -> LockSettings:
+        """Read the configuration settings over BLE in ONE persistent session.
+
+        Reads volume (0xc3), language (0x68), alarm volume (0x84) and the
+        lock-setting blob (0x1a — carries the alert volume) in a single
+        opcode-correlated burst, mirroring the official app. Returns a
+        :class:`LockSettings`; a field is ``None`` if that opcode did not answer.
+        Requires a live connection (wake the lock's radio to connect; no per-read
+        keypad touch is needed once connected).
+        """
+        frames = ["c3044301", "680168", "84020407", "1a011a"]
+        results = dict(await self.read_burst(frames))
+
+        def _raw(frame: str) -> bytes | None:
+            resp = results.get(frame)
+            return bytes.fromhex(resp) if resp else None
+
+        return LockSettings(
+            alert_volume=decode_alert_volume(_raw("1a011a")),
+            system_volume=decode_lock_volume(_raw("c3044301")),
+            language=decode_language(_raw("680168")),
+            alarm_volume=decode_alarm_volume(_raw("84020407")),
+            raw={f: results.get(f) for f in frames},
+        )
 
     async def read_door_type(self) -> str | None:
         """Read the configured door-lock type over BLE ('eu'/'uk'/'us'; 0xe0)."""

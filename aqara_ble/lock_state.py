@@ -113,6 +113,90 @@ def decode_pull_spring(raw: bytes | None) -> tuple[bool, int] | None:
     return (raw[2] != 0x00, raw[3])
 
 
+# ── configuration settings reads (2026-08-27, confirmed live) ────────────────
+# These read over BLE from our OWN authenticated session — there is no privilege
+# tier (see docs/devices/u200/settings-protocol.md). Frames + replies captured on
+# fw 3.0.0_0085 and cross-checked byte-for-byte against the official app:
+#   volume   0xc3  `c3 04 43 01` -> `c3 00 02 04 …`
+#   language 0x68  `68 01 68`    -> `68 00 02 01 00 00 …`
+#   alarm    0x84  `84 02 04 07` -> `84 00 02 00 10 …`
+#   setting  0x1a  `1a 01 1a`    -> `1a 00 00 01 <alert> 0a 01 01 02 00 00 02 00 …`
+GET_LOCK_VOLUME_REPLY = 0xC3
+GET_LANGUAGE_REPLY = 0x68
+GET_ALARM_VOLUME_REPLY = 0x84
+GET_LOCK_SETTING_REPLY = 0x1A
+
+#: Alert volume lives in the lock-setting bulk blob (0x1a), byte 4. Fully pinned
+#: 2026-08-27 by change-and-reread: 01=Alto, 03=Bajo, 04=Silencio → 02=Medio.
+ALERT_VOLUME_LEVELS = {0x01: "high", 0x02: "medium", 0x03: "low", 0x04: "silent"}
+#: Lock language, byte 3 of the 0x68 reply. Only 'es' (0x01) is confirmed so far.
+LANGUAGES = {0x01: "es"}
+
+
+def decode_alert_volume(raw: bytes | None) -> str | None:
+    """Decode alert volume from the lock-setting blob (0x1a, byte 4) → level name.
+
+    CONFIRMED live 2026-08-27 (change-and-reread): 01='high', 02='medium',
+    03='low', 04='silent'. An unknown code returns ``f"level-{n}"`` (never None
+    for a valid reply), so the caller always sees real data.
+    """
+    if not raw or len(raw) < 5 or raw[0] != GET_LOCK_SETTING_REPLY or raw[1] != 0x00:
+        return None
+    return ALERT_VOLUME_LEVELS.get(raw[4], f"level-{raw[4]}")
+
+
+def decode_lock_volume(raw: bytes | None) -> int | None:
+    """Decode the system/voice volume (0xc3) → level byte (raw[2]).
+
+    Live sample 2026-08-27: `c3 00 02 04 …` (byte 2 = 0x02). The exact scale is not
+    yet pinned by a change-and-reread, so this returns the raw level integer.
+    """
+    if not raw or len(raw) < 3 or raw[0] != GET_LOCK_VOLUME_REPLY or raw[1] != 0x00:
+        return None
+    return raw[2]
+
+
+def decode_alarm_volume(raw: bytes | None) -> str | None:
+    """Decode the alarm (siren) volume (0x84) → raw value hex.
+
+    Live sample 2026-08-27: `84 00 02 00 10 …`. Scale/field layout not yet pinned by
+    a change-and-reread, so this honestly returns the value bytes (reply minus the
+    opcode, status and 2-byte CRC) as hex rather than a guessed level.
+    """
+    if not raw or len(raw) < 5 or raw[0] != GET_ALARM_VOLUME_REPLY or raw[1] != 0x00:
+        return None
+    return raw[2:-2].hex()
+
+
+def decode_language(raw: bytes | None) -> str | None:
+    """Decode the lock language (0x68, byte 3) → language code.
+
+    Live sample 2026-08-27: `68 00 02 01 00 00 …` = Español (byte 3 = 0x01). Only
+    'es'=0x01 is confirmed; other indices fall through to ``f"lang-{n}"``.
+    """
+    if not raw or len(raw) < 4 or raw[0] != GET_LANGUAGE_REPLY or raw[1] != 0x00:
+        return None
+    return LANGUAGES.get(raw[3], f"lang-{raw[3]}")
+
+
+@dataclass(frozen=True)
+class LockSettings:
+    """Configuration settings read over BLE in one persistent session.
+
+    ``alert_volume`` is fully confirmed ('high'/'medium'/'low'/'silent'). The others
+    carry real captured data with the exact enum scales still being pinned:
+    ``system_volume`` is the raw 0xc3 level byte, ``language`` decodes byte 3 of
+    0x68, ``alarm_volume`` is the 0x84 value hex. Each field is ``None`` when that
+    opcode did not answer. ``raw`` keeps every reply for debugging/refinement.
+    """
+
+    alert_volume: str | None = None
+    system_volume: int | None = None
+    language: str | None = None
+    alarm_volume: str | None = None
+    raw: dict[str, str | None] | None = None
+
+
 # ── ff62 spontaneous event stream (feature 034) ──────────────────────────────
 # Captured live 2026-08-26 by holding the connection while operating the lock.
 # Frame shape: <opcode:1> <arg:1> [payload] <unix_ts:4 LE> <crc:2>.

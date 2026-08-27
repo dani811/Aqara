@@ -75,7 +75,17 @@ from .lock_ops import (
     normalize_lock_operation,
     send_lock_operation,
 )
-from .lock_state import LockEvent, LockState, decode_event, decode_lock_state
+from .lock_state import (
+    LockEvent,
+    LockSettings,
+    LockState,
+    decode_alarm_volume,
+    decode_alert_volume,
+    decode_event,
+    decode_language,
+    decode_lock_state,
+    decode_lock_volume,
+)
 from .models import MODEL_BY_PRODUCT_ID, decode_manufacturer_payload
 from .operations_catalog import (
     OPERATIONS_CATALOG,
@@ -149,7 +159,12 @@ __all__ = [
     "LockOperation",
     "LockOperationWrite",
     "LockEvent",
+    "LockSettings",
     "LockState",
+    "decode_alarm_volume",
+    "decode_alert_volume",
+    "decode_language",
+    "decode_lock_volume",
     "NoDeviceFoundError",
     "OperationEntry",
     "OperationInProgressError",
