@@ -41,6 +41,12 @@ The actuation frame is `74 <dir:1> <seq:2 LE> <trailer:2 LE>`:
 Each operation is sent encrypted:
 `control_write = write_prefix + AES-CCM(sessionKey, nonce, payload)`.
 
+> **Read protocol + privilege tiers:** how these opcodes are *read* (the
+> `<opcode> <kind> <body>` frame, which answer freely vs. which are cloud-side
+> privilege-gated) is in [settings-protocol.md](settings-protocol.md). Volume,
+> language, alarm-volume, finger, and log-sync are **gated** (app-only so far) —
+> see `specs/036-privilege-elevation`.
+
 ### Voice / alert volume
 
 | Preset | Serialized request (hex) — `kind|command|body|trailer` |
