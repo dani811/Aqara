@@ -4,7 +4,14 @@
 
 **Created**: 2026-08-27
 
-**Status**: Planned (blocked-hard research; open only when ready to invest)
+**Status**: ✅ RESOLVED 2026-08-27 — the MITM proved (HPACK-decoded `/verify`) that
+the cloud session-grant is **identical** app-vs-library (same body, deviceId,
+headers, and JWT scope `tokenSource:UC/loginSource:USER_NEW`). There was **no cloud
+privilege**: the gated-read failure was two client bugs in `aqara_ble` (reply
+correlation + ff61 write-prefix), now fixed — all settings read over BLE from our
+own session, live 6/6 (commit `8b24731`). See `settings-protocol.md` and spec 036.
+
+**Original status**: Planned (blocked-hard research; open only when ready to invest)
 
 **Input**: Capture the official Aqara app's HTTPS traffic to the Aqara cloud during
 a lock session, and diff the session-grant (`get_public_key` + `verify`) request +

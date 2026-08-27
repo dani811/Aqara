@@ -1,11 +1,10 @@
 # U200 settings read protocol (2026-08-26, updated 2026-08-27)
 
-How the lock's configuration settings are read over the control channel, why some
-answer freely while others are privilege-gated, and where that privilege lives.
+How the lock's configuration settings are read over the control channel.
 Reconstructed by decrypting the official Aqara app's own BLE session (see "How this
-was obtained"). The privileged tier is unsolved (granted cloud-side) — see
-investigation `specs/036-privilege-elevation` and the MITM follow-up
-`specs/037-cloud-session-mitm`.
+was obtained"). **All settings read over BLE from our own session** — there is no
+privilege tier; the earlier "cloud-gated" theory (specs 036/037) was two client
+bugs, now fixed (see "There is NO privilege tier" below).
 
 ## Control frame shape for a read
 
@@ -28,66 +27,55 @@ The generic `build_read_query_write` (opcode + `00` + 4-byte trailer, kind absen
 works for the kind-01 status/info opcodes but NOT for the family-02/03/04 settings —
 those need the real `<opcode> <kind> <body>` frame.
 
-## Two tiers: free reads vs elevation-gated reads
+## There is NO privilege tier — every setting reads over BLE (RESOLVED 2026-08-27)
 
-Against this lock (fw 3.0.0_0085), one authenticated session reads these **freely**
-(answer in ~300 ms, no extra state): keepalive `0x2f`, MTU `0x4d`, firmware `0x0d`,
-lock status `0x07`, battery `0xde`, tongue `0x08`, door type `0xe0`, pull spring
-`0xe4`, work mode `0xee`, advanced `0xd8`, limits `0xe2`, verify-fail `0x94`, alarm
-enable `0xcb`, timezone `0x33`.
+Earlier notes here (and specs 036/037) claimed a "privileged/cloud-gated tier"
+that answered the official app but stayed silent to our library: volume `0xc3`,
+language `0x68`, alarm volume `0x84`, finger count `0x20`, `0x1f`, voice-OTA
+`0xa6`, lock-setting `0x1a`, access-log sync `0x13`. **That tier does not exist.**
+On our own authenticated ESP32 session (same account, fw 3.0.0_0085) all of them
+read fine and return **byte-identical values** to the app — confirmed live **6/6**:
 
-These return **nothing** to our sessions — they are **privilege-gated**: volume
-`0xc3` & `0x02`, language `0x68`, alarm volume `0x84`, finger count `0x20`, `0x1f`,
-voice OTA `0xa6`, lock-setting `0x1a`, **and the access-log sync `0x13` itself**.
-The official app reads them all; our authenticated sessions (same account) do not.
+| setting | frame (plaintext) | response | value |
+| --- | --- | --- | --- |
+| battery `0xde` | `de 01 de` (pfx 01) | `de 00 07 00 01 01 64 00 00` | 100 % |
+| lock-setting `0x1a` | `1a 01 1a` (pfx 01) | `1a 00 00 01 01 0a 01 01 02 00 00 02` | bulk blob |
+| volume `0xc3` | `c3 04 43 01` (pfx 01) | `c3 00 02 04` | `02 04` |
+| language `0x68` | `68 01 68` (pfx 01) | `68 00 02 01 00 00` | `02 01 00 00` |
+| alarm-vol `0x84` | `84 02 04 07` (pfx 01) | `84 00 02 00 10` | `02 00 10` |
+| finger `0x20` | `20 03 20` (**pfx 03**) | `20 00 00 00 00 00` | 0 fingers |
 
-### Where the privilege comes from — cloud-side (investigation 036)
+### The real cause: two client bugs (both fixed)
 
-The app is privileged **from its first post-auth command** (clean capture: auth
-done 11:19:50.97, first gated `0x13` answered 11:19:51.826 — ~0.5 s later). And
-**every BLE-observable is identical** between the app and our library: the auth
-message format (`00 ft 10 01 00 <len_le> crc16(body) …`), the 8-byte verifyData,
-and the cloud calls (our library reimplements them). The phone even connects with a
-**rotating RPA** over an **unbonded** link, so the lock cannot gate on central
-identity either. Conclusion: **the privileged tier is granted CLOUD-SIDE at session
-mint time and is invisible on the BLE link** — the Aqara cloud hands the official
-app privilege-bearing session material (or accepts a role/scope/app-signature field
-in its mint request) that our reimplemented `kdf` request does not obtain. Likely
-only the SecNeo-signed official app is granted it. Confirming/bypassing this needs
-an HTTPS MITM of the app's cloud session-grant — tracked in
-`specs/037-cloud-session-mitm`.
+The MITM investigation (037) proved the cloud session-grant is **identical**
+between the app and our library — same `/verify` body, `deviceId`, and every header
+(`appid`/`userid`/`phoneid`/`account`/`sign`), and the **same JWT scope**
+(`tokenSource:UC`, `loginSource:USER_NEW`). So the difference was never cloud-side.
+It was two bugs in `aqara_ble`:
 
-**UPDATE 2026-08-27 (MITM — cloud request proven IDENTICAL; "cloud-side privilege"
-hypothesis REFUTED):** a Frida-16 **native** `SSL_read`/`SSL_write` hook (stable
-under SecNeo, unlike Java hooks) captured the app's
-`/dev/bluetooth/login/assure/verify` **body**, and a full-hex dump + offline HPACK
-decoder (`scratchpad/sslfull.js` + `decode_h2.py`) recovered its **headers** too.
-Field-by-field the request is **functionally identical** to what our `kdf` sends:
-same `deviceId` + `devicePublicKey` body, same `appid` (`444c476ef7135e53330f46e7`),
-`userid`, `phoneid`, `account`, `area`, `sign` structure. The **only** difference
-is `clientid` — an **FCM push-registration token**, not a privilege field. So the
-cloud mints the app's session material from a request we already reproduce, and the
-gated-read difference is **not** granted by any distinguishing field in the
-session-mint request. Two live variables remain: (1) the **JWT scope** — the app's
-token is `tokenSource:UC / loginSource:USER_NEW`; ours (via `/user/guard-code/login`)
-is unverified; (2) a **timing / wake-window** artifact — the earlier "gated reads
-return silence" may be a mis-timed `read_burst`, not a real wall. See spec 037's
-2026-08-27 headers-decoded log.
+1. **Response correlation by arrival order.** The persistent-session follow-up loop
+   in `session.py` paired each reply to its request by the order frames arrived on
+   `ff62`. But that notify channel also carries **spontaneous state events**
+   (`0x1d`/`0xdd`/`0x15`); a stray event stole a read's slot and desynced the whole
+   burst, so later reads (e.g. volume) got no matching frame → looked "gated".
+   **Fix:** correlate each reply to its request by **opcode** (the reply is
+   `<op> 00 …`), draining/forwarding non-matching event frames.
+2. **Fixed ff61 write-prefix.** `read_burst` forced write-prefix `0x01` for every
+   frame. The app uses **`0x03`** for finger `0x20`, log-sync `0x13`, `0x1f` and
+   voice-OTA `0xa6` (proven from the decrypted app session). With `0x01` those stay
+   silent; with `0x03` they answer. **Fix:** `read_burst` accepts a `"PP:frame"`
+   spec to set the per-frame prefix (default `01`).
 
-**Hypotheses tested and REFUTED** (do not re-try — evidence in spec 036 / memory
-`app-reads-settings-bulk-blob`): keypad-per-read; keypad held during read; set-time
-`0x33` then read; "log-sync `0x13` completes → elevates" (circular — `0x13` is
-itself gated); session age / settling delay; response latency / queueing (30 s
-listen, 0 frames); persistent session alone; BLE bonding/encryption (app's ATT is
-in the clear); BLE central address (rotating RPA + unbonded).
+### Reading them from the library
 
-### Reading them, if a privileged session is ever obtained
-
-Use a **persistent session** (one auth, many frames) — `U200Client.read_burst()` /
-`run_authenticated_lock_operation(follow_up_ops=…)`. A multi-frame burst needs the
-stabilized BLE link (2026-08-27 fix in `transport.py`: `supervision_timeout`
-5 s→20 s, connection interval 30–60 ms) — before it, the ESP32 link dropped
-mid-burst within ~10–16 s; after it, a held session survives 27 s+.
+Use a **persistent session** (one auth, many frames): `U200Client.read_burst([…])`.
+Pass raw plaintext frames; add a `"03:"` prefix for the pfx-03 family, e.g.
+`read_burst(["c3044301", "680168", "03:200320"])`. Each reply is opcode-correlated
+and spontaneous events are skipped. A multi-frame burst needs the stabilized BLE
+link (2026-08-27 fix in `transport.py`: `supervision_timeout` 5 s→20 s, connection
+interval 30–60 ms). The lock only needs a keypad touch to **wake its radio for a
+new connection**; once connected, reads work with no further touches (the app never
+touches the keypad — it holds a persistent link).
 
 ## How this was obtained (own device, own account)
 

@@ -4,7 +4,15 @@
 
 **Created**: 2026-08-27
 
-**Status**: Investigation (analysis-only; no live-lock steps until a trigger is found)
+**Status**: ✅ RESOLVED 2026-08-27 — **there was no privilege to elevate.** The
+"gated tier" was two client bugs in `aqara_ble` (reply-correlation by arrival order
++ a forced ff61 write-prefix `0x01` where finger/log/`1f`/`a6` need `0x03`). All
+settings read over BLE from our own session, byte-identical to the app (live 6/6,
+commit `8b24731`). See `docs/devices/u200/settings-protocol.md` ("There is NO
+privilege tier") and spec 037. The premise below (a cloud-side privilege to
+reproduce) is **wrong** — kept for the audit trail only.
+
+**Original status**: Investigation (analysis-only; no live-lock steps until a trigger is found)
 
 **Input**: Reverse-engineer why the Aqara U200 serves a whole tier of "sensitive"
 control opcodes to the official app but not to our `aqara-ble` sessions, and find

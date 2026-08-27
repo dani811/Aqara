@@ -41,11 +41,14 @@ The actuation frame is `74 <dir:1> <seq:2 LE> <trailer:2 LE>`:
 Each operation is sent encrypted:
 `control_write = write_prefix + AES-CCM(sessionKey, nonce, payload)`.
 
-> **Read protocol + privilege tiers:** how these opcodes are *read* (the
-> `<opcode> <kind> <body>` frame, which answer freely vs. which are cloud-side
-> privilege-gated) is in [settings-protocol.md](settings-protocol.md). Volume,
-> language, alarm-volume, finger, and log-sync are **gated** (app-only so far) —
-> see `specs/036-privilege-elevation`.
+> **Read protocol:** how these opcodes are *read* (the `<opcode> <kind> <body>`
+> frame, and the ff61 write-prefix — `01` for most, `03` for finger `0x20`/log-sync
+> `0x13`/`0x1f`/voice-OTA `0xa6`) is in
+> [settings-protocol.md](settings-protocol.md). **All settings read over BLE from
+> our own session** — volume, language, alarm-volume, finger and lock-setting were
+> confirmed live 6/6 (2026-08-27). The earlier "privilege-gated / app-only" claim
+> was two client bugs, now fixed; see settings-protocol.md and specs 036/037
+> (RESOLVED).
 
 ### Voice / alert volume
 
