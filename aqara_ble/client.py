@@ -46,13 +46,18 @@ from .lock_state import (
     SOURCE_OPERATION,
     SOURCE_QUERY,
     LockEvent,
+    LockSettings,
     LockState,
+    decode_alarm_volume,
+    decode_alert_volume,
     decode_assist_turn,
     decode_battery_info,
     decode_door_type,
     decode_event,
+    decode_language,
     decode_lock_state,
     decode_lock_status,
+    decode_lock_volume,
     decode_pull_spring,
     decode_state_report,
 )
@@ -491,6 +496,90 @@ class U200Client:
     async def _read_raw(self, opcode: int) -> bytes | None:
         st = await self.read(opcode)
         return bytes.fromhex(st.raw_hex) if st.raw_hex else None
+
+    async def read_burst(self, frames_hex: list[str]) -> list[tuple[str, str | None]]:
+        """Read many control frames in ONE authenticated session (persistent).
+
+        Each item in ``frames_hex`` is a raw plaintext control frame in hex — the
+        bytes fed to AES-CCM (e.g. ``"c3044301"`` = volume, opcode 0xc3 / kind 0x04).
+        An item may carry an explicit **write-prefix** as ``"PP:frame"`` (hex),
+        e.g. ``"03:200320"`` for finger count — the ff61 write byte differs per op
+        family: volume/language/alarm/lock-setting use ``01`` (the default), while
+        finger `0x20`, log-sync `0x13`, `0x1f` and voice-OTA `0xa6` use ``03`` (from
+        the app's decrypted session). Authenticates once and sends them all on the
+        same session, mirroring the official app. Returns ``(spec, response_hex_or_
+        None)`` for each, in order. Run within ~40 s of a wake.
+        """
+        if not self.connected or self._gatt is None:
+            raise U200ClientError(FlowPhase.OPERATION, "el cliente está cerrado; vuelve a conectar")
+        if not frames_hex:
+            return []
+        from .lock_ops import LockOperationWrite  # noqa: PLC0415
+
+        def _mk(spec: str) -> LockOperationWrite:
+            prefix = 0x01
+            fh = spec
+            if ":" in spec:
+                pfx, fh = spec.split(":", 1)
+                prefix = int(pfx, 16)
+            return LockOperationWrite(
+                operation=f"burst:{spec}", payload=bytes.fromhex(fh), write_prefix=prefix
+            )
+
+        # Route EVERY read through the follow-up path, which correlates each reply
+        # to its request by opcode and discards spontaneous state events (0x1d/
+        # 0xdd/0x15) that share the notify channel. A harmless keepalive is the
+        # primary op (its reply is not opcode-checked, so it must not be a real
+        # read — otherwise a stray event could steal it).
+        primary = _mk("2f012f")  # keepalive, never actuation
+        follow_ups = [_mk(fh) for fh in frames_hex]
+        follow_out: list[tuple[object, str | None]] = []
+        try:
+            await run_authenticated_lock_operation(
+                client=self._gatt,
+                device_id=self.device_id,
+                auth_headers=None,
+                region=self.region,
+                base_url=self.base_url,
+                operation=primary,
+                notify_timeout=self.notify_timeout,
+                auth=self.auth,
+                follow_up_ops=follow_ups,
+                follow_up_out=follow_out,
+            )
+        except (OperationInProgressError, CloudServiceError, U200ClientError):
+            raise
+        except Exception as exc:
+            raise U200ClientError(FlowPhase.OPERATION, f"read_burst: {exc}") from exc
+        out: list[tuple[str, str | None]] = []
+        for fh, (_op, resp) in zip(frames_hex, follow_out, strict=False):
+            out.append((fh, resp))
+        return out
+
+    async def read_settings(self) -> LockSettings:
+        """Read the configuration settings over BLE in ONE persistent session.
+
+        Reads volume (0xc3), language (0x68), alarm volume (0x84) and the
+        lock-setting blob (0x1a — carries the alert volume) in a single
+        opcode-correlated burst, mirroring the official app. Returns a
+        :class:`LockSettings`; a field is ``None`` if that opcode did not answer.
+        Requires a live connection (wake the lock's radio to connect; no per-read
+        keypad touch is needed once connected).
+        """
+        frames = ["c3044301", "680168", "84020407", "1a011a"]
+        results = dict(await self.read_burst(frames))
+
+        def _raw(frame: str) -> bytes | None:
+            resp = results.get(frame)
+            return bytes.fromhex(resp) if resp else None
+
+        return LockSettings(
+            alert_volume=decode_alert_volume(_raw("1a011a")),
+            system_volume=decode_lock_volume(_raw("c3044301")),
+            language=decode_language(_raw("680168")),
+            alarm_volume=decode_alarm_volume(_raw("84020407")),
+            raw={f: results.get(f) for f in frames},
+        )
 
     async def read_door_type(self) -> str | None:
         """Read the configured door-lock type over BLE ('eu'/'uk'/'us'; 0xe0)."""

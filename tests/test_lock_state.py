@@ -6,11 +6,15 @@ from aqara_ble import LockState, decode_lock_state
 from aqara_ble.lock_state import (
     SOURCE_KEEPALIVE,
     SOURCE_OPERATION,
+    decode_alarm_volume,
+    decode_alert_volume,
     decode_assist_turn,
     decode_battery_info,
     decode_door_type,
     decode_event,
+    decode_language,
     decode_lock_status,
+    decode_lock_volume,
     decode_pull_spring,
 )
 
@@ -113,3 +117,40 @@ def test_decode_battery_info_rejects_non_battery_and_out_of_range() -> None:
     assert decode_battery_info(bytes.fromhex("de00")) is None  # too short
     # 0xde reply shape but percentage byte > 100 is rejected (not invented).
     assert decode_battery_info(bytes.fromhex("de00070001016500000000")) is None
+
+
+# ── configuration settings reads (real samples captured live 2026-08-27) ─────
+# Alert volume lives in the 0x1a lock-setting blob (byte 4); pinned by
+# change-and-reread on the real lock: Alto=01, Bajo=03, Silencio=04 → Medio=02.
+ALERT_ALTO = bytes.fromhex("1a000001010a010102000002001c77")
+ALERT_BAJO = bytes.fromhex("1a000001030a010102000002009e54")
+ALERT_SILENCIO = bytes.fromhex("1a000001040a010102000002001927")
+VOLUME_RESP = bytes.fromhex("c300020482")  # system volume (0xc3)
+LANGUAGE_ES = bytes.fromhex("680002010000106c")  # Español (0x68)
+ALARM_RESP = bytes.fromhex("84000200101e")  # alarm volume (0x84)
+
+
+def test_decode_alert_volume_from_confirmed_frames() -> None:
+    assert decode_alert_volume(ALERT_ALTO) == "high"
+    assert decode_alert_volume(ALERT_BAJO) == "low"
+    assert decode_alert_volume(ALERT_SILENCIO) == "silent"
+    # Medio (0x02) inferred between Alto/Bajo.
+    assert decode_alert_volume(bytes.fromhex("1a000001020a01010200000200aaaa")) == "medium"
+
+
+def test_decode_alert_volume_unknown_and_bad_replies() -> None:
+    assert decode_alert_volume(bytes.fromhex("1a000001070a01010200000200aaaa")) == "level-7"
+    assert decode_alert_volume(None) is None
+    assert decode_alert_volume(bytes.fromhex("c300020482")) is None  # wrong opcode
+    assert decode_alert_volume(bytes.fromhex("1a0000")) is None  # too short
+
+
+def test_decode_lock_volume_and_language_and_alarm() -> None:
+    assert decode_lock_volume(VOLUME_RESP) == 0x02
+    assert decode_lock_volume(None) is None
+    assert decode_lock_volume(bytes.fromhex("680002010000106c")) is None  # wrong opcode
+    assert decode_language(LANGUAGE_ES) == "es"
+    assert decode_language(bytes.fromhex("680002050000abcd")) == "lang-5"  # unknown index (byte 3)
+    assert decode_language(None) is None
+    assert decode_alarm_volume(ALARM_RESP) == "0200"  # value bytes minus opcode/status/crc
+    assert decode_alarm_volume(None) is None
