@@ -683,6 +683,7 @@ async def _run_authenticated_lock_operation_once(
             # window, so re-authenticating per command (a fresh session each time)
             # misses that window; keeping one session open reads them reliably.
             if follow_up_ops and follow_up_out is not None:
+                loop = asyncio.get_event_loop()
                 for fop in follow_up_ops:
                     fwrite = build_lock_operation_write(fop)
                     fenc = encrypt_control_payload(
@@ -693,19 +694,37 @@ async def _run_authenticated_lock_operation_once(
                         bytes((fwrite.write_prefix,)) + fenc,
                         response=False,
                     )
-                    try:
-                        fframe = await asyncio.wait_for(
-                            control_queue.get(), timeout=notify_timeout
-                        )
-                    except TimeoutError:
-                        fframe = b""
-                    fresp = (
-                        decrypt_control_payload(
+                    # Correlate the reply to THIS read by its opcode: the response
+                    # to `<op> …` is `<op> 00 …`. The control notify channel also
+                    # carries spontaneous state events (e.g. 0x1d/0xdd/0x15) that
+                    # land in the same queue; matching by arrival order lets a
+                    # stray event steal a read's slot and desync the whole burst.
+                    # Drain until the opcode matches (or the window closes),
+                    # forwarding non-matching frames to on_report if present.
+                    want = fwrite.payload[0] if fwrite.payload else None
+                    deadline = loop.time() + notify_timeout
+                    fresp: str | None = None
+                    while True:
+                        remaining = deadline - loop.time()
+                        if remaining <= 0:
+                            break
+                        try:
+                            fframe = await asyncio.wait_for(
+                                control_queue.get(), timeout=remaining
+                            )
+                        except TimeoutError:
+                            break
+                        if len(fframe) < 2:
+                            continue
+                        dec = decrypt_control_payload(
                             session["sessionKey"], session["nonce"], ciphertext=fframe[1:]
                         ).hex()
-                        if len(fframe) >= 2
-                        else None
-                    )
+                        if want is None or dec[:2] == f"{want:02x}":
+                            fresp = dec
+                            break
+                        # spontaneous event / mismatched reply — don't lose it
+                        if on_report is not None:
+                            on_report("ff62", bytes.fromhex(dec))
                     follow_up_out.append((fwrite.operation, fresp))
 
             if listen_after > 0 and on_report is not None:

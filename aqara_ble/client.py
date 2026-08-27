@@ -497,11 +497,13 @@ class U200Client:
 
         Each item in ``frames_hex`` is a raw plaintext control frame in hex — the
         bytes fed to AES-CCM (e.g. ``"c3044301"`` = volume, opcode 0xc3 / kind 0x04).
-        Authenticates once and sends them all on the same session, mirroring the
-        official app. This is REQUIRED for the presence-gated settings
-        (volume/language/alarm volume), which only answer within the lock's wake
-        window — a fresh session per read misses it. Returns ``(frame_hex,
-        response_hex_or_None)`` for each, in order. Run within ~40 s of a wake.
+        An item may carry an explicit **write-prefix** as ``"PP:frame"`` (hex),
+        e.g. ``"03:200320"`` for finger count — the ff61 write byte differs per op
+        family: volume/language/alarm/lock-setting use ``01`` (the default), while
+        finger `0x20`, log-sync `0x13`, `0x1f` and voice-OTA `0xa6` use ``03`` (from
+        the app's decrypted session). Authenticates once and sends them all on the
+        same session, mirroring the official app. Returns ``(spec, response_hex_or_
+        None)`` for each, in order. Run within ~40 s of a wake.
         """
         if not self.connected or self._gatt is None:
             raise U200ClientError(FlowPhase.OPERATION, "el cliente está cerrado; vuelve a conectar")
@@ -509,14 +511,26 @@ class U200Client:
             return []
         from .lock_ops import LockOperationWrite  # noqa: PLC0415
 
-        def _mk(fh: str) -> LockOperationWrite:
-            return LockOperationWrite(operation=f"burst:{fh}", payload=bytes.fromhex(fh), write_prefix=0x01)
+        def _mk(spec: str) -> LockOperationWrite:
+            prefix = 0x01
+            fh = spec
+            if ":" in spec:
+                pfx, fh = spec.split(":", 1)
+                prefix = int(pfx, 16)
+            return LockOperationWrite(
+                operation=f"burst:{spec}", payload=bytes.fromhex(fh), write_prefix=prefix
+            )
 
-        primary = _mk(frames_hex[0])
-        follow_ups = [_mk(fh) for fh in frames_hex[1:]]
+        # Route EVERY read through the follow-up path, which correlates each reply
+        # to its request by opcode and discards spontaneous state events (0x1d/
+        # 0xdd/0x15) that share the notify channel. A harmless keepalive is the
+        # primary op (its reply is not opcode-checked, so it must not be a real
+        # read — otherwise a stray event could steal it).
+        primary = _mk("2f012f")  # keepalive, never actuation
+        follow_ups = [_mk(fh) for fh in frames_hex]
         follow_out: list[tuple[object, str | None]] = []
         try:
-            _material, _write, primary_resp = await run_authenticated_lock_operation(
+            await run_authenticated_lock_operation(
                 client=self._gatt,
                 device_id=self.device_id,
                 auth_headers=None,
@@ -532,8 +546,8 @@ class U200Client:
             raise
         except Exception as exc:
             raise U200ClientError(FlowPhase.OPERATION, f"read_burst: {exc}") from exc
-        out: list[tuple[str, str | None]] = [(frames_hex[0], primary_resp)]
-        for fh, (_op, resp) in zip(frames_hex[1:], follow_out, strict=False):
+        out: list[tuple[str, str | None]] = []
+        for fh, (_op, resp) in zip(frames_hex, follow_out, strict=False):
             out.append((fh, resp))
         return out
 
