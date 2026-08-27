@@ -41,6 +41,31 @@ non-privileged session material.
   verify a gated read (volume `0xc3`) returns a real value from our session.
 - **FR-005**: No lock actuation (`0x74`) at any point; capture is passive.
 
+## Attempt log — 2026-08-27 (walls confirmed empirically)
+
+First MITM attempt with mitmproxy 12.2.0 (own device/account):
+
+- **Regular HTTP proxy (WiFi `http_proxy` = Mac:8080):** works for cooperating
+  apps — the phone's browser/Google/Spotify all appeared in the proxy log (with
+  TLS failures until a CA was trusted). But the **Aqara app made ZERO connections
+  through it** — it **ignores the system HTTP proxy** (hardened-app behaviour;
+  Context7 confirms this is the known case that needs WireGuard/transparent/local
+  modes).
+- **User-CA install:** Android 14 refuses CA install via file intent ("install CA
+  in Settings"); installed via Settings → Encryption & credentials as a **user CA**.
+  Modern/hardened apps distrust user CAs, so this alone would not decrypt the app.
+- **WireGuard mode** (`mitmdump --mode wireguard`, tun0 up on the phone): routing
+  came up but traffic failed end-to-end ("error de red" on the phone, empty proxy
+  log — a mitmproxy-WG DNS/forwarding issue that needs more setup), and the
+  user-CA/pinning wall still sits behind it.
+
+**Conclusion:** standard MITM of this SecNeo app **without root** hits compounding
+walls (proxy bypass → WireGuard plumbing → user-CA distrust → likely pinning). This
+confirms the crux risk. To proceed would need root (system-CA + iptables transparent
+redirect) or app instrumentation (Frida SSL-unpin) — both blocked (unrooted phone +
+SecNeo). Cleanup after the attempt: revert phone `http_proxy`, re-enable mobile
+data, remove the installed mitmproxy user CA, delete the WireGuard tunnel.
+
 ## Success Criteria
 
 - **SC-001**: Either the cloud field/step that grants privilege is identified and
