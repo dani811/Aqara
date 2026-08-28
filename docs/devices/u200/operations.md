@@ -440,3 +440,22 @@ app, re-read) or the app's decoder. `U200Client.read(opcode)` and `aqara read
 answer an on-demand read (they are push-only). This same shape should unlock the
 other catalogued reads (status, settings) — send `command + body + trailer` behind
 the `0x01` prefix, not the bare opcode.
+
+## Write/SET opcodes (byte-confirmed 2026-08-28, app-driving + btsnoop)
+
+Reverse-engineered by driving the official app (autonomous adb/uiautomator + a Zigbee
+Fingerbot to pass the keypad gate) to change a setting while the phone's BT HCI snoop
+was on, then keystream-decoding the captured write. Both confirmed against the read value.
+
+| Setting | READ | WRITE (SET) frame | Values |
+| --- | --- | --- | --- |
+| Voice volume | `0xc3` | `02 04 <level>` (op `0x02`, kind `0x04`) | `01`=Alto, `02`=Medio, `03`=Bajo |
+| Alarm volume | `0x84` | `83 02 <val> 07` (op `0x83`, kind `0x02`) | `00`=Silencio, `0x10`=Normal |
+| Turn assist | `0xe9` | `e8 <0/1> 68 …` (op `0xe8`) | `00`=off, `01`=on |
+
+Method (repeatable for every setting): app → open the setting (keypad gate: close the
+popup, tap a keypad key / fire the fingerbot, re-enter fast) → select a value → the app
+writes the SET frame on ff61 → `adb bugreport` → extract `FS/data/misc/bluetooth/logs/
+btsnoop_hci.log` → `scratchpad/app_keystream.py` decodes it (static-nonce keystream reuse).
+This yields BOTH the enum byte-mapping and the SET opcode, so the library can WRITE
+(control), not just read. Actuation `0x74` stays out of scope by default.
