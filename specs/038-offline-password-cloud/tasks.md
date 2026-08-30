@@ -21,7 +21,7 @@ pendientes, US2 = histórico, US3 = verificación en vivo).
 
 ## Phase 1: Setup
 
-- [ ] T001 Leer `aqara_ble/kdf.py` completo (ya hecho durante research.md,
+- [X] T001 Leer `aqara_ble/kdf.py` completo (ya hecho durante research.md,
   reconfirmar antes de tocar) para no romper `_post_json`'s call sites
   existentes al generalizarlo.
 
@@ -34,7 +34,7 @@ historias necesitan.
 
 **⚠️ CRITICAL**: nada de US1/US2 puede implementarse antes de esto.
 
-- [ ] T002 En `aqara_ble/kdf.py`, generalizar `_post_json` en un
+- [X] T002 En `aqara_ble/kdf.py`, generalizar `_post_json` en un
   `_request_json(method, url, payload, auth_headers=None, timeout=10,
   signer=None, path_rel=None, encrypt_appkey=None)` interno: mismo cuerpo
   actual, pero `urlrequest.Request(url, data=data, headers=...,
@@ -42,17 +42,17 @@ historias necesitan.
   vacío (no serializar `{}` como cuerpo en un GET). `_post_json` pasa a ser
   `def _post_json(...): return _request_json("POST", ...)` — ninguna
   llamada existente cambia de comportamiento.
-- [ ] T003 [P] En `aqara_ble/kdf.py`, extender el log de depuración
+- [X] T003 [P] En `aqara_ble/kdf.py`, extender el log de depuración
   `U200_DEBUG` (hoy solo imprime la respuesta) para que `_request_json`
   también imprima, ANTES de enviar, `f"[U200] {method} {url}"` y las
   cabeceras no sensibles (todo excepto `Sign`/`Token`, que se imprimen como
   `<redacted>`) — esto es la base de FR-007/US3, pero se hace aquí porque
   vive en el mismo helper que T002.
-- [ ] T004 [P] En `aqara_ble/kdf.py`, añadir las constantes
+- [X] T004 [P] En `aqara_ble/kdf.py`, añadir las constantes
   `_PATH_OFFLINE_PASSWORD = "/dev/bluetooth/lock/passwd"` y
   `_PATH_OFFLINE_PASSWORD_LOG = "/dev/bluetooth/lock/password/log/query"`
   junto a las demás `_PATH_*`.
-- [ ] T005 [P] En `aqara_ble/kdf.py`, añadir las dataclasses
+- [X] T005 [P] En `aqara_ble/kdf.py`, añadir las dataclasses
   `OfflinePasswordBatch` (`codes: tuple[str, ...]`, `window_start_ms: int`,
   `window_end_ms: int`) y `OfflinePasswordLogEntry` (`create_time_ms: int`,
   `start_time_ms: int`, `end_time_ms: int`, `device_id: str`), `frozen=True`,
@@ -76,27 +76,27 @@ de transporte BLE se importa/llama en el camino.
 
 ### Tests for User Story 1
 
-- [ ] T006 [P] [US1] En `tests/test_kdf.py`, test
+- [X] T006 [P] [US1] En `tests/test_kdf.py`, test
   `test_fetch_offline_passwords_parses_the_real_response`: monkeypatchea
   `kdf._request_json` para devolver
   `{"result":{"passwd":["651399","637408"]},"code":0,"requestId":"...",
   "message":"Success","msgDetails":"Success"}` (JSON real de
   `docs/devices/u200/operations.md`) y comprueba
   `batch.codes == ("651399", "637408")`.
-- [ ] T007 [P] [US1] En `tests/test_kdf.py`, test
+- [X] T007 [P] [US1] En `tests/test_kdf.py`, test
   `test_fetch_offline_passwords_calls_the_get_endpoint`: monkeypatchea
   `kdf._request_json` para capturar sus argumentos y comprueba que se llamó
   con `method="GET"` y `url` terminando en `_PATH_OFFLINE_PASSWORD`
   (`{base_url}/dev/bluetooth/lock/passwd`), sin cuerpo (`payload={}`).
-- [ ] T008 [P] [US1] En `tests/test_kdf.py`, test
+- [X] T008 [P] [US1] En `tests/test_kdf.py`, test
   `test_fetch_offline_passwords_window_is_a_10_minute_grid`: con `time.time`
   fijado (monkeypatch), comprueba `window_start_ms`/`window_end_ms` son
   múltiplos exactos de 600000 y `window_end_ms - window_start_ms == 600000`.
-- [ ] T009 [P] [US1] En `tests/test_kdf.py`, test
+- [X] T009 [P] [US1] En `tests/test_kdf.py`, test
   `test_fetch_offline_passwords_empty_list_is_not_an_error`: respuesta
   `{"result":{"passwd":[]},"code":0,...}` → `batch.codes == ()`, sin
   excepción.
-- [ ] T010 [P] [US1] En `tests/test_kdf.py`, test
+- [X] T010 [P] [US1] En `tests/test_kdf.py`, test
   `test_fetch_offline_passwords_propagates_cloud_service_error`: respuesta
   `{"code":108,"message":"...",...}` → `pytest.raises(CloudServiceError)`
   (reutiliza `_unwrap_aqara_result`, ya probado en otro sitio — este test
@@ -104,7 +104,7 @@ de transporte BLE se importa/llama en el camino.
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] En `aqara_ble/kdf.py`, implementar
+- [X] T011 [US1] En `aqara_ble/kdf.py`, implementar
   `fetch_offline_passwords(device_id, auth_headers, base_url, signer=None)
   -> OfflinePasswordBatch`: llama `_request_json("GET",
   f"{base_url}{_PATH_OFFLINE_PASSWORD}", {}, auth_headers, signer=signer,
@@ -118,7 +118,7 @@ de transporte BLE se importa/llama en el camino.
   `OfflinePasswordBatch`. `device_id` no se usa todavía en la URL/cabeceras
   hasta T023 (US3) confirme dónde va — documentarlo con un comentario
   `# TODO(US3): confirmar si did va en query/cabecera` en vez de adivinar.
-- [ ] T012 [US1] En `aqara_ble/__init__.py`, exportar
+- [X] T012 [US1] En `aqara_ble/__init__.py`, exportar
   `fetch_offline_passwords` y `OfflinePasswordBatch`.
 
 **Checkpoint**: US1 funciona y está probada de forma independiente — MVP
@@ -138,27 +138,27 @@ correctos, sin depender de que US1 se haya llamado antes.
 
 ### Tests for User Story 2
 
-- [ ] T013 [P] [US2] En `tests/test_kdf.py`, test
+- [X] T013 [P] [US2] En `tests/test_kdf.py`, test
   `test_fetch_offline_password_log_parses_the_real_response`: monkeypatchea
   `kdf._request_json` para devolver
   `{"result":[{"createTime":"1788123833807","startTime":"1788123600000",
   "endTime":"1788124200000","did":"matt.73cb7865154223b90e81d000"}],
   "code":0,...}` (JSON real capturado) y comprueba los 4 campos de la
   entrada devuelta.
-- [ ] T014 [P] [US2] En `tests/test_kdf.py`, test
+- [X] T014 [P] [US2] En `tests/test_kdf.py`, test
   `test_fetch_offline_password_log_builds_the_query_string`: comprueba que
   la URL pasada a `_request_json` incluye
   `did=<device_id>&startTime=<start_time_ms>&endTime=<end_time_ms>` (estos
   tres SÍ están confirmados en query string por la captura de esta sesión,
   a diferencia de US1 — ver contracts/cloud-offline-password.md).
-- [ ] T015 [P] [US2] En `tests/test_kdf.py`, test
+- [X] T015 [P] [US2] En `tests/test_kdf.py`, test
   `test_fetch_offline_password_log_drops_incomplete_entries`: una entrada
   del array de respuesta sin `createTime` se descarta sin lanzar excepción
   y sin afectar a las demás entradas válidas.
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] En `aqara_ble/kdf.py`, implementar
+- [X] T016 [US2] En `aqara_ble/kdf.py`, implementar
   `fetch_offline_password_log(device_id, start_time_ms, end_time_ms,
   auth_headers, base_url, signer=None) -> tuple[OfflinePasswordLogEntry,
   ...]`: construye la query string con `urllib.parse.urlencode`, llama
@@ -169,7 +169,7 @@ correctos, sin depender de que US1 se haya llamado antes.
   directamente en vez de asumir el desenvuelto genérico), construye una
   `OfflinePasswordLogEntry` por elemento completo y descarta los
   incompletos.
-- [ ] T017 [US2] En `aqara_ble/__init__.py`, exportar
+- [X] T017 [US2] En `aqara_ble/__init__.py`, exportar
   `fetch_offline_password_log` y `OfflinePasswordLogEntry`.
 
 **Checkpoint**: US1 y US2 funcionan de forma independiente entre sí.
@@ -208,16 +208,22 @@ hardware real, o corregida y vuelta a confirmar.
 
 ## Phase 6: Polish
 
-- [ ] T020 [P] Ejecutar `pytest -q` completo (no solo `test_kdf.py`) y
+- [X] T020 [P] Ejecutar `pytest -q` completo (no solo `test_kdf.py`) y
   confirmar que sigue en el mismo estado que antes de esta feature (255/258
   o mejor — los 3 fallos preexistentes documentados esta sesión no son de
   esta feature).
-- [ ] T021 [P] Actualizar `docs/devices/u200/operations.md` (sección
+- [X] T021 [P] Actualizar `docs/devices/u200/operations.md` (sección
   "2026-08-30 (resolved)") con un enlace a las funciones nuevas
   (`fetch_offline_passwords`/`fetch_offline_password_log`) y el resultado de
-  T018/T019.
+  T018/T019. Hecho: documentadas las dos funciones; el resultado de T018/T019
+  queda pendiente de anotar cuando se ejecute esa verificación con hardware.
 - [ ] T022 Actualizar `CHANGELOG.md` con la nueva funcionalidad (feature
-  038) siguiendo el formato ya usado por las entradas anteriores.
+  038). **Diferido a propósito**: en este proyecto el CHANGELOG se actualiza
+  en el commit de bump de versión (p. ej. "chore: bump aqara-ble to 1.8.0"),
+  no en el PR de cada feature — ver el propio historial de CHANGELOG.md, sin
+  ninguna entrada `[Unreleased]`. Añadir aquí una entrada con un número de
+  versión inventado se adelantaría a una decisión del mantenedor. Queda para
+  el próximo pase de preparación de release.
 
 ---
 

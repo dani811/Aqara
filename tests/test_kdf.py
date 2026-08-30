@@ -430,3 +430,157 @@ def test_login_surfaces_the_810_rejection(monkeypatch: pytest.MonkeyPatch) -> No
     message = str(excinfo.value)
     assert "810" in message
     assert "/user/guard-code/login" in message
+
+
+# ---------------------------------------------------------------------------
+# Offline password ("Contraseña sin conexión") — feature 038
+#
+# Response fixtures below are the REAL JSON captured live 2026-08-30 (see
+# docs/devices/u200/operations.md, "2026-08-30 (resolved)"), reproduced here
+# as-is so a regression in parsing this exact shape is caught.
+# ---------------------------------------------------------------------------
+
+OFFLINE_PASSWORD_RESPONSE: dict[str, Any] = {
+    "result": {"passwd": ["651399", "637408"]},
+    "code": 0,
+    "requestId": "6e162a10df7e455c8a09f95e42326000.65.17881247433120661",
+    "message": "Success",
+    "msgDetails": "Success",
+}
+
+OFFLINE_PASSWORD_LOG_RESPONSE: dict[str, Any] = {
+    "result": [
+        {
+            "createTime": "1788123833807",
+            "startTime": "1788123600000",
+            "endTime": "1788124200000",
+            "did": "matt.73cb7865154223b90e81d000",
+        }
+    ],
+    "code": 0,
+    "requestId": "6e162a10df7e455c8a09f95e42326000.68.17881247317827579",
+    "message": "Success",
+    "msgDetails": "Success",
+}
+
+
+def _capture_request_json(
+    monkeypatch: pytest.MonkeyPatch, response: dict[str, Any]
+) -> dict[str, Any]:
+    """Replace kdf._request_json and record exactly what was asked of it."""
+
+    seen: dict[str, Any] = {}
+
+    def _fake_request(
+        method: str,
+        url: str,
+        payload: Any,
+        auth_headers: Any = None,
+        timeout: float = 10,
+        signer: Any = None,
+        path_rel: str | None = None,
+        encrypt_appkey: str | None = None,
+    ) -> dict[str, Any]:
+        seen["method"] = method
+        seen["url"] = url
+        seen["payload"] = payload
+        return response
+
+    monkeypatch.setattr(kdf, "_request_json", _fake_request)
+    return seen
+
+
+def test_fetch_offline_passwords_parses_the_real_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _capture_request_json(monkeypatch, OFFLINE_PASSWORD_RESPONSE)
+    batch = kdf.fetch_offline_passwords("matt.fake", None, "https://example.test")
+    assert batch.codes == ("651399", "637408")
+
+
+def test_fetch_offline_passwords_calls_the_get_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen = _capture_request_json(monkeypatch, OFFLINE_PASSWORD_RESPONSE)
+    kdf.fetch_offline_passwords("matt.fake", None, "https://example.test")
+    assert seen["method"] == "GET"
+    assert seen["url"] == "https://example.test" + kdf._PATH_OFFLINE_PASSWORD
+    assert not seen["payload"]  # no body on a GET
+
+
+def test_fetch_offline_passwords_window_is_a_10_minute_grid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _capture_request_json(monkeypatch, OFFLINE_PASSWORD_RESPONSE)
+    # 2026-08-30 23:19:03.474 local, mid-window — same instant as one of the
+    # real samples that produced OFFLINE_PASSWORD_RESPONSE.
+    fixed_now_ms = 1788124743474
+    batch = kdf.fetch_offline_passwords(
+        "matt.fake", None, "https://example.test", _now_ms=lambda: fixed_now_ms
+    )
+    assert batch.window_start_ms % 600_000 == 0
+    assert batch.window_end_ms - batch.window_start_ms == 600_000
+    assert batch.window_start_ms == 1788124200000  # confirmed real startTime
+    assert batch.window_end_ms == 1788124800000  # confirmed real endTime
+
+
+def test_fetch_offline_passwords_empty_list_is_not_an_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _capture_request_json(monkeypatch, {**OFFLINE_PASSWORD_RESPONSE, "result": {"passwd": []}})
+    batch = kdf.fetch_offline_passwords("matt.fake", None, "https://example.test")
+    assert batch.codes == ()
+
+
+def test_fetch_offline_passwords_propagates_cloud_service_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _capture_request_json(
+        monkeypatch, {"code": 108, "message": "token expired", "msgDetails": None}
+    )
+    with pytest.raises(kdf.CloudServiceError) as excinfo:
+        kdf.fetch_offline_passwords("matt.fake", None, "https://example.test")
+    assert excinfo.value.is_code(108)
+
+
+def test_fetch_offline_password_log_parses_the_real_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _capture_request_json(monkeypatch, OFFLINE_PASSWORD_LOG_RESPONSE)
+    entries = kdf.fetch_offline_password_log(
+        "matt.73cb7865154223b90e81d000", 1788123600000, 1788124200000, None, "https://example.test"
+    )
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry.create_time_ms == 1788123833807
+    assert entry.start_time_ms == 1788123600000
+    assert entry.end_time_ms == 1788124200000
+    assert entry.device_id == "matt.73cb7865154223b90e81d000"
+
+
+def test_fetch_offline_password_log_builds_the_query_string(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen = _capture_request_json(monkeypatch, OFFLINE_PASSWORD_LOG_RESPONSE)
+    kdf.fetch_offline_password_log("matt.abc", 111, 222, None, "https://example.test")
+    assert seen["method"] == "GET"
+    assert seen["url"].startswith("https://example.test" + kdf._PATH_OFFLINE_PASSWORD_LOG + "?")
+    assert "did=matt.abc" in seen["url"]
+    assert "startTime=111" in seen["url"]
+    assert "endTime=222" in seen["url"]
+
+
+def test_fetch_offline_password_log_drops_incomplete_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = {
+        "result": [
+            {"createTime": "1", "startTime": "2", "endTime": "3", "did": "matt.a"},
+            {"createTime": "1", "startTime": "2"},  # missing endTime/did
+        ],
+        "code": 0,
+    }
+    _capture_request_json(monkeypatch, response)
+    entries = kdf.fetch_offline_password_log("matt.a", 1, 2, None, "https://example.test")
+    assert len(entries) == 1
+    assert entries[0].device_id == "matt.a"

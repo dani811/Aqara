@@ -52,9 +52,11 @@ import sys
 import time
 import uuid
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any, cast
 from urllib import error as urlerror
 from urllib import request as urlrequest
+from urllib.parse import urlencode
 
 # Pure cloud crypto lives in cloud_crypto (feature 027): HKDF, the native Sign,
 # the RSA login-password envelope and the x-aes128gcm body codec. This module is
@@ -93,6 +95,16 @@ _PATH_PUBLICKEY = "/dev/bluetooth/login/assure/publickey"
 _PATH_VERIFY = "/dev/bluetooth/login/assure/verify"
 #: Account device inventory (POST, empty body) → result: {data: [...], totalCount}.
 _PATH_DEVICE_LIST = "/dev/query"
+#: Offline-password batch fetch (feature 038, GET, no body) → result:
+#: {passwd: ["<6-digit code>", ...]} — the current 10-minute window's pending
+#: codes. Confirmed live 2026-08-30 (docs/devices/u200/operations.md); the
+#: exact query/header shape for `did` is NOT yet confirmed byte-for-byte
+#: (see specs/038-offline-password-cloud User Story 3) — this path is.
+_PATH_OFFLINE_PASSWORD = "/dev/bluetooth/lock/passwd"
+#: Offline-password issuance history (feature 038, GET) → result: [{createTime,
+#: startTime, endTime, did}, ...]. did/startTime/endTime confirmed in the
+#: query string by the same 2026-08-30 capture.
+_PATH_OFFLINE_PASSWORD_LOG = "/dev/bluetooth/lock/password/log/query"
 _REQUIRED_AUTH_HEADERS = (
     "Lang",
     "Cuty",
@@ -286,7 +298,14 @@ def _tls_context() -> ssl.SSLContext:
     return context
 
 
-def _post_json(
+#: Headers never printed in the clear by the U200_DEBUG request log — they're
+#: the request's actual authentication material, not useful for wire-shape
+#: comparison against a live capture (Constitution I: no secret ever logged).
+_SENSITIVE_DEBUG_HEADERS = frozenset({"sign", "token"})
+
+
+def _request_json(
+    method: str,
     url: str,
     payload: Mapping[str, Any],
     auth_headers: Mapping[str, str] | None = None,
@@ -295,12 +314,21 @@ def _post_json(
     path_rel: str | None = None,
     encrypt_appkey: str | None = None,
 ) -> dict[str, Any]:
+    """Issue a signed Aqara cloud request. Shared by ``_post_json`` (POST,
+    the historical name) and the GET-based endpoints (feature 038) — nothing
+    below this line depends on the HTTP method except which verb goes on the
+    wire and whether a body is sent at all.
+    """
     # Serialize compactly (no spaces) so the body matches the exact bytes the
     # Aqara app signs/sends; okhttp+gson emit `{"deviceId":"..."}` with no space.
-    body_str = json.dumps(payload, separators=(",", ":"))
+    body_str = json.dumps(payload, separators=(",", ":")) if payload else ""
     # El Sign SIEMPRE se calcula sobre el PLAINTEXT (body_str), aunque el cuerpo
     # viaje cifrado. Con cifrado x-aes128gcm se envia el BLOB pero se firma el claro.
-    if encrypt_appkey is not None:
+    # A GET with no payload has no body at all (not even "{}") — this matches
+    # the real app, which never sends a body on its GET-verb endpoints either.
+    if not body_str:
+        data = None
+    elif encrypt_appkey is not None:
         data = aes128gcm_encrypt_body(body_str.encode("utf-8"), encrypt_appkey).encode("utf-8")
     else:
         data = body_str.encode("utf-8")
@@ -310,14 +338,15 @@ def _post_json(
         prepared = dict(signer(path_rel, body_str))
     else:
         if auth_headers is None:
-            raise RuntimeError("_post_json necesita auth_headers o signer")
+            raise RuntimeError("_request_json necesita auth_headers o signer")
         prepared = prepare_runtime_cloud_auth_headers(auth_headers)
     request_headers = {
         key: value for key, value in prepared.items() if key.lower() not in _TRANSPORT_HEADERS
     }
     request_headers.setdefault("Accept", "application/json")
-    request_headers.setdefault("Content-Type", "application/json; charset=utf-8")
-    if encrypt_appkey is not None:
+    if data is not None:
+        request_headers.setdefault("Content-Type", "application/json; charset=utf-8")
+    if encrypt_appkey is not None and data is not None:
         # Cuerpo cifrado: negociamos el mismo codec para peticion y respuesta.
         request_headers["Content-Encoding"] = "x-aes128gcm"
         request_headers["Accept-Encoding"] = "x-aes128gcm"
@@ -325,7 +354,14 @@ def _post_json(
         # Ask for an unencoded body so response.read() is plain UTF-8 JSON; we
         # still gunzip defensively below in case the server ignores this.
         request_headers["Accept-Encoding"] = "identity"
-    request = urlrequest.Request(url, data=data, headers=request_headers, method="POST")
+    request = urlrequest.Request(url, data=data, headers=request_headers, method=method)
+    if os.environ.get("U200_DEBUG"):
+        redacted = {
+            k: ("<redacted>" if k.lower() in _SENSITIVE_DEBUG_HEADERS else v)
+            for k, v in request_headers.items()
+        }
+        print(f"[U200] {method} {url}", file=sys.stderr)
+        print(f"[U200]   headers: {redacted}", file=sys.stderr)
     try:
         ssl_context = _tls_context()
         with urlrequest.urlopen(request, timeout=timeout, context=ssl_context) as response:
@@ -374,6 +410,30 @@ def _post_json(
         return cast("dict[str, Any]", result)
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"{url} returned invalid JSON: {body[:200]}") from exc
+
+
+def _post_json(
+    url: str,
+    payload: Mapping[str, Any],
+    auth_headers: Mapping[str, str] | None = None,
+    timeout: float = 10,
+    signer: Signer | None = None,
+    path_rel: str | None = None,
+    encrypt_appkey: str | None = None,
+) -> dict[str, Any]:
+    """POST variant of :func:`_request_json` — kept as the historical name
+    every existing call site already uses; behavior is unchanged.
+    """
+    return _request_json(
+        "POST",
+        url,
+        payload,
+        auth_headers,
+        timeout,
+        signer,
+        path_rel,
+        encrypt_appkey,
+    )
 
 
 class CloudServiceError(RuntimeError):
@@ -630,6 +690,166 @@ def get_session_material(
     """
     url = base_url or REGION_BASE_URLS.get(region, REGION_BASE_URLS["EU"])
     return cloud_verify(device_id, device_public_key_hex, auth_headers, url, signer=signer)
+
+
+# ---------------------------------------------------------------------------
+# Offline password ("Contraseña sin conexión") — feature 038
+# ---------------------------------------------------------------------------
+#
+# Three sessions of RE assumed this 6-digit one-time code was computed
+# LOCALLY on the phone from a per-lock seed (the patent's Hash(seed, period)
+# design). It is not: the Aqara cloud pre-generates a batch of codes per
+# 10-minute UTC-epoch-aligned window and the app just fetches them over
+# HTTPS — confirmed live 2026-08-30 (the server's response contained the
+# exact codes the app displayed). See docs/devices/u200/operations.md,
+# section "2026-08-30 (resolved)", for the full evidence trail.
+#
+# No new crypto: compute_sign()/make_local_signer() already sign
+# appid/nonce/time/token/body/appkey — never the HTTP method or path — so an
+# empty-body GET signs with the exact same call already used for POSTs.
+
+
+@dataclass(frozen=True)
+class OfflinePasswordBatch:
+    """The offline-password codes pending for the *current* 10-minute window.
+
+    ``codes`` comes straight from the server's ``result.passwd`` — never
+    convert to ``int`` (a code may have a leading zero). ``window_start_ms``/
+    ``window_end_ms`` are NOT part of that response: they are derived
+    locally as ``floor(now_ms / 600_000) * 600_000`` / ``+ 600_000``, a rule
+    confirmed by evidence (three independent samples' server-reported
+    startTime/endTime were exact multiples of 600000ms) but not literally
+    present in this particular response — see research.md Decision 4.
+    """
+
+    codes: tuple[str, ...]
+    window_start_ms: int
+    window_end_ms: int
+
+
+@dataclass(frozen=True)
+class OfflinePasswordLogEntry:
+    """One already-issued offline-password record, exactly as the server's
+    history endpoint reports it — no derived fields here.
+    """
+
+    create_time_ms: int
+    start_time_ms: int
+    end_time_ms: int
+    device_id: str
+
+
+def fetch_offline_passwords(
+    device_id: str,
+    auth_headers: Mapping[str, str] | None,
+    base_url: str,
+    signer: Signer | None = None,
+    *,
+    _now_ms: Any = None,
+) -> OfflinePasswordBatch:
+    """Fetch the offline-password codes pending for the lock's current
+    10-minute window (``GET /dev/bluetooth/lock/passwd``) — no BLE
+    connection to the lock at any point, this is a pure cloud call.
+
+    Args:
+        device_id: Lock DID (``matt.<...>``). Not yet confirmed whether the
+            real request needs this on the wire for this specific endpoint
+            (unlike ``fetch_offline_password_log``, where did/startTime/
+            endTime are confirmed in the query string) — see
+            specs/038-offline-password-cloud User Story 3. Accepted here so
+            the public signature does not need to change once that's
+            confirmed.
+        auth_headers: Same auth headers as the rest of this module's cloud
+            calls.
+        base_url: Region base URL, e.g. ``REGION_BASE_URLS["EU"]``.
+        signer: Optional local signer (see ``make_local_signer``).
+        _now_ms: Test-only hook to inject the current time; defaults to the
+            real wall clock.
+
+    Raises:
+        CloudServiceError: the cloud answered with a non-zero ``code``.
+    """
+    # TODO(US3): confirm live whether `device_id` needs to ride on the wire
+    # for this endpoint (header/query) — the capture that found this path had
+    # a mid-connection HPACK dynamic-table desync on exactly that detail.
+    del device_id
+    data = _request_json(
+        "GET",
+        f"{base_url}{_PATH_OFFLINE_PASSWORD}",
+        {},
+        auth_headers,
+        signer=signer,
+        path_rel=_PATH_OFFLINE_PASSWORD,
+    )
+    result = _unwrap_aqara_result(data, endpoint=_PATH_OFFLINE_PASSWORD)
+    codes_raw = result.get("passwd", []) if isinstance(result, dict) else []
+    codes = tuple(str(c) for c in codes_raw) if isinstance(codes_raw, list) else ()
+
+    now_ms = _now_ms() if _now_ms is not None else int(time.time() * 1000)
+    window_start_ms = (now_ms // 600_000) * 600_000
+    window_end_ms = window_start_ms + 600_000
+    return OfflinePasswordBatch(
+        codes=codes,
+        window_start_ms=window_start_ms,
+        window_end_ms=window_end_ms,
+    )
+
+
+def fetch_offline_password_log(
+    device_id: str,
+    start_time_ms: int,
+    end_time_ms: int,
+    auth_headers: Mapping[str, str] | None,
+    base_url: str,
+    signer: Signer | None = None,
+) -> tuple[OfflinePasswordLogEntry, ...]:
+    """Fetch the offline-password issuance history for ``device_id`` between
+    ``start_time_ms`` and ``end_time_ms`` (``GET .../password/log/query``) —
+    no BLE connection, pure cloud call.
+
+    Entries missing any of the four required fields are dropped silently
+    (never invented) rather than failing the whole call.
+
+    Raises:
+        CloudServiceError: the cloud answered with a non-zero ``code``.
+    """
+    query = urlencode({"did": device_id, "startTime": start_time_ms, "endTime": end_time_ms})
+    data = _request_json(
+        "GET",
+        f"{base_url}{_PATH_OFFLINE_PASSWORD_LOG}?{query}",
+        {},
+        auth_headers,
+        signer=signer,
+        path_rel=_PATH_OFFLINE_PASSWORD_LOG,
+    )
+    # _unwrap_aqara_result only special-cases a dict `result`; this
+    # endpoint's `result` is a list, so read it directly from the raw payload.
+    code = data.get("code")
+    if "code" in data and code not in (0, "0", None):
+        raise CloudServiceError(
+            code=code,
+            message=data.get("message"),
+            endpoint=_PATH_OFFLINE_PASSWORD_LOG,
+            details=data.get("msgDetails"),
+        )
+    raw_entries = data.get("result", [])
+    entries: list[OfflinePasswordLogEntry] = []
+    if isinstance(raw_entries, list):
+        for item in raw_entries:
+            if not isinstance(item, dict):
+                continue
+            try:
+                entries.append(
+                    OfflinePasswordLogEntry(
+                        create_time_ms=int(item["createTime"]),
+                        start_time_ms=int(item["startTime"]),
+                        end_time_ms=int(item["endTime"]),
+                        device_id=str(item["did"]),
+                    )
+                )
+            except (KeyError, TypeError, ValueError):
+                continue  # incomplete/malformed entry — drop, don't invent
+    return tuple(entries)
 
 
 # The auth header map is intentionally caller-provided.  Use

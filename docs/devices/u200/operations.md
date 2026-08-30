@@ -809,6 +809,21 @@ pointer-reused connections on the client preface — same two bugs
 before). Both scripts + this method are straightforward to redo from this
 write-up if the scratchpad is gone again next session.
 
+**2026-08-31 — implemented** (`specs/038-offline-password-cloud`):
+`aqara_ble.fetch_offline_passwords(device_id, auth_headers, base_url,
+signer=None) -> OfflinePasswordBatch` (the current 10-minute window's
+pending codes, `codes` from the server + `window_start_ms`/`window_end_ms`
+derived locally from the confirmed grid) and
+`aqara_ble.fetch_offline_password_log(device_id, start_time_ms, end_time_ms,
+auth_headers, base_url, signer=None) -> tuple[OfflinePasswordLogEntry, ...]`
+(the issuance history, all fields server-provided). Both reuse the existing
+`make_local_signer`/`_request_json` machinery unchanged — no new crypto.
+**Not yet confirmed byte-for-byte against hardware**: the exact wire shape
+of the `passwd`-fetch request (whether `device_id` needs to ride on it at
+all, and how) — `specs/038-offline-password-cloud/tasks.md` T018/T019 track
+that live-capture verification pass explicitly as the one remaining step,
+requiring the maintainer's phone/account.
+
 ### "Contraseña programada remota" — blocked on a Matter Controller prerequisite
 
 This UI entry (distinct from "Contraseña sin conexión") requires an Aqara Matter
