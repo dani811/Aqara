@@ -68,14 +68,17 @@ Each operation is sent encrypted:
 
 ## Full catalog (from the app enum)
 
-214 operations across 8 families; `confirmed` = verified live, `catalogued` = from
+234 operations across 8 families; `confirmed` = verified live, `catalogued` = from
 the enum with exact `data` unverified. The two confirmed above are `0x74`
 (BLE_OPEN_LOCK) and `0x2f` (HEART_PCK); everything else is `catalogued`. The
 SYSTEM family's naming was cross-checked 2026-08-30 against the app's own
 decompiled source (not just an extracted enum) — see
 [u200-app-opcode-table.md](u200-app-opcode-table.md) for the full 151-entry
 table, the diff against this catalog, and the one unresolved naming
-contradiction (`0x18`).
+contradiction (`0x18`). 20 SYSTEM opcodes present in that source table but
+missing from this catalog were added as `catalogued` (name-only, no frame)
+on 2026-08-30: `0x1d/0x1e/0x34/0x35/0x36/0x37/0x3c/0x41/0x42/0x44/0x45/0x46/
+0x47/0x63/0x64/0xdc/0xdd/0xea/0xef/0xf1`.
 
 ### SYSTEM (`0x01`, reply `0x81`)
 
@@ -101,6 +104,8 @@ contradiction (`0x18`).
 | `0x1a` | LOCK_SETTING | catalogued |
 | `0x1b` | REPORT_UN_LOCK | catalogued |
 | `0x1c` | DEL_TEMP_PWD | catalogued |
+| `0x1d` | REPORT_LOCK_LOG | catalogued |
+| `0x1e` | REPORT_DOOR_LOG | catalogued |
 | `0x20` | FINGER_COUNT | catalogued |
 | `0x21` | HARDWARE_VERSION | catalogued |
 | `0x22` | BIND_NFC_FLAG | catalogued |
@@ -119,10 +124,21 @@ contradiction (`0x18`).
 | `0x2f` | HEART_PCK | ✅ confirmed |
 | `0x30` | HANDLE_DIRECTION | catalogued |
 | `0x33` | TIMEZONE_TIME | catalogued |
+| `0x34` | SET_SAFE | catalogued |
+| `0x35` | READ_SAFE | catalogued |
+| `0x36` | READ_HOME_AWAY | catalogued |
+| `0x37` | REPORT_HOME_AWAY | catalogued |
 | `0x39` | READ_AWAY_HOME_STATUS | catalogued |
 | `0x3a` | HOMEKIT_BIND | catalogued |
 | `0x3b` | HOMEKIT_BROADCAST | catalogued |
+| `0x3c` | SET_ELECTORNIC_LOCK | catalogued |
 | `0x3f` | CONFIG_ZIGBEE | catalogued |
+| `0x41` | SET_INFRARD_VISION | catalogued |
+| `0x42` | READ_INFRARD_VISION | catalogued |
+| `0x44` | SET_STAY_DETECTION | catalogued |
+| `0x45` | READ_STAY_DETECTION | catalogued |
+| `0x46` | SET_VIDIO_RECORD_TIME | catalogued |
+| `0x47` | READ_VIDIO_RECORD_TIME | catalogued |
 | `0x48` | SET_DOOR_BELL | catalogued |
 | `0x49` | READ_DOOR_BELL | catalogued |
 | `0x4a` | ZIGBEE_STATUS | catalogued |
@@ -135,6 +151,8 @@ contradiction (`0x18`).
 | `0x5c` | SET_OTA_SWITCH_TIME | catalogued |
 | `0x5d` | GET_OTA_SWITCH_TIME | catalogued |
 | `0x61` | REPORT_ZIGBEE_STATUS | catalogued |
+| `0x63` | PICTURE_QUALITY_PARAMS | catalogued |
+| `0x64` | READ_PICTURE_QUALITY_PARAMS | catalogued |
 | `0x68` | READ_LOCK_LANGUAGE | catalogued |
 | `0x70` | SET_DOOR_BELL_PUSH_SWITCH | catalogued |
 | `0x71` | READ_DOOR_BELL_PUSH_SWITCH | catalogued |
@@ -187,6 +205,8 @@ contradiction (`0x18`).
 | `0xd9` | UWB_CONFIG | catalogued |
 | `0xda` | UWB_REPORT | catalogued |
 | `0xdb` | UWB_DISTANCE | catalogued |
+| `0xdc` | GET_REPORT_NORMALLY_OPEN_MODE_STATE | catalogued |
+| `0xdd` | GET_FRONT_CONNECTION | catalogued |
 | `0xde` | GET_BATTERY_INFO | catalogued |
 | `0xdf` | SET_DOOR_LOCK_TYPE | catalogued |
 | `0xe0` | GET_DOOR_LOCK_TYPE | catalogued |
@@ -198,10 +218,13 @@ contradiction (`0x18`).
 | `0xe6` | REPORT_DOOR_LOCK_STATUS | catalogued |
 | `0xe8` | SET_ASSIST_TURN | catalogued |
 | `0xe9` | GET_ASSIST_TURN | catalogued |
+| `0xea` | SET_AND_REPORT_VOICE_OTA_STATUS | catalogued |
 | `0xeb` | SET_SILENT_CONTROL_LOCK | confirmed (partial, see §Full catalog byte notes) |
 | `0xec` | GET_SILENT_CONTROL_LOCK | catalogued |
 | `0xed` | SET_LOCK_WORK_MODE | catalogued |
 | `0xee` | GET_LOCK_WORK_MODE | catalogued |
+| `0xef` | SET_PASSAGE_DATA | catalogued |
+| `0xf1` | GET_PASSAGE_DATA | catalogued |
 | `0xf2` | SET_GOOGLE_VOICE_UNLOCK_STATE | catalogued |
 | `0xf3` | GET_GOOGLE_VOICE_UNLOCK_STATE | catalogued |
 | `0xf4` | REPORT_E2E_SECRET_KEY | catalogued |

@@ -193,7 +193,8 @@ either.
 are cosmetic (our catalog fixed the app's own typos, e.g. `REPORT_TEM_PWD`
 → `REPORT_TEMP_PWD`, `FACE_INDENTIFY` → `FACE_IDENTIFY`) or naming-style
 differences (`QUERY_*` vs `GET_*`) that don't change meaning. A genuine,
-not-yet-catalogued set: `0x1d/0x1e/0x34/0x35/0x36/0x37/0x3c/0x41/0x42/0x44/
-0x45/0x46/0x47/0x63/0x64/0xdc/0xdd/0xea/0xef/0xf1` have no entry at all in
-our SYSTEM family list — worth adding as `catalogued` (name-only, no frame)
-in a future pass; none of them block anything currently in progress.
+not-yet-catalogued set of 20 — `0x1d/0x1e/0x34/0x35/0x36/0x37/0x3c/0x41/0x42/
+0x44/0x45/0x46/0x47/0x63/0x64/0xdc/0xdd/0xea/0xef/0xf1` — had no entry at
+all in our SYSTEM family list; **added 2026-08-30** as `catalogued`
+(name-only, no frame, never sent) — see `operations_catalog.py` and the
+matching rows in [operations.md](operations.md#full-catalog-from-the-app-enum).
