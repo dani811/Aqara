@@ -746,6 +746,69 @@ crash risk; (b) reversing the relevant slice of SecNeo's VMP dispatch table
 statically — the approach the predecessor Codex project attempted and did
 not solve for anything in this app.
 
+#### 2026-08-30 (resolved) — the code is CLOUD-generated, not local at all
+
+The "no BLE write = 100% local generation" assumption that anchored this
+whole investigation across three sessions was **wrong** — it only ruled out
+a BLE round-trip, never an HTTPS one. Captured the full HTTPS traffic (native
+`SSL_read`/`SSL_write` hex dump + offline HTTP/2+HPACK reassembly — new
+tools, see below) around three "Crear" taps and found the server handing
+back the exact codes the app displayed:
+
+```json
+{"result":{"passwd":["956511","651399","637408","341308","234231","058138","818500","112802"]},"code":0,...}
+```
+
+`651399` and `637408` are byte-for-byte the two codes shown in the app UI at
+that moment (see the samples table above) — the server pre-generates a
+**batch of 8 codes per 10-minute window** and the app just pops one off the
+list per "Crear" tap. A companion "history" call
+(`GET /app/v1.0/lumi/dev/bluetooth/lock/passwd`'s sibling
+`.../password/log/query?did=...`) confirmed the exact window math:
+`startTime`/`endTime` in the responses are precisely `floor(now_ms /
+600000) * 600000` boundaries (verified: `1788123600000`/`1788124200000`/
+`1788124800000` are all exact multiples of `600000`) — a plain UTC-epoch-
+aligned **10-minute grid**, not an hour as the patent language suggested.
+The app's "Caduca" display is `endTime + 10 min` (one extra grid period of
+UI-shown grace), which is what made the earlier raw samples' expiry deltas
+look inconsistent — they weren't, the raw grid is exactly 10 minutes, only
+the *displayed* grace window varies with how far into its own 10-min window
+a code was created.
+
+**The exact endpoint, recovered from the raw HPACK bytes despite a
+mid-connection dynamic-table desync** (the `:path` pseudo-header is sent as
+a literal string against a static-table name, so it survives even when
+later indexed references in the same block don't resolve):
+
+```text
+GET /app/v1.0/lumi/dev/bluetooth/lock/passwd
+```
+
+— same `rpc-ger.aqara.com` host, same header/signing scheme already
+implemented in `aqara_ble`'s cloud client and already proven byte-identical
+to the app's own requests (specs/037-cloud-session-mitm). **No new crypto
+to reverse** — this is "add one more authenticated GET call," not "find the
+seed." The `did` and a couple of signing fields (timestamp, nonce/sign) ride
+either as headers our client already knows how to build, or as HPACK
+indexed references to values established earlier in the same connection
+(not recovered byte-for-byte from this capture, but not new territory
+either). Implementing this as an `aqara_ble` feature (a
+`fetch_offline_passwords()`/`create_offline_password()` cloud-client method)
+is real feature work, not further RE — should go through the normal
+`/speckit-specify` flow rather than being hand-rolled.
+
+**New reusable tools** (not yet promoted from scratchpad, worth keeping for
+the next cloud-capture need): `sslfull.js` (native `SSL_read`/`SSL_write`
+hook dumping **full hex**, tagged by the `SSL*` pointer and direction — a
+cleaner rebuild of the `scratchpad/sslfull.js` mentioned in
+[reverse-engineering.md](../../reverse-engineering.md) §2, which didn't
+survive between sessions) and `decode_h2.py` (offline HTTP/2 frame parser +
+HPACK decoder, dedups the double-hooked `SSL_write` and splits
+pointer-reused connections on the client preface — same two bugs
+`specs/037-cloud-session-mitm/spec.md` already documented fixing once
+before). Both scripts + this method are straightforward to redo from this
+write-up if the scratchpad is gone again next session.
+
 ### "Contraseña programada remota" — blocked on a Matter Controller prerequisite
 
 This UI entry (distinct from "Contraseña sin conexión") requires an Aqara Matter
