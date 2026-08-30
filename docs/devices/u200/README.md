@@ -21,7 +21,7 @@ specific to the U200; the reusable mechanisms it builds on live in
 | Document | Covers |
 | --- | --- |
 | [gatt-map.md](gatt-map.md) | Concrete service/characteristic UUIDs and ATT handles. |
-| [operations.md](operations.md) | The full opcode catalog (214 ops, 8 families) with status. |
+| [operations.md](operations.md) | The full opcode catalog (234 ops, 8 families) with status. |
 | [settings-protocol.md](settings-protocol.md) | The read frame shape (`<opcode> <kind> <body>`) and ff61 write-prefix rules. |
 | [u200-app-opcode-table.md](u200-app-opcode-table.md) | The SYSTEM-family opcode table mined straight from the app's decompiled source, cross-checked against `operations.md`. |
 | [validation.md](validation.md) | End-to-end run to confirm the whole pipeline works. |
