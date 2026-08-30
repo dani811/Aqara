@@ -43,14 +43,27 @@ def test_family_reply_byte_is_main_or_0x80() -> None:
     assert CommandFamily.LONG.reply == 0xBF
 
 
-def test_confirmed_set_is_exactly_open_close_keepalive() -> None:
+def test_confirmed_set_is_exactly_open_close_keepalive_and_2026_08_28_sweep() -> None:
     confirmed = {
         (e.family.main_cmd, e.sub_cmd)
         for e in OPERATIONS_CATALOG
         if e.status is OperationStatus.CONFIRMED
     }
-    # Open and close share sub 0x74; keepalive is 0x2f. Both under SYSTEM.
-    assert confirmed == {(0x01, 0x74), (0x01, 0x2F)}
+    # Open and close share sub 0x74; keepalive is 0x2f. 0xAF/0xD5 were added by
+    # the 2026-08-28 settings sweep (see build_set_verify_fail_time /
+    # build_set_auto_lockup_delay_time); 0x03 (LANGUAGE) and 0xC4
+    # (SET_AUXILIARY_LOCKING) by the 2026-08-29 sweep. All under SYSTEM.
+    assert confirmed == {
+        (0x01, 0x74),
+        (0x01, 0x2F),
+        (0x01, 0x02),
+        (0x01, 0x18),
+        (0x01, 0x83),
+        (0x01, 0xAF),
+        (0x01, 0xD5),
+        (0x01, 0x03),
+        (0x01, 0xC4),
+    }
 
 
 def test_confirmed_entries_carry_a_frame_catalogued_do_not() -> None:
@@ -67,7 +80,10 @@ def test_find_operation_hits_and_misses() -> None:
     assert open_op.status is OperationStatus.CONFIRMED
     volume = find_operation(0x01, 0x02)
     assert volume is not None and volume.name == "VOLUME"
-    assert volume.status is OperationStatus.CATALOGUED
+    assert volume.status is OperationStatus.CONFIRMED
+    still_catalogued = find_operation(0x01, 0x04)
+    assert still_catalogued is not None and still_catalogued.name == "DOUBLE_VERIFY"
+    assert still_catalogued.status is OperationStatus.CATALOGUED
     # Unknown pair returns None, never raises.
     assert find_operation(0x01, 0x99) is None
 

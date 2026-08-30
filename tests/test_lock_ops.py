@@ -15,6 +15,16 @@ import pytest
 from aqara_ble import (
     LockOperation,
     build_lock_operation_write,
+    build_set_alarm_volume,
+    build_set_alert_delay,
+    build_set_alert_volume,
+    build_set_auto_lock_on_close_delay_time,
+    build_set_auto_lockup_delay_time,
+    build_set_auxiliary_locking_on_close_enabled,
+    build_set_auxiliary_locking_relock_enabled,
+    build_set_language_deutsch,
+    build_set_language_english,
+    build_set_verify_fail_time,
     normalize_lock_operation,
     send_lock_operation,
 )
@@ -109,3 +119,143 @@ def test_send_dispatches_exact_payload() -> None:
     write = send_lock_operation(transport, "unlock")
     assert transport.sent == [bytes.fromhex("74010100b917")]
     assert write.operation is LockOperation.UNLOCK
+
+
+# SET_VERIFY_FAIL_TIME / SET_AUTO_LOCKUP_DELAY_TIME (2026-08-28 settings sweep).
+# Payloads are the exact captured frames from setting "Bloqueo de verificación"
+# to 2 minutes and the auto-lock re-lock delay to 10s (see
+# docs/devices/u200/operations.md).
+
+
+def test_build_set_verify_fail_time_reproduces_capture() -> None:
+    write = build_set_verify_fail_time(120)
+    assert write.payload == bytes.fromhex("af780000000c4a")
+    assert write.write_prefix == 0x01
+
+
+def test_build_set_verify_fail_time_rejects_out_of_range() -> None:
+    with pytest.raises(ValueError):
+        build_set_verify_fail_time(-1)
+    with pytest.raises(ValueError):
+        build_set_verify_fail_time(0x1_0000_0000)
+
+
+def test_build_set_auto_lockup_delay_time_reproduces_capture() -> None:
+    write = build_set_auto_lockup_delay_time(10)
+    assert write.payload == bytes.fromhex("d50a000efe")
+    assert write.write_prefix == 0x01
+
+
+def test_build_set_auto_lockup_delay_time_rejects_out_of_range() -> None:
+    with pytest.raises(ValueError):
+        build_set_auto_lockup_delay_time(-1)
+    with pytest.raises(ValueError):
+        build_set_auto_lockup_delay_time(0x1_0000)
+
+
+def test_build_set_auto_lock_on_close_delay_time_reproduces_capture() -> None:
+    write = build_set_auto_lock_on_close_delay_time(5)
+    assert write.payload == bytes.fromhex("d50500 01fe".replace(" ", ""))
+    assert write.write_prefix == 0x01
+
+
+def test_build_set_auto_lock_on_close_delay_time_rejects_out_of_range() -> None:
+    with pytest.raises(ValueError):
+        build_set_auto_lock_on_close_delay_time(-1)
+    with pytest.raises(ValueError):
+        build_set_auto_lock_on_close_delay_time(0x1_0000)
+
+
+# LANGUAGE (2026-08-29 sweep). Only English's byte (0x83) is confirmed — see
+# docs/devices/u200/operations.md for why there's no generic build_set_language.
+
+
+def test_build_set_language_english_reproduces_capture() -> None:
+    write = build_set_language_english()
+    assert write.payload == bytes.fromhex("03028307")
+    assert write.write_prefix == 0x01
+
+
+def test_build_set_language_deutsch_reproduces_capture() -> None:
+    write = build_set_language_deutsch()
+    assert write.payload == bytes.fromhex("0309830c")
+    assert write.write_prefix == 0x01
+
+
+# SET_AUXILIARY_LOCKING (2026-08-29 sweep). One opcode, two isolated ENABLE
+# captures (kind byte disambiguates the toggle) — see
+# docs/devices/u200/operations.md for why there's no disable builder yet.
+
+
+def test_build_set_auxiliary_locking_on_close_enabled_reproduces_capture() -> None:
+    write = build_set_auxiliary_locking_on_close_enabled()
+    assert write.payload == bytes.fromhex("c402000698")
+    assert write.write_prefix == 0x01
+
+
+def test_build_set_auxiliary_locking_relock_enabled_reproduces_capture() -> None:
+    write = build_set_auxiliary_locking_relock_enabled()
+    assert write.payload == bytes.fromhex("c404000098")
+    assert write.write_prefix == 0x01
+
+
+# SET_DOORLOCK_ALARM_VOLUME (2026-08-28 sweep). Frame `83 02 <val> 07`.
+
+
+def test_build_set_alarm_volume_normal_reproduces_capture() -> None:
+    write = build_set_alarm_volume(silent=False)
+    assert write.payload == bytes.fromhex("83021007")
+    assert write.write_prefix == 0x01
+
+
+def test_build_set_alarm_volume_silencio_reproduces_capture() -> None:
+    write = build_set_alarm_volume(silent=True)
+    assert write.payload == bytes.fromhex("83020007")
+    assert write.write_prefix == 0x01
+
+
+# SET_ALERT_VOLUME (2026-08-30 sweep). Frame `02 02 <val> 04 <val+0x0c>`.
+
+
+def test_build_set_alert_volume_bajo_reproduces_capture() -> None:
+    write = build_set_alert_volume(3)
+    assert write.payload == bytes.fromhex("020203040f")
+    assert write.write_prefix == 0x01
+
+
+def test_build_set_alert_volume_medio_reproduces_capture() -> None:
+    write = build_set_alert_volume(2)
+    assert write.payload == bytes.fromhex("020202040e")
+    assert write.write_prefix == 0x01
+
+
+def test_build_set_alert_volume_rejects_invalid_level() -> None:
+    with pytest.raises(ValueError):
+        build_set_alert_volume(0)
+    with pytest.raises(ValueError):
+        build_set_alert_volume(5)
+
+
+# SET_ALERT_DELAY (2026-08-30 sweep). Frame
+# `18 05 0a 03 <seconds> 88 <seconds XOR 0xdf>`.
+
+
+@pytest.mark.parametrize(
+    ("seconds", "frame"),
+    [
+        (60, "18050a033c88e3"),
+        (10, "18050a030a88d5"),
+        (5, "18050a030588da"),
+    ],
+)
+def test_build_set_alert_delay_reproduces_captures(seconds: int, frame: str) -> None:
+    write = build_set_alert_delay(seconds)
+    assert write.payload == bytes.fromhex(frame)
+    assert write.write_prefix == 0x01
+
+
+def test_build_set_alert_delay_rejects_out_of_range() -> None:
+    with pytest.raises(ValueError):
+        build_set_alert_delay(-1)
+    with pytest.raises(ValueError):
+        build_set_alert_delay(256)
