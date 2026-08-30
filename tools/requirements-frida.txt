@@ -6,7 +6,10 @@
 # that pulled 17.x against a 16.x gadget) fails the handshake with
 # "connection closed" / "Failed to spawn". See tools/frida-setup.md.
 #
-# Install (host):  pipx install --force "frida-tools==17.17.0"
-#              or:  pip install -r tools/requirements-frida.txt
-frida-tools==17.17.0
-frida==17.17.0
+# Install (host):  pip install -r tools/requirements-frida.txt
+#              or:  pipx runpip frida-tools install --force-reinstall "frida==16.7.19"
+#                   (frida-tools itself has its own, lower version numbering on
+#                   PyPI — e.g. 14.10.4 — it's the CORE `frida` package's version
+#                   that must match the gadget; `frida --version` on the CLI
+#                   reports the core version, not the frida-tools package version)
+frida==16.7.19
