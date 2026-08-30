@@ -703,16 +703,89 @@ it, verified end-to-end: `hci_smoke.py` + a real scan finding the lock):
 **Conclusion (real negative, not yet a dead end):** none of the four
 opcodes/shapes tried elicit a response. This doesn't mean "Registro" is
 unreadable — only that the generic read shape that works for most SYSTEM
-opcodes doesn't apply here as tried. Untried: whether `SYNC_LOG`/`SYNC_DOOR_LOCK_LOG`
-need a genuinely different body (not the generic `0x00` placeholder — a log
-read plausibly needs a page/index/timestamp parameter, unlike a status read)
-or a session state the app establishes first (e.g. reading `0x14`
-`LOCAL_SETTING`/`0x1A` `LOCK_SETTING` before the log opcode, matching how the
-app's own screens often read one thing before another). Next step if picked
-up again: the same write-opcode RE loop used for everything else (3d) —
-open "Registro" in the official app with HCI snoop running, since the app
-demonstrably CAN read it and that capture would show the real body shape
-instead of guessing it.
+opcodes doesn't apply here as tried, confirmed below by static analysis of
+the app's own source.
+
+#### 2026-08-31 (later) — static analysis of the app's own source finds the real recipe
+
+Went back into the U200 plugin's decompiled JS (`u200_decompiled.js`,
+818K lines, already extracted this session) looking for the real
+`SYNC_LOG`/`SYNC_DOOR_LOCK_LOG` call sites — this time searching for the
+actual **request-builder function**, not just the opcode-name constants
+table (which was already cross-checked earlier). Found it, and it explains
+everything the live probe couldn't:
+
+- **The app's own `BleCmd.ts` constants module was found in full** (not
+  just referenced) — an object literal with `SendMainCmd`
+  (`{SYSTEM:'01', USER:'02', LOG:'03', ALARM:'04', DEVICELOG:'05', XXQ:'06',
+  SYSTEM_EXT:'07', LONG:'3f'}`), `ReplyMainCmd`, and every per-family
+  `*SubCmd` table (`SystemSubCmd`, `UserSubCmd`, `LogSubCmd`,
+  `DeviceLogSubCmd`, `AlarmSubCmd`, `XXQSubCmd`) — **byte-for-byte identical**
+  to `operations_catalog.py`. This is a stronger confirmation than the
+  earlier opcode-table cross-check (that came from a name→hex dictionary
+  found once; this is the literal constants file the running app code
+  imports and uses on every single BLE call), and closes out any remaining
+  doubt about the family-grouping/naming for SYSTEM/USER/LOG/ALARM/DEVICELOG.
+- **Found the real `SYNC_LOG` request builder** (a generator function whose
+  console.log calls are in Chinese: `'请求日志列表开始索引 : '` = "Request log
+  list start index: ", `'  结束索引 : '` = "end index: "). It builds:
+  ```
+  { mainCmd: SendMainCmd.LOG,       // '03'
+    subCmd:  LogSubCmd.SYNC_LOG,    // '13'
+    data:    reverseByteHex(toHex(startIndex), 4) + reverseByteHex(toHex(endIndex), 4) }
+  ```
+  i.e. **the body is TWO little-endian uint16 indices (4 bytes total)** —
+  not the generic single `0x00` placeholder byte our `build_read_query_write`
+  sends for status-style reads. This alone explains the earlier
+  `responded=False`: even if `0x13` were safe to send, our placeholder body
+  was the wrong shape for this opcode's actual parameters.
+  It's then passed as a **structured object** (`{mainCmd, subCmd, data}`) to
+  a `sendBlePackageAsync()` function, not as pre-assembled wire bytes — so
+  whether `mainCmd` becomes a literal byte on the wire, or is purely an
+  app-side dispatch/response-routing key (with the *reply's* mainCmd, e.g.
+  `0x83` for LOG vs `0x82` for USER, being what actually disambiguates a
+  colliding request subCmd like `0x13`), is **still not resolved** from
+  static analysis alone — only a live capture of the real wire bytes would
+  settle it.
+- **Found the reply parser too**: `parseLogData(hexString, outArray)` walks
+  the response as a sequence of TLV-shaped records — for each: a 2-byte
+  field (purpose unconfirmed, likely an index/id), then a 1-byte length,
+  then that many bytes of payload — repeated until the buffer is exhausted.
+  This is the shape to decode against once a real response is captured.
+- **`SYNC_DOOR_LOCK_LOG` (0x12) — the one opcode we tried live with no
+  collision risk — has ZERO call sites anywhere in this compiled bundle.**
+  Not "hard to find": grepped for every property-access form and it simply
+  isn't invoked. This independently explains that specific live negative
+  without needing a wrong-frame-shape theory — this U200 firmware/app
+  version's "Registro" screen most likely never uses it at all, `SYNC_LOG`
+  alone covers the feature, and `SYNC_DOOR_LOCK_LOG` may be vestigial from a
+  shared codebase with another lock model.
+- A red herring worth recording so it isn't re-chased: a class named
+  **`LockRecordHandler`** looked like the obvious candidate by name, but its
+  actual content (`notifyLockBusy`/`notifyLockFree`/`ifLockBusy`/
+  `startBusyTimeout`) is a **BLE-session busy-mutex coordinator** — "Lock" as
+  in *mutex*, "Record" isn't even the right word for what it does. Nothing
+  to do with the access-log feature.
+- Separately, a **`LogTransferHandler`** class (Chinese debug strings:
+  receives chunked data, ACKs on a `0xfe` terminator byte, can zip and
+  **upload** the result via `uploadFileWithFileName`) exists for
+  `DEVICELOG.SYNC_DEVICE_LOG` (mainCmd `0x05`) — this looks like a
+  diagnostic-log-to-support-team uploader, a **different feature** from the
+  user-facing "Registro" list, not yet fully disentangled from it with
+  certainty.
+
+**Why `0x13` still wasn't sent tonight, now with a concrete recipe in hand:**
+the collision with `USER.ADD_VISITOR_PWD` is unresolved by any of the above —
+if anything, finding that the app treats `mainCmd`/`subCmd`/`data` as
+separate structured fields (not a single pre-built byte string) makes it
+*more* plausible that something besides the raw subCmd byte disambiguates
+them, which is a reason for hope, not a green light to guess it's safe live.
+The path to actually testing this stays the one already documented: capture
+the app's own real request live (write-opcode RE loop, 3d) — a live capture
+would show, in one shot, whether the wire bytes for a real
+`SYNC_LOG` request differ visibly from `ADD_VISITOR_PWD`'s, settling the
+ambiguity with evidence instead of a guess. Until then, `0x13` is not sent
+by this library.
 
 ### "Modo de cierre nocturno" — confirmed NOT a BLE/HTTPS lock command
 
