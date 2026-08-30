@@ -693,6 +693,59 @@ against its own computation. The remaining blocker to implement this in the
 library is unchanged: obtaining the per-lock seed (app internal storage via
 root/gadget, or a cloud endpoint — not yet found).
 
+#### 2026-08-30 — live native hooking: the algorithm is NOT a standard crypto call
+
+Attempted to catch the computation live via **native-only** Frida hooks (no
+`Java.perform`, no ART touch — the same technique proven safe under SecNeo
+earlier for file I/O) on the two plausible crypto surfaces, across three
+separate "Crear" taps (real generated samples below):
+
+1. **All of BoringSSL's HMAC/digest primitives** (`HMAC_Init_ex/_Update/_Final`,
+   `EVP_DigestUpdate`/`EVP_DigestFinal_ex`) in the conscrypt module's
+   `libcrypto.so` — the only implementation path `javax.crypto.Mac` /
+   `MessageDigest` can take on Android. The hook demonstrably works (it
+   captured real concurrent traffic: TLS-handshake Finished-message HMACs,
+   OkHttp cache-key digests) but **zero calls correlate with the "Crear" tap**.
+2. **`liblumidevsdk.so`'s own bare AES/crypto C functions**
+   (`getEncryptedData`, `getDecryptedData`, `aesEncryptedContent`,
+   `aesDecryptedContent` — the unwrapped internals behind the `Java_com_lumi_
+   lumidevsdk_LumiDevSDK_*` JNI exports used elsewhere in the app for signing/
+   encryption) — hooked live during a full "Crear" tap: **zero calls**.
+3. **`libaqara_ed.so`** (another small app-private native lib, name suggestive
+   of "encrypt/decrypt") — confirmed via `Process.enumerateModules()` that it
+   is **never loaded** for this feature at all.
+
+**Conclusion:** the 6-digit code is not produced by any standard Android
+crypto primitive, nor by the app's own native AES/signing library. It is
+almost certainly a hand-rolled arithmetic/lookup computation executed
+directly inside the app's SecNeo-VM-protected Kotlin bytecode — consistent
+with the `PeriodPasswordViewModel`/`CreatePeriodPasswordEntity` classes
+found by static `strings` analysis of `libdatajar.so` (the "dexdata0"
+catalog) earlier this session, which never resolved to any crypto helper
+call site. This downgrades "find the HMAC key" to "recover an unknown
+formula with no observable crypto boundary to intercept" — genuinely harder
+to shortcut than the patent's `Hash(seed, period)` framing suggested.
+
+Two real ground-truth samples were captured for future analysis (own
+lock/account):
+
+| Code | Created (local) | Expires (shown in app) |
+| --- | --- | --- |
+| `837246` | 2026-08-30 ~23:00:00 | 2026/08/30 23:10 |
+| `079972` | 2026-08-30 23:03:53 | 2026/08/30 23:20 |
+
+The expiry deltas (**+10 min** vs. **+~17 min**) are NOT a fixed
+post-creation offset — the window likely snaps to a fixed-size grid (10 min?)
+with some rounding/margin rule, itself unconfirmed with only two samples.
+
+**Remaining paths, neither attempted this session:** (a) a Java/ART-level
+hook directly on the Kotlin method that builds the code — SecNeo is known to
+crash within minutes of any `Java.perform`-based hook, so this would need to
+be a single surgical hook fired right before one "Crear" tap, accepting the
+crash risk; (b) reversing the relevant slice of SecNeo's VMP dispatch table
+statically — the approach the predecessor Codex project attempted and did
+not solve for anything in this app.
+
 ### "Contraseña programada remota" — blocked on a Matter Controller prerequisite
 
 This UI entry (distinct from "Contraseña sin conexión") requires an Aqara Matter
