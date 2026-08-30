@@ -303,6 +303,104 @@ _CONFIRMED: dict[tuple[int, int], tuple[bytes, str]] = {
         "close seq1 = 740001003912 (see build_operate_frame)",
     ),
     (0x01, 0x2F): (bytes.fromhex("2f012f"), "keepalive / HEART_PCK sample"),
+    (0x01, 0x02): (
+        bytes.fromhex("020203040f"),
+        "SET_ALERT_VOLUME: `02 <kind=0x02> <val> 04 <trailer=val+0x0c>` — the "
+        "4-level 'Volumen de alerta' enum (01=Alto/02=Medio/03=Bajo/04=Silencio, "
+        "same enum as lock_state.decode_alert_volume's 0x1a blob read). Captured "
+        "live 2026-08-30 in TWO isolated writes on the same connection: Bajo "
+        "(val=0x03, trailer=0x0f, this sample) and Medio (val=0x02, "
+        "trailer=0x0e) — the trailer=val+0x0c relationship holds across both. "
+        "Distinct from voice volume (same opcode 0x02, but kind=0x04) and from "
+        "alarm volume (0x83). See build_set_alert_volume.",
+    ),
+    (0x01, 0x18): (
+        bytes.fromhex("18050a033c88e3"),
+        "SET_ALERT_DELAY: `18 05 0a 03 <seconds:1> 88 <trailer=seconds XOR "
+        "0xdf>` — 'Retraso de alerta' (open-door alarm delay). Captured live "
+        "2026-08-30 across THREE isolated writes on the same connection: 60s "
+        "(this sample, 0x3c), 10s (18050a030a88d5) and 5s (18050a030588da) — "
+        "the trailer XOR seconds == 0xdf relationship holds across all three. "
+        "NOTE: the app-enum name for sub-cmd 0x18 is 'UN_LOCK' (see _RAW) — "
+        "CONFIRMED straight from the app's own decompiled source (not just an "
+        "enum list) 2026-08-30, see docs/devices/u200/u200-app-opcode-table.md — "
+        "yet the live wire behavior is unambiguously the alert-delay setter "
+        "(seconds value matches the UI selection every time, 3/3 isolated "
+        "samples, consistent XOR-0xdf trailer), not an unlock command (0x74 "
+        "is the real, separately-confirmed actuator, also present correctly "
+        "in that same app source table). This is a genuine, unresolved "
+        "contradiction between the app's own naming and live capture, not a "
+        "stale/guessed label — see the opcode-table doc for the full writeup. "
+        "Trust the live capture for what 0x18 actually does. See "
+        "build_set_alert_delay.",
+    ),
+    (0x01, 0x83): (
+        bytes.fromhex("83021007"),
+        "SET_DOORLOCK_ALARM_VOLUME: `83 02 <val> 07`. Captured live 2026-08-28 "
+        "changing 'Volumen de alarma': val=0x10 (16)=Normal, val=0x00=Silencio "
+        "(only two levels exist for this setting — distinct from the 4-level "
+        "alert_volume enum in the 0x1a LOCK_SETTING blob, decoded read-only by "
+        "decode_alert_volume). Both values confirmed via change-and-reread. "
+        "See build_set_alarm_volume.",
+    ),
+    (0x01, 0x03): (
+        bytes.fromhex("03028307"),
+        "LANGUAGE (SET): `03 <code:1> 83 <trailer=code XOR 0x05>`. CORRECTED "
+        "2026-08-30: the language code is byte1, not byte2 as first assumed "
+        "on 2026-08-29 (that note mistook the constant marker byte 0x83 for "
+        "the code, having only one sample). Re-derived with TWO independent "
+        "isolated live captures, each confirmed by an explicit ACK "
+        "(`03 00 00 06 00`): English code=0x02 (this sample, `03028307`) and "
+        "Deutsch code=0x09 (`0309830c`, also confirmed via a fresh cold "
+        "relaunch showing the real device state changed). Español's code is "
+        "UNKNOWN: code=0x0a was tried (extrapolating the sequential pattern) "
+        "and got no ACK + no state change on a fresh relaunch — confirmed "
+        "wrong. The official app's 'Otros idiomas' picker sub-sheet is itself "
+        "BUGGED on this build — tapping ANY row in it (Español, Français, "
+        "tested 5+ times, ruling out the keypad gate each time) closes the "
+        "sheet as a no-op without ever showing a selection checkmark, so the "
+        "app UI cannot currently be used to re-derive it either. Do not guess "
+        "further language codes on a real lock.",
+    ),
+    (0x01, 0xAF): (
+        bytes.fromhex("af780000000c4a"),
+        "SET_VERIFY_FAIL_TIME: seconds LE (bytes 1-4) + 2B trailer. Captured live "
+        "2026-08-28 setting 'Bloqueo de verificación' to 2 minutes: 0x78=120s. "
+        "Trailer reused verbatim by build_set_verify_fail_time (unconfirmed "
+        "whether the lock validates it for SET frames — READ trailers are known "
+        "to be ignored, see build_read_query_write).",
+    ),
+    (0x01, 0xD5): (
+        bytes.fromhex("d50a000efe"),
+        "SET_AUTO_LOCKUP_DELAY_TIME: seconds LE (bytes 1-2) + 2B trailer. "
+        "Captured live 2026-08-28 setting auto-lock's re-lock delay to 10s: "
+        "0x0a=10s, trailer=0e fe. **This single opcode covers BOTH auto-lock "
+        "timers** — confirmed 2026-08-29 with an isolated capture changing "
+        "the OTHER timer ('Bloqueo automático al cerrar') to 5s: "
+        "`d505000 1fe` (trailer=01 fe). The first trailer byte disambiguates "
+        "which timer (0x0e=re-lock, 0x01=on-close); the last byte (0xfe) is "
+        "reused verbatim, same caveat as 0xAF above. There is NO separate "
+        "0xAD frame for the on-close timer — an earlier 13-byte 0xAD sample "
+        "(2026-08-28) was something else entirely, not isolated to any "
+        "single auto-lock action in two follow-up isolated captures that "
+        "toggled each sub-feature ON/OFF without 0xAD ever appearing. See "
+        "build_set_auto_lock_on_close_delay_time.",
+    ),
+    (0x01, 0xC4): (
+        bytes.fromhex("c402000698"),
+        "SET_AUXILIARY_LOCKING: `c4 <kind:1> <val:2> <trailer:1=0x98>` — ONE "
+        "opcode for BOTH auto-lock sub-toggles, disambiguated by kind. "
+        "Captured live 2026-08-29 in two ISOLATED captures (nothing else "
+        "changed per connection): enabling 'Bloqueo automático al cerrar' "
+        "gives kind=0x02, val=0x0006 (this sample); enabling 'Re-bloqueo de "
+        "seguridad' gives kind=0x04, val=0x0000 (see build_set_auxiliary_"
+        "locking_relock_enabled). `val`'s meaning past 'differs by toggle' is "
+        "unclear — no OFF-state frame was captured for comparison, so only "
+        "the two ON frames are exposed as builders. This also RULES OUT 0xad "
+        "as either simple toggle: it appeared in NEITHER isolated capture, so "
+        "it must be tied to actually changing a sub-timer's value, not the "
+        "toggle itself — still uncaptured.",
+    ),
 }
 
 
@@ -341,21 +439,49 @@ def operations_in_family(main_cmd: int) -> list[OperationEntry]:
 
 # Substrings that mark a mutating/actuating command — never sent by a read.
 _NON_READ_MARKERS = (
-    "SET_", "DEL_", "ADD_", "MODIFY_", "ABORT_", "QUIT_", "REMOVE_", "SYNC_",
-    "STOP_", "OTA", "APDU", "BIND", "REGISTER", "INSTALL", "UPGRADE",
-    "CALIBRATION", "OPEN_LOCK", "UN_LOCK", "CONFIG_", "ENABLE", "REPORT",
+    "SET_",
+    "DEL_",
+    "ADD_",
+    "MODIFY_",
+    "ABORT_",
+    "QUIT_",
+    "REMOVE_",
+    "SYNC_",
+    "STOP_",
+    "OTA",
+    "APDU",
+    "BIND",
+    "REGISTER",
+    "INSTALL",
+    "UPGRADE",
+    "CALIBRATION",
+    "OPEN_LOCK",
+    "UN_LOCK",
+    "CONFIG_",
+    "ENABLE",
+    "REPORT",
 )
 
 
 def _is_read_name(name: str) -> bool:
     if any(marker in name for marker in _NON_READ_MARKERS):
         return False
-    return name.startswith(("GET_", "QUERY_", "READ_")) or name.endswith(
-        ("_STATUS", "_INFO", "_VERSION", "_TIME")
-    ) or name in {
-        "SYSTEM_TIME", "DEVICE_MTU", "VOLUME", "LANGUAGE", "BATTERY",
-        "LOCK_SETTING", "LOCAL_SETTING", "HANDLE_DIRECTION", "TIMEZONE_TIME",
-    }
+    return (
+        name.startswith(("GET_", "QUERY_", "READ_"))
+        or name.endswith(("_STATUS", "_INFO", "_VERSION", "_TIME"))
+        or name
+        in {
+            "SYSTEM_TIME",
+            "DEVICE_MTU",
+            "VOLUME",
+            "LANGUAGE",
+            "BATTERY",
+            "LOCK_SETTING",
+            "LOCAL_SETTING",
+            "HANDLE_DIRECTION",
+            "TIMEZONE_TIME",
+        }
+    )
 
 
 def system_read_opcodes() -> dict[str, int]:

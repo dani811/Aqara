@@ -170,6 +170,280 @@ def build_read_query_write(sub_cmd: int, body: bytes = b"\x00") -> LockOperation
     )
 
 
+# SET-setting trailers (2026-08-28/29 sweeps). Captured live from the app
+# while changing "Bloqueo de verificación" (0xAF) and BOTH auto-lock timers
+# (0xD5) — see docs/devices/u200/operations.md. All frames are
+# `<opcode> <seconds:N LE> <2B trailer>`; the last trailer byte (0xfe) is
+# reused verbatim for the same reason READ_QUERY_TRAILER is: read trailers
+# are known-ignored by the lock, and no CRC-16 variant tried
+# (binascii.crc_hqx, the one this codebase already uses in protocol.valid_crc)
+# matches these bytes. The FIRST trailer byte, however, is NOT noise for
+# 0xD5 — it disambiguates which of the two auto-lock timers the frame targets
+# (0xD5 covers both; there is no separate 0xAD SET_AUTO_LOCK_TIME frame for
+# this — an earlier 13-byte 0xAD sample was something else entirely, see
+# operations.md): `0x0e` = "Re-bloqueo de seguridad" delay (confirmed 10s),
+# `0x01` = "Bloqueo automático al cerrar" delay (confirmed 5s). Unconfirmed
+# whether the lock validates either trailer byte for SET specifically.
+_VERIFY_FAIL_TIME_TRAILER = bytes.fromhex("0c4a")
+_AUTO_LOCKUP_RELOCK_TRAILER = bytes.fromhex("0efe")
+_AUTO_LOCKUP_ON_CLOSE_TRAILER = bytes.fromhex("01fe")
+
+
+def build_set_verify_fail_time(seconds: int) -> LockOperationWrite:
+    """SET_VERIFY_FAIL_TIME (0xAF): lockout duration after 10 failed keypad tries.
+
+    Frame: ``af <seconds:4 LE> <trailer:2>``. Captured live setting "Bloqueo de
+    verificación" to 2 minutes: ``af780000000c4a`` (0x78 = 120s). The app's own
+    picker only offers discrete values (no bloqueo, 1-5 min, 30 min) but nothing
+    in the captured frame suggests the lock only accepts those — pass any
+    seconds value.
+    """
+
+    if not 0 <= seconds <= 0xFFFFFFFF:
+        raise ValueError("seconds must fit in 4 bytes (0..4294967295)")
+    body = seconds.to_bytes(4, "little") + _VERIFY_FAIL_TIME_TRAILER
+    return LockOperationWrite(
+        operation=f"set:0xaf:{seconds}s",
+        payload=build_control_frame(0xAF, body),
+        write_prefix=0x01,
+    )
+
+
+def build_set_auto_lockup_delay_time(seconds: int) -> LockOperationWrite:
+    """SET_AUTO_LOCKUP_DELAY_TIME (0xD5): delay before the "Re-bloqueo de
+    seguridad" auto re-lock fires after a remote/automation/third-party unlock.
+
+    Frame: ``d5 <seconds:2 LE> 0e <trailer:1>``. Captured live setting it to
+    10s: ``d50a000efe``. See :func:`build_set_auto_lock_on_close_delay_time`
+    for the OTHER auto-lock timer — same opcode, different disambiguating byte.
+    """
+
+    if not 0 <= seconds <= 0xFFFF:
+        raise ValueError("seconds must fit in 2 bytes (0..65535)")
+    body = seconds.to_bytes(2, "little") + _AUTO_LOCKUP_RELOCK_TRAILER
+    return LockOperationWrite(
+        operation=f"set:0xd5:relock:{seconds}s",
+        payload=build_control_frame(0xD5, body),
+        write_prefix=0x01,
+    )
+
+
+def build_set_auto_lock_on_close_delay_time(seconds: int) -> LockOperationWrite:
+    """SET the "Bloqueo automático al cerrar" timer — how long after the door
+    is detected shut before the lock auto-locks.
+
+    Same opcode as :func:`build_set_auto_lockup_delay_time` (0xD5) — the two
+    auto-lock timers share it, disambiguated by the first trailer byte.
+    Frame: ``d5 <seconds:2 LE> 01 <trailer:1>``. Captured live setting it to
+    5s: ``d50500 01fe``. (There is no separate 0xAD opcode for this despite an
+    earlier 13-byte 0xAD sample suggesting one — see operations.md.)
+    """
+
+    if not 0 <= seconds <= 0xFFFF:
+        raise ValueError("seconds must fit in 2 bytes (0..65535)")
+    body = seconds.to_bytes(2, "little") + _AUTO_LOCKUP_ON_CLOSE_TRAILER
+    return LockOperationWrite(
+        operation=f"set:0xd5:on_close:{seconds}s",
+        payload=build_control_frame(0xD5, body),
+        write_prefix=0x01,
+    )
+
+
+# SET_DOORLOCK_ALARM_VOLUME (0x83, 2026-08-28 sweep). Frame `83 02 <val> 07`.
+# Only two levels exist in the app's UI for this setting (distinct from the
+# 4-level alert_volume enum decoded in lock_state.decode_alert_volume): Normal
+# and Silencio. Both bytes confirmed live via change-and-reread.
+ALARM_VOLUME_SILENCIO = 0x00
+ALARM_VOLUME_NORMAL = 0x10
+
+
+def build_set_alarm_volume(*, silent: bool) -> LockOperationWrite:
+    """SET the alarm/siren volume ("Volumen de alarma"): Normal or Silencio.
+
+    Frame: ``83 02 <val> 07``. ``val=0x00``=Silencio, ``val=0x10``=Normal —
+    both confirmed live (docs/devices/u200/operations.md).
+    """
+
+    val = ALARM_VOLUME_SILENCIO if silent else ALARM_VOLUME_NORMAL
+    body = bytes([0x02, val, 0x07])
+    return LockOperationWrite(
+        operation=f"set:0x83:{'silencio' if silent else 'normal'}",
+        payload=build_control_frame(0x83, body),
+        write_prefix=0x01,
+    )
+
+
+# SET_ALERT_VOLUME (0x02 kind=0x02, 2026-08-30 sweep). This is the 4-level
+# "Volumen de alerta" enum (distinct from both voice volume 0x02/kind=0x04 and
+# alarm volume 0x83) — same read-side enum as lock_state.decode_alert_volume
+# (01=Alto, 02=Medio, 03=Bajo, 04=Silencio). Frame: `02 02 <val> 04 <trailer>`
+# where trailer = val + 0x0c — confirmed additive via 2 isolated captures
+# (Bajo: 020203040f, Medio: 020202040e — 0x0f-0x03 == 0x0e-0x02 == 0x0c).
+ALERT_VOLUME_ALTO = 0x01
+ALERT_VOLUME_MEDIO = 0x02
+ALERT_VOLUME_BAJO = 0x03
+ALERT_VOLUME_SILENCIO = 0x04
+_ALERT_VOLUME_TRAILER_OFFSET = 0x0C
+_ALERT_VOLUME_NAMES = {
+    ALERT_VOLUME_ALTO: "alto",
+    ALERT_VOLUME_MEDIO: "medio",
+    ALERT_VOLUME_BAJO: "bajo",
+    ALERT_VOLUME_SILENCIO: "silencio",
+}
+
+
+def build_set_alert_volume(level: int) -> LockOperationWrite:
+    """SET the "Volumen de alerta" level (Alto/Medio/Bajo/Silencio).
+
+    Frame: ``02 02 <level> 04 <level + 0x0c>``. Only ``level`` in
+    ``{1, 2, 3, 4}`` is valid — matches the read-side enum in
+    :func:`aqara_ble.lock_state.decode_alert_volume`.
+    """
+
+    if level not in _ALERT_VOLUME_NAMES:
+        raise ValueError("level must be one of 1 (Alto), 2 (Medio), 3 (Bajo), 4 (Silencio)")
+    trailer = (level + _ALERT_VOLUME_TRAILER_OFFSET) & 0xFF
+    body = bytes([0x02, level, 0x04, trailer])
+    return LockOperationWrite(
+        operation=f"set:0x02:alert_volume:{_ALERT_VOLUME_NAMES[level]}",
+        payload=build_control_frame(0x02, body),
+        write_prefix=0x01,
+    )
+
+
+# SET_ALERT_DELAY (0x18, 2026-08-30 sweep). "Retraso de alerta" — how long the
+# door can stay open before the alarm sounds. Frame:
+# `18 05 0a 03 <seconds:1> 88 <trailer = seconds XOR 0xdf>`, confirmed via 3
+# isolated captures (60s: 18050a033c88e3, 10s: 18050a030a88d5,
+# 5s: 18050a030588da — trailer XOR seconds == 0xdf in all three). The app's UI
+# only offers a fixed preset list (3/5/10/15/30/60/180s) but the wire format
+# is a plain single byte, so any 0-255s value is accepted here.
+_ALERT_DELAY_PREFIX = bytes.fromhex("050a03")
+_ALERT_DELAY_TRAILER_PREFIX = 0x88
+_ALERT_DELAY_TRAILER_XOR = 0xDF
+
+
+def build_set_alert_delay(seconds: int) -> LockOperationWrite:
+    """SET the "Retraso de alerta" (open-door alarm delay), in seconds.
+
+    Frame: ``18 05 0a 03 <seconds> 88 <seconds XOR 0xdf>``.
+    """
+
+    if not 0 <= seconds <= 0xFF:
+        raise ValueError("seconds must fit in 1 byte (0..255)")
+    trailer = seconds ^ _ALERT_DELAY_TRAILER_XOR
+    body = _ALERT_DELAY_PREFIX + bytes([seconds, _ALERT_DELAY_TRAILER_PREFIX, trailer])
+    return LockOperationWrite(
+        operation=f"set:0x18:alert_delay:{seconds}s",
+        payload=build_control_frame(0x18, body),
+        write_prefix=0x01,
+    )
+
+
+# LANGUAGE. CORRECTED 2026-08-30 (previous byte-position note was wrong): the
+# frame is `03 <code:1> 83 <trailer=code XOR 0x05>` — the LANGUAGE CODE is
+# byte1, not byte2 as the 2026-08-29 note assumed. Byte2 (0x83) is a CONSTANT
+# marker, not "English's code" — that earlier conclusion was a misreading of
+# which byte varies (it only had one sample at the time). Re-derived live
+# 2026-08-30 with TWO independent isolated captures, each confirmed by an
+# explicit lock-side ACK (`03 00 00 06 00`) that was absent for an invalid
+# code tried for Español (see below):
+#   English: code=0x02 -> `03028307` (trailer 0x02^0x05=0x07) — matches the
+#   original 2026-08-29 capture too, now correctly reinterpreted.
+#   Deutsch: code=0x09 -> `0309830c` (trailer 0x09^0x05=0x0c), ACK'd, and a
+#   fresh cold relaunch confirmed the lock's real state changed to Deutsch.
+# Español's real code is UNKNOWN — code=0x0a was tried (guessed from the
+# XOR-0x05 pattern continuing sequentially) and got NO ack + no state change
+# (a fresh relaunch still showed Deutsch), so 0x0a is confirmed WRONG. Worse:
+# the official app's own "Selección de idioma > Otros idiomas > Español
+# (Descargado) > Confirmar" flow is BUGGED on this firmware/app version — it
+# reproducibly closes the picker sheet as a no-op the moment "Español" is
+# tapped (5/5 attempts, both via touch and after ruling out the keypad gate),
+# while the sibling flow for Français behaves the same way (also never shows
+# a checkmark) — so this isn't Español-specific, the whole "Otros idiomas"
+# sub-sheet's row-tap doesn't register a selection on this app build. Only
+# ENGLISH and DEUTSCH are exposed as builders. Do NOT guess Español's code
+# further on a real lock — re-attempt via a full BLE session using our own
+# client (bypassing the buggy app UI) if this is picked back up, or retry the
+# app flow on an app update.
+LANGUAGE_ENGLISH_CODE = 0x02
+LANGUAGE_DEUTSCH_CODE = 0x09
+_LANGUAGE_CONST_BYTE = 0x83
+_LANGUAGE_TRAILER_XOR = 0x05
+
+
+def build_set_language_english() -> LockOperationWrite:
+    """SET LANGUAGE to English — code 0x02, confirmed live with an ACK.
+
+    Frame: ``03 02 83 07``.
+    """
+
+    trailer = LANGUAGE_ENGLISH_CODE ^ _LANGUAGE_TRAILER_XOR
+    body = bytes([LANGUAGE_ENGLISH_CODE, _LANGUAGE_CONST_BYTE, trailer])
+    return LockOperationWrite(
+        operation="set:0x03:english",
+        payload=build_control_frame(0x03, body),
+        write_prefix=0x01,
+    )
+
+
+def build_set_language_deutsch() -> LockOperationWrite:
+    """SET LANGUAGE to Deutsch — code 0x09, confirmed live with an ACK and a
+    fresh cold-relaunch re-read.
+
+    Frame: ``03 09 83 0c``.
+    """
+
+    trailer = LANGUAGE_DEUTSCH_CODE ^ _LANGUAGE_TRAILER_XOR
+    body = bytes([LANGUAGE_DEUTSCH_CODE, _LANGUAGE_CONST_BYTE, trailer])
+    return LockOperationWrite(
+        operation="set:0x03:deutsch",
+        payload=build_control_frame(0x03, body),
+        write_prefix=0x01,
+    )
+
+
+# SET_AUXILIARY_LOCKING (0xC4, 2026-08-29 sweep). ONE opcode for BOTH auto-lock
+# sub-toggles, disambiguated by a "kind" byte: 0x02 = "Bloqueo automático al
+# cerrar", 0x04 = "Re-bloqueo de seguridad". Each was captured in its OWN
+# isolated connection (nothing else changed) — only the ENABLE frame for each
+# is confirmed; no OFF-state frame was captured, so no disable builder is
+# exposed yet, and `val`'s meaning past "differs by toggle" is unconfirmed.
+_AUX_LOCKING_TRAILER = 0x98
+
+
+def build_set_auxiliary_locking_on_close_enabled() -> LockOperationWrite:
+    """Enable "Bloqueo automático al cerrar" (auto-lock when the door shuts).
+
+    Frame: ``c4 02 0006 98``. Captured live 2026-08-29 in an isolated capture
+    (the "Re-bloqueo de seguridad" toggle and both timers were left untouched).
+    """
+
+    body = bytes([0x02]) + (0x0006).to_bytes(2, "big") + bytes([_AUX_LOCKING_TRAILER])
+    return LockOperationWrite(
+        operation="set:0xc4:on_close_enabled",
+        payload=build_control_frame(0xC4, body),
+        write_prefix=0x01,
+    )
+
+
+def build_set_auxiliary_locking_relock_enabled() -> LockOperationWrite:
+    """Enable "Re-bloqueo de seguridad" (auto re-lock after a remote/automation
+    unlock that isn't followed by the door opening).
+
+    Frame: ``c4 04 0000 98``. Captured live 2026-08-29 in an isolated capture
+    (the "Bloqueo automático al cerrar" toggle and both timers were left
+    untouched).
+    """
+
+    body = bytes([0x04]) + (0x0000).to_bytes(2, "big") + bytes([_AUX_LOCKING_TRAILER])
+    return LockOperationWrite(
+        operation="set:0xc4:relock_enabled",
+        payload=build_control_frame(0xC4, body),
+        write_prefix=0x01,
+    )
+
+
 def build_control_query_write(sub_cmd: int, data: bytes = b"") -> LockOperationWrite:
     """Build a generic **read-only-intended** control query write (feature 021).
 
