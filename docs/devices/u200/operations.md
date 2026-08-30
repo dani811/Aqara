@@ -669,6 +669,51 @@ captures didn't isolate (a fully-fresh reconnect right at the moment of tap
 might be needed), or same-value / cached-language switches skip the wire write
 entirely and rely on some other sync path.
 
+### "Registro" (access/activity log) — first live probe, clean negative (2026-08-31)
+
+The lock's own opcode catalog has two LOG-family log-sync opcodes,
+`SYNC_DOOR_LOCK_LOG` (0x12) and `SYNC_LOG` (0x13), plus two SYSTEM-family
+push-style ones, `REPORT_LOCK_LOG` (0x1D) and `REPORT_DOOR_LOG` (0x1E) — all
+name-only until now, never captured or probed. First live attempt, over the
+ESP32-S3/bumble transport (freshly reflashed this session — it wasn't dead
+hardware, just a corrupted prior flash; `esptool erase_flash` + rewrite fixed
+it, verified end-to-end: `hci_smoke.py` + a real scan finding the lock):
+
+- **`0x13` (`SYNC_LOG`) was deliberately NOT sent.** It's the one LOG opcode
+  that collides on the wire with a SYSTEM/USER opcode from a *different*
+  family — specifically `USER.ADD_VISITOR_PWD`, also `0x13`. Since
+  `operations_catalog.py`'s own foundational assumption ("no mainCmd byte on
+  the wire — sub_cmd alone identifies the command", see
+  `build_control_frame`'s docstring) was only ever validated against the two
+  confirmed SYSTEM commands (`0x74`/`0x2f`), there's no evidence it holds for
+  a byte value shared across families. Sending it risked an ambiguous
+  interpretation touching visitor-password/credential state — skipped outright
+  rather than guessed at, consistent with the standing rule to never touch
+  user-management surfaces on the real lock.
+- `0x12` (`SYNC_DOOR_LOCK_LOG`) — **no collision** with any other catalogued
+  opcode, tried both with the standard read shape (`12 00 158b3609`, ff61
+  prefix `0x01`) and with the LOG-family prefix `0x03` (documented for its
+  sibling `0x13`/`0x1f`/voice-OTA `0xa6`) — **`responded=False` both times.**
+- `0x1D`/`0x1E` (`REPORT_LOCK_LOG`/`REPORT_DOOR_LOG`) — standard read shape,
+  prefix `0x01` (their family default) — **`responded=False` both times**,
+  consistent with the established pattern that `REPORT_*` opcodes are
+  push-only and never answer an on-demand read (same as `REPORT_BATTERY`,
+  `REPORT_VOLUME`, etc. — see the "Full SYSTEM read sweep" section above).
+
+**Conclusion (real negative, not yet a dead end):** none of the four
+opcodes/shapes tried elicit a response. This doesn't mean "Registro" is
+unreadable — only that the generic read shape that works for most SYSTEM
+opcodes doesn't apply here as tried. Untried: whether `SYNC_LOG`/`SYNC_DOOR_LOCK_LOG`
+need a genuinely different body (not the generic `0x00` placeholder — a log
+read plausibly needs a page/index/timestamp parameter, unlike a status read)
+or a session state the app establishes first (e.g. reading `0x14`
+`LOCAL_SETTING`/`0x1A` `LOCK_SETTING` before the log opcode, matching how the
+app's own screens often read one thing before another). Next step if picked
+up again: the same write-opcode RE loop used for everything else (3d) —
+open "Registro" in the official app with HCI snoop running, since the app
+demonstrably CAN read it and that capture would show the real body shape
+instead of guessing it.
+
 ### "Modo de cierre nocturno" — confirmed NOT a BLE/HTTPS lock command
 
 See [[night-latch-is-not-a-lock-command]] (memory) / the exhaustive investigation
