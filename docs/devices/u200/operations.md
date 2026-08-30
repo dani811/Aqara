@@ -20,6 +20,15 @@ reference lock.
 | `UNLOCK` (open) | `74010100b917` | `0x01` | `0x74` = BLE_OPEN_LOCK, byte 1 `0x01` = open |
 | `LOCK` (close) | `740002003a12` | `0x01` | byte 1 `0x00` = close |
 | `KEEPALIVE` | `2f012f` | `0x01` | `0x2f` = HEART_PCK; status poll |
+| `SET_VERIFY_FAIL_TIME` | `af780000000c4a` | `0x01` | `0xaf`; `af <seconds:4 LE> <trailer:2>`. 0x78=120s (2 min). `build_set_verify_fail_time()` |
+| `SET_AUTO_LOCKUP_DELAY_TIME` (re-lock timer) | `d50a000efe` | `0x01` | `0xd5`; `d5 <seconds:2 LE> <kind=0x0e> <trailer=0xfe>`. 0x0a=10s. **Same opcode also covers the OTHER auto-lock timer** (kind=0x01, see next row) — there is no separate 0xAD frame. `build_set_auto_lockup_delay_time()` |
+| `SET_AUTO_LOCKUP_DELAY_TIME` (on-close timer) | `d50500 01fe` | `0x01` | same opcode, `kind=0x01`="Bloqueo automático al cerrar" timer. 5s confirmed. `build_set_auto_lock_on_close_delay_time()` |
+| `LANGUAGE` | `03028307` | `0x01` | `0x03`; `03 <code> 83 <code XOR 0x05>`. `code=0x02`=English, `code=0x09`=Deutsch, both ACK'd live. `build_set_language_english()` / `build_set_language_deutsch()` — see §2026-08-30 for the corrected byte-position and the Español blocker. |
+| `SET_AUXILIARY_LOCKING` (on-close enable) | `c402000698` | `0x01` | `0xc4`; `c4 <kind> <val:2> <trailer=0x98>`. `kind=0x02`="Bloqueo automático al cerrar" ON. `build_set_auxiliary_locking_on_close_enabled()` |
+| `SET_AUXILIARY_LOCKING` (re-lock enable) | `c404000098` | `0x01` | same opcode, `kind=0x04`="Re-bloqueo de seguridad" ON. `build_set_auxiliary_locking_relock_enabled()` |
+| `SET_DOORLOCK_ALARM_VOLUME` | `83021007` | `0x01` | `0x83`; `83 02 <val> 07`. `val=0x10`=Normal, `val=0x00`=Silencio (only 2 levels). `build_set_alarm_volume()` |
+| `SET_ALERT_VOLUME` | `020203040f` | `0x01` | `0x02` kind=`0x02`; `02 02 <val> 04 <val+0x0c>`. 4-level "Volumen de alerta" enum (01=Alto/02=Medio/03=Bajo/04=Silencio), distinct from voice volume (same opcode, kind=`0x04`) and alarm volume (`0x83`). `build_set_alert_volume()` |
+| `SET_ALERT_DELAY` | `18050a033c88e3` | `0x01` | `0x18`; `18 05 0a 03 <seconds> 88 <seconds XOR 0xdf>`. "Retraso de alerta". The app's own decompiled source calls sub-cmd `0x18` "UN_LOCK" — a genuine, unresolved contradiction with this live capture, not a stale/guessed label; see [u200-app-opcode-table.md](u200-app-opcode-table.md#-one-important-contradiction-not-swept-under-the-rug). Trust the live capture for what `0x18` actually does. `build_set_alert_delay()` |
 
 The confirmed frames start with their **sub-command** byte (`74…`, `2f…`) — the
 family/mainCmd is an app-side grouping, not a wire prefix.
@@ -61,15 +70,20 @@ Each operation is sent encrypted:
 
 214 operations across 8 families; `confirmed` = verified live, `catalogued` = from
 the enum with exact `data` unverified. The two confirmed above are `0x74`
-(BLE_OPEN_LOCK) and `0x2f` (HEART_PCK); everything else is `catalogued`.
+(BLE_OPEN_LOCK) and `0x2f` (HEART_PCK); everything else is `catalogued`. The
+SYSTEM family's naming was cross-checked 2026-08-30 against the app's own
+decompiled source (not just an extracted enum) — see
+[u200-app-opcode-table.md](u200-app-opcode-table.md) for the full 151-entry
+table, the diff against this catalog, and the one unresolved naming
+contradiction (`0x18`).
 
 ### SYSTEM (`0x01`, reply `0x81`)
 
 | sub | name | status |
 |-----|------|--------|
 | `0x01` | SYSTEM_TIME | catalogued |
-| `0x02` | VOLUME | catalogued |
-| `0x03` | LANGUAGE | catalogued |
+| `0x02` | VOLUME | confirmed (voice `02 04 <lvl>` AND alert `02 02 <val> 04 <val+0x0c>`, kind byte disambiguates) |
+| `0x03` | LANGUAGE | confirmed (English only, see §Full catalog byte notes) |
 | `0x04` | DOUBLE_VERIFY | catalogued |
 | `0x07` | LOCK_STATUS | catalogued |
 | `0x08` | TONGUE_STATUS | catalogued |
@@ -83,7 +97,7 @@ the enum with exact `data` unverified. The two confirmed above are `0x74`
 | `0x15` | REPORT_LOCK_STATUS | catalogued |
 | `0x16` | TEMP_PWD | catalogued |
 | `0x17` | REPORT_TEMP_PWD | catalogued |
-| `0x18` | UN_LOCK | catalogued |
+| `0x18` | UN_LOCK | confirmed live as SET_ALERT_DELAY, not unlock — the app's own decompiled source really does call it "UN_LOCK", an unresolved naming contradiction, see [u200-app-opcode-table.md](u200-app-opcode-table.md#-one-important-contradiction-not-swept-under-the-rug) |
 | `0x1a` | LOCK_SETTING | catalogued |
 | `0x1b` | REPORT_UN_LOCK | catalogued |
 | `0x1c` | DEL_TEMP_PWD | catalogued |
@@ -146,9 +160,9 @@ the enum with exact `data` unverified. The two confirmed above are `0x74`
 | `0xa7` | DOWNGRADE_PROTECTION | catalogued |
 | `0xaa` | SET_FACE_IDENTIFY_ON_OFF | catalogued |
 | `0xab` | GET_FACE_IDENTIFY_ON_OFF | catalogued |
-| `0xad` | SET_AUTO_LOCK_TIME | catalogued |
+| `0xad` | SET_AUTO_LOCK_TIME | catalogued (both auto-lock timers turned out to live on `0xd5`, see §Full catalog byte notes — an earlier 0xad sample was unrelated noise) |
 | `0xae` | GET_AUTO_LOCK_TIME | catalogued |
-| `0xaf` | SET_VERIFY_FAIL_TIME | catalogued |
+| `0xaf` | SET_VERIFY_FAIL_TIME | ✅ confirmed |
 | `0xb0` | GET_VERIFY_FAIL_TIME | catalogued |
 | `0xb5` | SET_OTHER_PLATFORM | catalogued |
 | `0xb6` | GET_OTHER_PLATFORM | catalogued |
@@ -156,7 +170,7 @@ the enum with exact `data` unverified. The two confirmed above are `0x74`
 | `0xbf` | SET_OPEN_DOOR_DIRECTION | catalogued |
 | `0xc0` | GET_OPEN_DOOR_DIRECTION | catalogued |
 | `0xc3` | GET_LOCK_VOLUME | catalogued |
-| `0xc4` | SET_AUXILIARY_LOCKING | catalogued |
+| `0xc4` | SET_AUXILIARY_LOCKING | ✅ confirmed (ON frames for both sub-toggles; no OFF frame yet) |
 | `0xc5` | GET_AUXILIARY_LOCKING | catalogued |
 | `0xc6` | SET_NORMALLY_OPEN_MODE | catalogued |
 | `0xc7` | GET_NORMALLY_OPEN_MODE | catalogued |
@@ -166,7 +180,7 @@ the enum with exact `data` unverified. The two confirmed above are `0x74`
 | `0xcb` | GET_ALARM_ENABLE | catalogued |
 | `0xcc` | ANTI_LOCK_MANAGER_STATUS | catalogued |
 | `0xcd` | REPORT_ANTI_LOCK_MANAGER_STATUS | catalogued |
-| `0xd5` | SET_AUTO_LOCKUP_DELAY_TIME | catalogued |
+| `0xd5` | SET_AUTO_LOCKUP_DELAY_TIME | ✅ confirmed |
 | `0xd6` | GET_AUTO_LOCKUP_DELAY_TIME | catalogued |
 | `0xd7` | SET_ADVANCED_MODE | catalogued |
 | `0xd8` | GET_ADVANCED_MODE | catalogued |
@@ -184,7 +198,7 @@ the enum with exact `data` unverified. The two confirmed above are `0x74`
 | `0xe6` | REPORT_DOOR_LOCK_STATUS | catalogued |
 | `0xe8` | SET_ASSIST_TURN | catalogued |
 | `0xe9` | GET_ASSIST_TURN | catalogued |
-| `0xeb` | SET_SILENT_CONTROL_LOCK | catalogued |
+| `0xeb` | SET_SILENT_CONTROL_LOCK | confirmed (partial, see §Full catalog byte notes) |
 | `0xec` | GET_SILENT_CONTROL_LOCK | catalogued |
 | `0xed` | SET_LOCK_WORK_MODE | catalogued |
 | `0xee` | GET_LOCK_WORK_MODE | catalogued |
@@ -452,6 +466,8 @@ was on, then keystream-decoding the captured write. Both confirmed against the r
 | Voice volume | `0xc3` | `02 04 <level>` (op `0x02`, kind `0x04`) | `01`=Alto, `02`=Medio, `03`=Bajo |
 | Alarm volume | `0x84` | `83 02 <val> 07` (op `0x83`, kind `0x02`) | `00`=Silencio, `0x10`=Normal |
 | Turn assist | `0xe9` | `e8 <0/1> 68 …` (op `0xe8`) | `00`=off, `01`=on |
+| Verify-fail lockout ("Bloqueo de verificación") | `0xb0` | `af <seconds:4 LE> <trailer:2>` — `af780000000c4a` | 120s (2 min) confirmed; `build_set_verify_fail_time()` |
+| Auto-lock re-lock delay ("Re-bloqueo de seguridad" timer) | `0xd6` | `d5 <seconds:2 LE> <trailer:2>` — `d50a000efe` | 10s confirmed; `build_set_auto_lockup_delay_time()` |
 
 Method (repeatable for every setting): app → open the setting (keypad gate: close the
 popup, tap a keypad key / fire the fingerbot, re-enter fast) → select a value → the app
@@ -459,3 +475,223 @@ writes the SET frame on ff61 → `adb bugreport` → extract `FS/data/misc/bluet
 btsnoop_hci.log` → `scratchpad/app_keystream.py` decodes it (static-nonce keystream reuse).
 This yields BOTH the enum byte-mapping and the SET opcode, so the library can WRITE
 (control), not just read. Actuation `0x74` stays out of scope by default.
+
+### 2026-08-28/29 settings sweeps — auto-lock and silent-mode byte layout
+
+First pass (2026-08-28) changed several settings per connection, which muddied
+which byte moved for which action. A 2026-08-29 follow-up re-ran the loop
+**isolating one field per connection** (nothing else touched) and resolved
+most of it:
+
+- **`0xc4` SET_AUXILIARY_LOCKING — fully resolved, now confirmed and wired
+  in** (`build_set_auxiliary_locking_on_close_enabled()` /
+  `_relock_enabled()`). It's a **single opcode covering both auto-lock
+  sub-toggles**, disambiguated by a `kind` byte: `c4 <kind> <val:2>
+  <trailer=0x98>`. Isolated captures: `kind=0x02` (`c402000698`) enables
+  "Bloqueo automático al cerrar"; `kind=0x04` (`c404000098`) enables
+  "Re-bloqueo de seguridad". `val` differs by toggle (`0x0006` vs `0x0000`)
+  but its exact meaning is unconfirmed — no OFF-state frame was captured for
+  either toggle, so only the two ENABLE frames are exposed as builders.
+- **`0xad` SET_AUTO_LOCK_TIME — DOES NOT EXIST for this; fully resolved as a
+  dead end.** The 2026-08-29 isolated toggle captures never produced it (only
+  `0xc4` did), so a follow-up isolated capture changed a sub-timer's VALUE
+  instead (the "al cerrar" timer, 10s→5s) expecting to finally trigger 0xad —
+  instead it produced **`d5 05 00 01 fe`: the SAME opcode as the OTHER
+  auto-lock timer** (`0xd5`, previously thought to be re-lock-delay-only).
+  `0xd5` covers BOTH timers, disambiguated by the first trailer byte
+  (`0x0e`=re-lock, `0x01`=on-close) — see the confirmed-operations table
+  above and `build_set_auto_lock_on_close_delay_time()`. The earlier
+  2026-08-28 13-byte `0xad` sample was therefore something unrelated (never
+  reproduced across three follow-up isolated captures); don't chase it
+  further.
+- **`0xeb` SET_SILENT_CONTROL_LOCK — pattern confirmed across two separate
+  days' captures, still not fully wired.** Structure `eb <schedule:1>
+  <speed:1> <9 more bytes> <2 unrecovered bytes>`. `schedule` (byte1) is `00`
+  when "Modo silencioso programado" is off, `01` when on — confirmed in both
+  the 2026-08-28 sample and a fresh 2026-08-29 isolated capture (only this
+  toggle changed, both speed pickers left at "Rápido"/"silencioso"):
+  `eb 01 03 30 2c 93 6a d0 b8 93 6a 00` (+2 unrecovered bytes). `speed`
+  (byte2) tracks the "Desbloquear/Bloquear configuraciones" picker and looks
+  like a 1-based index matching the UI order (Tranquilo/estándar/Rápido) —
+  `02` when that picker was "estándar" (2026-08-28), `03` when it was
+  "Rápido" (2026-08-29) — but only two data points, not fully proven. Bytes
+  3-11 changed completely between the two days despite the schedule window
+  defaulting to the same 21:00–07:00 both times, which rules out the earlier
+  "fixed schedule padding" theory — they're more likely a session/timestamp
+  field unrelated to user-visible settings. Not wired as a writer: the
+  trailing 2 bytes are still uncaptured and the middle field is unexplained.
+
+### 2026-08-30 — LANGUAGE (0x03) byte-position corrected; Español blocked by an app bug
+
+**Correction of the original 2026-08-29 note (kept for history below):** the
+language code is **byte1**, not byte2 — byte2 (`0x83`) is a constant marker
+present in every SET_LANGUAGE frame, not "English's code". The earlier note
+conflated the two because it only had one confirmed sample. Frame:
+`03 <code:1> 83 <trailer = code XOR 0x05>`.
+
+Re-derived live with two independent isolated captures, each verified two
+ways — an explicit lock-side ACK (`03 00 00 06 00`, present for both) and a
+fresh cold app relaunch confirming the real device state:
+- English: `code=0x02` → `03028307` (trailer `0x02^0x05=0x07`) — matches the
+  original 2026-08-29 capture byte-for-byte, just reinterpreted correctly.
+- Deutsch: `code=0x09` → `0309830c` (trailer `0x09^0x05=0x0c`).
+
+**Español's code is still unknown, and the lock is currently left on Deutsch
+as a result — see below.** `code=0x0a` was tried (extrapolating the
+sequential/XOR pattern) and is confirmed **wrong**: no ACK followed the write,
+and a fresh cold relaunch still showed Deutsch as the real state.
+
+**The official app itself is bugged for this specific flow on this app
+version**, independent of any capture issue: "Sonido de voz > Selección de
+idioma > Otros idiomas" opens a picker sheet (中文 / Polski / Русский /
+Español(Descargado) / Français) where tapping **any** row — tested on both
+Español and Français, 5+ attempts, explicitly ruling out the keypad-gate
+dialog stealing the tap each time via before/after screenshots — closes the
+sheet as a no-op: no checkmark ever appears, the "Confirmar"/"Descargar y
+usar" button never activates, and no BLE write happens. Direct D-pad
+navigation (bypassing touch entirely) also found no focusable row, confirming
+this is a real app-side interaction bug, not a coordinate or timing issue in
+the automation. Consequence: the app UI currently cannot be used to select
+**any** language from that sub-sheet, not just Español — English and Deutsch
+only work because they have dedicated quick-select chips in the flat list one
+level up, which behave completely differently (direct single-tap select, no
+sub-sheet, no bug).
+
+**Result: the lock's spoken-prompt language is left on Deutsch at the end of
+this session**, not restored to its original Español, because neither the app
+UI nor a confirmed byte value could get it back. This is an audio/voice
+setting only — it does not affect lock/unlock, security, or any BLE control
+function. To fix: either (a) retry the app flow after an app update in case
+this gets patched, or (b) send `build_control_frame(0x03, bytes([code, 0x83,
+code ^ 0x05]))` directly via a raw `U200Client`/`GattClient` session for a
+candidate Español code and check for the ACK — English=2 and Deutsch=9 are
+the only two data points; do not extrapolate further without live
+verification.
+
+**2026-08-30 (later, wire-level proof):** after a fresh app login (the
+session had been logged out) plus a scroll-then-tap on the sub-sheet, the
+"Español(Descargado)" row DID show a selection state this time (the button
+changed from "Descargar y usar" to "Confirmar" — unlike the 5 earlier
+attempts, which never got that far). Tapping "Confirmar" was captured on a
+fresh HCI snoop: **zero SET_LANGUAGE (0x03) writes appear anywhere in the
+connection** — only two `680168` LANGUAGE READ queries (the screen's normal
+load + a post-tap refresh), both still reflecting Deutsch. A cold relaunch
+afterward confirmed the real device state is still Deutsch. So the bug is
+narrower than first thought: the picker CAN reach a "selected" visual state
+for Español, but its Confirm handler still doesn't fire a write for it —
+proven with wire-level evidence this time, not just a UI observation.
+
+**2026-08-30 (resolved) — the real mechanism is a bulk OTA file transfer, not
+a short control-channel command.** The user's hypothesis was right in
+spirit: language material is a downloadable **package**, and the app's
+"Otros idiomas" picker bug only blocks the *row selection* via synthetic
+touch (a real human touch on the phone worked every time) — once a real tap
+selects a row and "Descargar y usar"/"Confirmar" is tapped, the download
+proceeds normally. Captured the full flow live (Français, then Español,
+both freshly downloaded): the voice pack is transferred over a **separate
+GATT characteristic (ATT handle 60, NOT the AES-CCM control channel on
+handle 49)**, using write-prefixes `0x11`/`0x90`, in ~9,000+ chunks of up to
+244 bytes for a single language. Crucially **this channel is NOT encrypted
+with the session's AES-CCM cipher** — the chunks contain directly-readable
+ASCII: a manifest of `<name>.lst`/`<name>.mp3` pairs (e.g.
+`fr_Passage_mode_is_available.mp3`, `es_Addedsuccessfully.mp3`), i.e. the
+lock's spoken-prompt library, one file per phrase. **The control channel
+(handle 49) carries ONLY periodic keepalives during the entire transfer —
+no `0x03` SET_LANGUAGE write appears anywhere.** So the actual
+"switch active language" signal is embedded in the OTA protocol itself
+(handle 60), not the short `03 <code> 83 <trailer>` frame documented above.
+
+That `03 <code> 83 <trailer>` frame is real and reproducible (confirmed with
+ACKs for English/Deutsch) but appears to be a **separate shortcut path**
+used only when picking a language from the flat list's quick-select chips
+(a language the app has fully cached, e.g. immediately after downloading
+it) — not the general mechanism. Reproducing the full OTA protocol (framing,
+chunk sequencing/ack, and the exact "activate" trigger at the end) is real
+future work for making language changes fully autonomous in `aqara_ble`
+(the user's ask) — it needs its own capture-and-decode session focused on
+handle 60, ideally with an HTTP capture of the manifest-download API call
+too (not done this session — noted as a gap).
+
+**Practical result: the lock's language was successfully restored to
+Español** by forcing a fresh download (selecting a different language
+first evicts the cached one — the app's own dialog warns "el material en
+idioma actual se eliminará y reemplazará" — after which Español itself
+shows as needing download again and can be re-downloaded to reactivate it).
+Confirmed via a full cold relaunch. A real per-touch synthetic-vs-human
+input quirk was also identified: `adb shell input tap` never registered a
+row selection for anything requiring a download (Français, 中文, Русский,
+Español-when-not-cached) even at correct coordinates — only a real human
+touch on the phone worked; the row selection state itself doesn't render in
+`uiautomator dump`'s plain text/bounds either (needs a screenshot to see
+the checkmark), which caused an earlier false "still broken" read on this
+same session — worth remembering for future automation of this screen.
+
+Only `build_set_language_english()` and `build_set_language_deutsch()` are
+exposed as builders (the confirmed shortcut-path frames); the general OTA
+download mechanism is not implemented in the library yet.
+
+#### Original 2026-08-29 note (superseded above, kept for history)
+
+`03 02 <val> 07` — same `kind=02`/`trailer=07` shape as `SET_DOORLOCK_ALARM_VOLUME`
+(0x83). Confirmed live switching "Sonido de voz > Selección de idioma" to
+English: `val=0x83`. This is **not** a sequential 0-6 index across the 7
+languages the app lists — 0x83 is far too large for that, so it's very likely a
+shared cross-device Aqara language-code table (same codes used by other Aqara
+products). Trying to revert to Español (already downloaded, so no voice-pack
+fetch needed) **did not produce a matching wire write** in two more capture
+attempts, even though the app's UI updated to show "Español" both times and a
+fresh app relaunch + re-read afterward confirmed the lock's actual state really
+is Español again — so either that path uses a different frame this session's
+captures didn't isolate (a fully-fresh reconnect right at the moment of tap
+might be needed), or same-value / cached-language switches skip the wire write
+entirely and rely on some other sync path.
+
+### "Modo de cierre nocturno" — confirmed NOT a BLE/HTTPS lock command
+
+See [[night-latch-is-not-a-lock-command]] (memory) / the exhaustive investigation
+2026-08-28: two clean BLE captures (enable, disable) plus a live Frida MITM (native
+SSL hook on a repacked app) all showed **zero** lock-control traffic for this
+toggle — only the standard on-connect refresh burst and, over HTTPS, a generic
+click-analytics event (`POST /track/event/upload` to `track-ger.aqara.com`). The
+feature's own description text ("access via Apple Home will be restricted") only
+makes sense as an account/cloud/bridge-level access policy — the lock firmware has
+no concept of "Apple Home". Not a gap in the capture technique; don't re-attempt
+via the write-opcode loop.
+
+### "Contraseña sin conexión" (offline password) — generation is local, no BLE write
+
+Tapping "Crear" produced a 6-digit one-time code **instantly**, with no loading
+spinner and (checked against the continuously-running HCI snoop) no accompanying
+BLE write — consistent with the patent's design (US11120656B2:
+`trunc6(Hash(seed, hour_period))`): the app and the lock each derive the same code
+independently from a shared per-lock seed, so nothing needs to be pushed to the
+lock at creation time — only at actual keypad-entry time does the lock verify it
+against its own computation. The remaining blocker to implement this in the
+library is unchanged: obtaining the per-lock seed (app internal storage via
+root/gadget, or a cloud endpoint — not yet found).
+
+### "Contraseña programada remota" — blocked on a Matter Controller prerequisite
+
+This UI entry (distinct from "Contraseña sin conexión") requires an Aqara Matter
+Controller already paired to the home ("Después de conectar al Controlador Matter
+de Aqara, puedes configurar contraseñas de forma remota") — without one, the
+screen only offers "Exponer" (expose/pair a controller), no password can be
+created to capture. Out of scope until a Matter Controller is set up; not a BLE
+opcode we can chase directly.
+
+**2026-08-29 verification: there is no separate, standalone "Contraseña
+programada".** Exhaustively enumerated every screen reachable from the lock
+that isn't "Gestión de usuarios" (main lock screen fully scrolled: Contraseña
+sin conexión / Gestión de usuarios / Contraseña programada remota / Registro —
+4 items, confirmed bottomed-out scroll; the "..." settings menu fully scrolled:
+21 items, none password-related besides the two above). The settings menu's
+**"Modos de bloqueo"** screen (safe to view — not "Gestión de usuarios")
+explicitly ties the two names together in its own copy: "Modo estándar ...
+con soporte para desbloqueo remoto **y configuración de contraseña
+programada**" (i.e. remote unlock + scheduled-password config are the same
+Matter-gated bundle), versus "Modo Bluetooth: Solo admite conexiones
+Bluetooth directas. Sin control remoto ni respuesta a automatismos." So
+"contraseña programada" and "contraseña programada remota" are literally the
+same feature, gated by Matter Controller pairing / "Modo estándar" — not by
+"Gestión de usuarios", and not a second hidden opcode. This closes item 7 of
+the roadmap as a genuine, verified negative result (not an assumption).
