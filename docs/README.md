@@ -24,6 +24,12 @@ reuse vs discover.
 Go to [diagnostics.md](diagnostics.md): symptom → hypothesis → test for the common
 failures.
 
+### I want to **reverse-engineer** a new setting or opcode
+
+Go to [reverse-engineering.md](reverse-engineering.md): the toolchain (app versions,
+Frida/objection repack, btsnoop keystream-reuse decryption, the write-opcode RE
+loop) and a key-findings index.
+
 ## The reference (device-agnostic)
 
 The reusable protocol layer lives in [`reference/`](reference/README.md):
@@ -37,7 +43,9 @@ The reusable protocol layer lives in [`reference/`](reference/README.md):
 
 Per-device details live under [`devices/`](devices/u200/README.md). Today:
 [U200](devices/u200/README.md) — [gatt-map](devices/u200/gatt-map.md) ·
-[operations](devices/u200/operations.md) · [validation](devices/u200/validation.md).
+[operations](devices/u200/operations.md) ·
+[settings-protocol](devices/u200/settings-protocol.md) ·
+[validation](devices/u200/validation.md).
 
 ## Evidence
 

@@ -13,6 +13,7 @@ device lives under [`../devices/`](../devices/).
 | [ble-transport.md](ble-transport.md) | GATT role model, connection preamble, and frame fragmentation/timing. |
 | [auth-handshake.md](auth-handshake.md) | The `0610`/`0710` exchange and the header layout. |
 | [control-channel.md](control-channel.md) | AES-CCM encryption, the control-frame shape, and the bulk CRC-HQX. |
+| [rn-device-plugins.md](rn-device-plugins.md) | How to pull any Aqara device's real React Native plugin source from a public CDN — reusable for porting to a new device. |
 
 Every claim links to sanitized proof in [`../evidence/`](../evidence/README.md)
 or is tagged `unverified`.

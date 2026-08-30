@@ -45,10 +45,16 @@ on setup; if the pin is unsatisfiable the integration fails to load.
   SecNeo's ART protection (Frida **native** hooks are stable).
 - **React Native** device plugins: the lock UI is an RN plugin. The shared SDK bundle
   `assets/lumi/reactnative/prefab/bundle/base-android-2.0.1.zip → android_base/base.bundle`
-  is **Hermes bytecode v96** — disassemble with **`hermes-dec`** (`hbc-disassembler`;
-  `hbctool` does NOT support v96). It carries i18n labels + the feature catalogue but
-  **not** the device opcode↔byte enums — those live in the per-model plugin, downloaded
-  to the phone's internal storage at runtime (needs root or a Frida gadget to pull).
+  is **Hermes bytecode v96** — disassemble with **`hbc-decompiler`** (pip-installed in
+  this repo's `.venv`; `hbctool`'s `disasm` does NOT support v96, but `hbctool disasm`
+  isn't needed — `hbc-decompiler` alone produces working, if verbosely register-named,
+  JS). It carries i18n labels + the feature catalogue but **not** the device
+  opcode↔byte enums — those live in the per-model plugin, **downloaded from a public
+  CDN** (`cdn.aqara.com`, no auth) and cached on the phone. Getting the manifest that
+  lists every model→plugin-URL mapping needs one Frida session (native file read, see
+  §3g); after that, **any model's real plugin source is one `curl` + decompile away,
+  no device needed.** See [reference/rn-device-plugins.md](reference/rn-device-plugins.md)
+  for the full catalog and the U200's own entry.
 - HTTP stack: okhttp3 + retrofit2 + Cronet, HTTP/2. Cloud request headers ride HPACK —
   decode offline with `scratchpad/sslfull.js` (native SSL full-hex dump) +
   `scratchpad/decode_h2.py` (fixes SSL* pointer reuse + double-hooked SSL_write).
