@@ -653,6 +653,63 @@ Only `build_set_language_english()` and `build_set_language_deutsch()` are
 exposed as builders (the confirmed shortcut-path frames); the general OTA
 download mechanism is not implemented in the library yet.
 
+#### 2026-08-31 — OTA handle-60 framing, first byte-level capture
+
+Live capture (adb HCI snoop, a fresh Français download from "Otros
+idiomas" — the synthetic-tap picker bug from the note above did **not**
+reproduce this time; `adb shell input tap` selected the row and reached
+"Descargar y usar" fine) confirms the wire shape the earlier session could
+only infer from the app's decompiled code:
+
+- **Transport confirmed:** ATT handle `0x003c` (60, decimal), opcode `0x52`
+  (**Write Command** — fire-and-forget, no ATT-level response expected; no
+  `0x1b` Handle Value Notification was ever seen on this handle in the
+  capture, so any pacing/ack the lock does happens above the ATT layer, not
+  as a visible BLE ack). Chunks are ≤244 bytes, write-prefix `0x11` on
+  every single chunk (matches the `0x11`/`0x90` prefixes noted 2026-08-30;
+  only `0x11` appeared for a download in this capture).
+- **First chunk is a plain-ASCII init frame:** `11 0100 ff
+  "U200_FR_audio_burn.bin"00"1664596"...` — i.e. `<prefix=0x11> <seq:2 LE,
+  starts at 1> <marker, starts at 0xff> <bundle filename ASCII> <NUL>
+  <total size in DECIMAL ASCII digits> ...`. The size string
+  (`1664596` bytes here) is the whole bundle for one language, matching
+  the "~9,000+ chunks" scale already documented (1664596 / 244 ≈ 6822
+  chunks).
+- **The next several chunks carry the file manifest in plain ASCII**,
+  confirming the `<name>.lst`/`<name>_<Name>.mp3` pairing already
+  documented, but interleaved with 4-byte little-endian numeric fields
+  (plausibly per-entry byte offset/length into the bundle) whose exact
+  layout is **not decoded** — only the ASCII spans were trustworthy enough
+  to assert. The `marker` byte counts DOWN from `0xff` across these
+  chunks (`0xff`, `0xfe`, `0xfd`, `0xfc`, `0xfb`, ...) while the leading
+  2-byte field does not follow a simple flat LE counter — a real
+  structure is there, but pinning it needs a dedicated, uninterrupted
+  capture-and-diff session (this one was captured mid-transfer via a
+  `bugreport`'s rolling buffer, not from a clean start).
+- **After the manifest, the remaining chunks are opaque binary** (compiled
+  audio-codec data, not text) — expected and NOT a contradiction of the
+  "plaintext, unencrypted channel" finding: unencrypted just means no
+  AES-CCM is applied, the bytes are still compressed/encoded audio.
+- **The app's own progress UI is unreliable for judging whether a transfer
+  is actually running.** The "0%" download screen stayed frozen at 0% for
+  5+ minutes with the keypad-presence gate re-triggering only once, while
+  the pulsador was re-fired every ~10-15s to keep the connection alive —
+  looked exactly like a hung transfer. A `bugreport` pulled at that exact
+  moment (while the UI still showed "0%") captured **18,067** real
+  handle-60 `WriteCmd` chunks already in flight. **Don't abandon a
+  same-looking "stuck at 0%" session based on the UI alone next
+  time — check the HCI snoop first.**
+- The transfer was manually abandoned ("Abandonar") before completion once
+  the capture was secured, specifically to avoid an indefinite live
+  BLE session on the maintainer's real lock; the language reverted cleanly
+  to Español on abandon (confirmed via the settings screen re-reading
+  "Español" with no lock/app side-effects), so **the exact "activate"
+  trigger frame at the end of a completed transfer is still not
+  captured** — that remains the one open piece for full automation.
+- `adb bugreport`'s `dumpstatez` service intermittently refused two
+  connection attempts in a row before a third succeeded — a transient
+  device-side hiccup, not a real blocker; retry if it happens again.
+
 #### Original 2026-08-29 note (superseded above, kept for history)
 
 `03 02 <val> 07` — same `kind=02`/`trailer=07` shape as `SET_DOORLOCK_ALARM_VOLUME`
