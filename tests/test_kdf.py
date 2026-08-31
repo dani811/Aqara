@@ -505,7 +505,20 @@ def test_fetch_offline_passwords_calls_the_get_endpoint(
     kdf.fetch_offline_passwords("matt.fake", None, "https://example.test")
     assert seen["method"] == "GET"
     assert seen["url"] == "https://example.test" + kdf._PATH_OFFLINE_PASSWORD
-    assert not seen["payload"]  # no body on a GET
+
+
+def test_fetch_offline_passwords_sends_did_as_a_json_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Confirmed live 2026-08-31 (native SSL hook, fresh capture): the real
+    app's GET request to this endpoint carries a JSON body ``{"did": "..."}``
+    — not a bodyless GET as originally assumed, and not a header/query param
+    either. Captured the exact SSL_write immediately preceding a real
+    passwd response on the maintainer's own account/device.
+    """
+    seen = _capture_request_json(monkeypatch, OFFLINE_PASSWORD_RESPONSE)
+    kdf.fetch_offline_passwords("matt.fake", None, "https://example.test")
+    assert seen["payload"] == {"did": "matt.fake"}
 
 
 def test_fetch_offline_passwords_window_is_a_10_minute_grid(

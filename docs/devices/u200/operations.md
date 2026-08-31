@@ -787,6 +787,38 @@ would show, in one shot, whether the wire bytes for a real
 ambiguity with evidence instead of a guess. Until then, `0x13` is not sent
 by this library.
 
+#### 2026-08-31 (later still) — live HTTPS capture: "Registro" is NOT re-fetched over the network
+
+Attached the native SSL hook (`capture_ssl_native.js`, left running across the
+whole navigation — it writes to a file, so it survives repeated screen
+transitions unlike a PTY-logging hook) and drove the real "Registro" screen
+three separate ways while the lock was BLE-connected (`Bloqueado` state,
+live): (1) opened the screen fresh, (2) switched the "Todos los
+eventos"/"Eventos de desbloqueo" filter tab, (3) opened the date picker and
+selected a day (2026/08/30) far from anything that could plausibly be
+preloaded. **None of the three produced any new SSL traffic** — the capture
+file's line count did not grow (screen open) or grew by only one unrelated
+17-byte keepalive-shaped frame (tab switch, date change). Meanwhile the
+list content itself (today's `Bloqueado exitosamente 08:19` /
+`Puerta Desbloqueada 08:11`, yesterday's full history including
+`Esther desbloqueado con Contraseña`) rendered correctly every time.
+
+**Conclusion:** this screen's data is NOT fetched fresh over HTTPS on open,
+filter, or date-change — it is served entirely from a local store already
+populated on the phone (RN AsyncStorage/SQLite, or synced once earlier and
+cached indefinitely). This means the `SYNC_LOG` (0x13) BLE opcode invesitgated
+above is very likely how that local store gets **populated in the first
+place** (at pairing, or periodically in the background) rather than
+something fetched live on every screen visit — consistent with, and refining,
+the static-analysis finding that `SYNC_LOG`'s request builder takes a
+`startIndex`/`endIndex` pagination range (a local-store catch-up sync
+primitive, not a per-view live query). Does not change the 0x13/collision
+open question from the static-analysis section above; only rules out "just
+capture the HTTPS call instead" as a shortcut for this specific feature — a
+real "Registro" capture still needs the BLE 0x13 wire bytes, ideally from a
+brand-new pairing (see `docs/reverse-engineering.md` §3g, the device-binding
+capture) where the local store is provably empty beforehand.
+
 ### "Modo de cierre nocturno" — confirmed NOT a BLE/HTTPS lock command
 
 See [[night-latch-is-not-a-lock-command]] (memory) / the exhaustive investigation
@@ -941,6 +973,23 @@ of the `passwd`-fetch request (whether `device_id` needs to ride on it at
 all, and how) — `specs/038-offline-password-cloud/tasks.md` T018/T019 track
 that live-capture verification pass explicitly as the one remaining step,
 requiring the maintainer's phone/account.
+
+#### 2026-08-31 — T018/T019 live verification: `did` rides as a JSON body on the GET
+
+Fresh native SSL-hook capture (repacked app, `tools/capture_ssl_native.js` →
+`ssl_capture.log`, real account/device) caught the exact `SSL_write`
+immediately preceding a real `passwd` response — plaintext body:
+`{"did":"matt.73cb7865154223b90e81d000"}`. So `device_id` **does** ride on
+the wire, as a JSON request body on the GET (not a header, not a query
+param) — the opposite of what `_request_json`'s own comment assumed ("a GET
+with no payload... matches the real app, which never sends a body on its
+GET-verb endpoints either" — that generalization was wrong for this one
+endpoint). Also reconfirmed the 10-minute grid live: a fresh "Crear" tap
+returned 8 pending codes with `startTime=1788171000000`/
+`endTime=1788171600000` (exact 600000ms multiples) and the app displayed
+`Caduca: 2026/08/31 12:30` (endTime + 10 min grace, as already documented).
+`fetch_offline_passwords()` now sends `{"did": device_id}` as the payload;
+tests updated (`test_fetch_offline_passwords_sends_did_as_a_json_body`).
 
 ### "Contraseña programada remota" — blocked on a Matter Controller prerequisite
 

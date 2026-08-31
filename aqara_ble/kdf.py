@@ -752,13 +752,15 @@ def fetch_offline_passwords(
     connection to the lock at any point, this is a pure cloud call.
 
     Args:
-        device_id: Lock DID (``matt.<...>``). Not yet confirmed whether the
-            real request needs this on the wire for this specific endpoint
-            (unlike ``fetch_offline_password_log``, where did/startTime/
-            endTime are confirmed in the query string) — see
-            specs/038-offline-password-cloud User Story 3. Accepted here so
-            the public signature does not need to change once that's
-            confirmed.
+        device_id: Lock DID (``matt.<...>``). Confirmed live 2026-08-31 (native
+            SSL hook, fresh capture) that it DOES ride on the wire — as a JSON
+            request **body** (``{"did": "<device_id>"}``) on the GET request,
+            not a header or query param. The earlier capture only recovered
+            the literal ``GET /app/v1.0/lumi/dev/bluetooth/lock/passwd``
+            ``:path`` (HPACK dynamic-table desync hid the rest); this capture
+            caught the ``SSL_write`` immediately preceding a real
+            ``passwd`` response and its plaintext body was exactly
+            ``{"did":"matt.<...>"}`` — real device, real account.
         auth_headers: Same auth headers as the rest of this module's cloud
             calls.
         base_url: Region base URL, e.g. ``REGION_BASE_URLS["EU"]``.
@@ -769,14 +771,10 @@ def fetch_offline_passwords(
     Raises:
         CloudServiceError: the cloud answered with a non-zero ``code``.
     """
-    # TODO(US3): confirm live whether `device_id` needs to ride on the wire
-    # for this endpoint (header/query) — the capture that found this path had
-    # a mid-connection HPACK dynamic-table desync on exactly that detail.
-    del device_id
     data = _request_json(
         "GET",
         f"{base_url}{_PATH_OFFLINE_PASSWORD}",
-        {},
+        {"did": device_id},
         auth_headers,
         signer=signer,
         path_rel=_PATH_OFFLINE_PASSWORD,
