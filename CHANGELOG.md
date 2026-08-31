@@ -2,6 +2,30 @@
 
 All notable changes to aqara-ble are documented in this file.
 
+## [1.9.0] — Offline-password cloud fetch + write-opcode sweep (2026-08-31)
+
+### Added
+- `fetch_offline_passwords(device_id, auth_headers, base_url, signer=None) ->
+  OfflinePasswordBatch`: fetch the "Contraseña sin conexión" codes pending for
+  the lock's current 10-minute window — a pure cloud call, no BLE connection to
+  the lock needed. `fetch_offline_password_log(...) -> tuple[OfflinePasswordLogEntry, ...]`
+  fetches the issuance history. Confirmed live (2026-08-30/31, real account/device)
+  that the codes are cloud-generated on a UTC-epoch-aligned 10-minute grid, and
+  (2026-08-31) that the request carries `device_id` as a JSON body (`{"did": ...}`)
+  on the GET, not a header/query param.
+- Write-opcode builders for previously read-only settings, all byte-confirmed
+  live and tested: `build_set_alert_volume`, `build_set_alert_delay`,
+  `build_set_alarm_volume`, `build_set_verify_fail_time`,
+  `build_set_auto_lockup_delay_time`, `build_set_auto_lock_on_close_delay_time`,
+  `build_set_auxiliary_locking_relock_enabled`,
+  `build_set_auxiliary_locking_on_close_enabled`, `build_set_language_english`,
+  `build_set_language_deutsch`.
+
+### Fixed
+- `fetch_offline_passwords()` now sends `{"did": device_id}` as the request
+  body — the initial implementation sent no body at all, which the live
+  capture proved wrong.
+
 ## [1.8.0] — Configuration-setting reads (2026-08-27)
 
 ### Fixed
