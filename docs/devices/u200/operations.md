@@ -892,6 +892,19 @@ cloud-side rate limit or cooldown on repeated OTA requests for the same
 account/device after many attempts in one afternoon; a stale/expired
 auth or session token after ~1.5+ hours of the app sitting mid-flow
 repeatedly; or a genuine CDN-side hiccup unrelated to anything client-side.
+
+**Also ruled out: bad in-memory app state from repeated attempts.** Fully
+force-stopped the app (`adb shell am force-stop`), relaunched it (needed
+the usual Frida-gadget cold-start unblock — see the standing procedure
+below — even though no script was attached, since the gadget itself still
+waits for a connection on the splash screen), and retried Français on a
+completely fresh process. **Stalled identically**, same ~135s, same
+mid-flow keypad-gate re-ask. Rules out "the app's own JS/native runtime
+got into a bad state after too many attempts" as an explanation — the
+cause survives a full app restart, pointing even more strongly at
+something server-side (rate limit, session/token staleness, or CDN) than
+anything client-side.
+
 **Next session should check for an HTTP error response around the stall
 point** (a raw CDN GET for the voice-pack asset, likely not going through
 the signed-header interceptor our Java hooks were watching — plain
