@@ -710,6 +710,86 @@ only infer from the app's decompiled code:
   connection attempts in a row before a third succeeded — a transient
   device-side hiccup, not a real blocker; retry if it happens again.
 
+#### 2026-09-01 — the "activate" trigger frame, TWO independent captures (Français + Español)
+
+The one open piece flagged above — the exact end-of-transfer activation
+frame — is now captured **twice, from two genuinely independent completed
+transfers** (a Français download that ran to completion, and a later
+Español download that also ran to completion after fixing an unrelated
+Bluetooth-proxy outage), letting the shape be told apart from any
+per-transfer noise. Both transfers, immediately after the last real audio
+chunk, end with the **exact same sequence of frame types in the same
+order**, all still on handle `0x003c` / write-prefix `0x11` unless noted:
+
+1. One all-`0xFF` padding chunk (244 bytes).
+2. One all-`0x00` padding chunk (244 bytes).
+3. Two all-`0x1A` marker chunks (244 bytes, then a shorter 58-byte one).
+4. A tiny 2-byte frame: `11 04`.
+5. **Two identical** 134-byte frames shaped exactly like the transfer's own
+   init frame but zeroed out: `11 0100 ff <244 bytes... all 0x00>` — i.e.
+   the same `<prefix><seq=1><marker=0xff>` header as the very first chunk
+   of the transfer, this time with an empty/zeroed body instead of a
+   filename+size string. Sent twice, back to back, byte-identical both
+   times within each transfer.
+6. **Two identical** 17-byte frames using a **different write-prefix,
+   `0x90`** (every other frame in the whole transfer uses `0x11`):
+   - Français: `90 1b7da3a951649f46b00a6e18acae2823`
+   - Español: `90 dc885ae8e29acad7d35ae75772fef244`
+
+The structural shape (padding → marker → `11 04` → zeroed-init-repeat ×2 →
+`0x90`-prefixed 17-byte frame ×2) is now confirmed language-independent —
+this is very likely the real "commit/activate this language now" signal
+the app sends once it's satisfied the transfer landed cleanly, replacing
+the earlier open question with a concrete, reproducible sequence.
+
+**Follow-up, same session, THIRD data point — content ruled out, points at
+a phone/app-side rotating value instead.** Ran the exact isolation
+experiment this section originally proposed: downloaded Français a
+*second* time (same bundle content and size as the first Français
+capture above), immediately after the Español download completed. Result:
+
+| Download | Order | `0x90` payload |
+| --- | --- | --- |
+| Français (1st) | 1st | `1b7da3a951649f46b00a6e18acae2823` |
+| Español | 2nd | `dc885ae8e29acad7d35ae75772fef244` |
+| Français (2nd) | 3rd | `dc885ae8e29acad7d35ae75772fef244` |
+
+The 2nd and 3rd rows are **byte-identical** despite different content
+(Español vs. Français — different bundle, different size, different
+manifest) and a completely separate BLE connection/session for each. This
+**rules out both of the two leading candidates**: it is not a hash/CRC of
+the transferred bundle (different content, same value) and not a
+per-connection nonce (different BLE sessions, same value). The 1st and
+2nd/3rd rows differ despite rows 1 and 3 sharing identical content
+(Français both times) — so it isn't a per-language constant either.
+
+The 2nd and 3rd downloads were ~28 minutes apart by the capture
+timestamps, one order of magnitude longer than the offline-password
+feature's 10-minute rotation grid, so a short time-windowed rotation (the
+first instinct, given that other feature's precedent) doesn't fit
+either — 28 minutes elapsed with zero change. What *did* happen between
+the 1st Français capture and the 2nd/3rd (which share their value): a
+long gap of unrelated work (over an hour) during which the Aqara app was
+**force-stopped and cold-relaunched several times** (chasing an unrelated
+Bluetooth-proxy outage), while between the 2nd and 3rd captures the app
+process ran continuously with no restart. **Leading hypothesis, not yet
+confirmed**: this value is generated once per app **process lifetime**
+(e.g. a random token/nonce the app creates at cold start and reuses for
+every OTA activation until it next restarts), not derived from the
+transfer's content or its BLE session at all. Confirming this needs one
+more data point: force-stop and cold-relaunch the app, then download any
+language and check whether the `0x90` payload changes from
+`dc885ae8e29acad7d35ae75772fef244` — if it does, the per-process-lifetime
+theory is confirmed (and the value must come from somewhere restart-reset
+on the phone, e.g. a fresh CSRNG draw kept in memory, needing a live
+Frida hook to actually observe rather than infer); if it stays the same
+even across a restart, look toward something persisted to disk instead
+(shared prefs / local DB row) that a plain force-stop doesn't clear.
+`aqara_ble` still only exposes `build_set_language_english()`/`_deutsch()`
+(the cached-language shortcut path); a real `OtaLanguageTransfer` builder
+covering the full download+activate sequence is blocked on nailing this
+one field, not on anything else in the framing above.
+
 #### Original 2026-08-29 note (superseded above, kept for history)
 
 `03 02 <val> 07` — same `kind=02`/`trailer=07` shape as `SET_DOORLOCK_ALARM_VOLUME`
