@@ -790,6 +790,84 @@ even across a restart, look toward something persisted to disk instead
 covering the full download+activate sequence is blocked on nailing this
 one field, not on anything else in the framing above.
 
+#### 2026-09-01, later same day — live Frida Java-hook capture: a 4th data point that complicates the picture (two DIFFERENT `0x90` frames, not an identical pair; source still not found)
+
+Confirmed the previous session's Frida 17.2.12 finding is real and durable:
+a `Java.perform()` hook (`SecureRandom.nextBytes`, `UUID.randomUUID`,
+`MessageDigest.digest`, `BluetoothGattCharacteristic.setValue`) stayed
+attached through roughly 40 minutes of real app navigation — menu
+traversal, three keypad-gate cycles, two full download attempts — with
+zero SecNeo crash. This is now solid enough to consider promoting 17.2.12
+to the project's daily driver (see `frida-repack-strategy.md`).
+
+**The capture itself, triggered live** (re-downloaded Français while the
+hook was attached): two `BLE setValue` hits fired almost immediately after
+tapping "Descargar y usar", **not** at the end of a long transfer:
+
+```text
+[BLE setValue] len=17 hex=90 2f d5 ef 63 68 a3 93 57 88 ec 7d 61 af 3e 57 bf
+[BLE setValue] len=27 hex=90 2f d5 ef 59 58 e0 dd 10 9f e3 30 4d 56 2d 4a 3a
+                          7c a4 24 9f 5d 89 6d 43 e9 0c
+```
+
+This does not match the shape documented above ("two **identical** 17-byte
+`0x90` frames at the very end of a completed transfer"). Instead:
+
+- The two frames here are **different lengths (17 vs 27) and different
+  content** — not a repeated pair.
+- They share a 4-byte prefix, `90 2f d5 ef`, then diverge completely.
+- They fired **before any bulk `0x11` data chunk was ever observed** by
+  the hook (which was watching for byte[0] ∈ {0x11, 0x90} on every
+  `setValue` call) — and after these two frames, the download stalled at
+  0% and the app re-asked for the keypad-gate wake, i.e. the real transfer
+  had not actually started yet.
+
+**Working theory, not confirmed**: these are a *different* `0x90`
+exchange from the one documented earlier — a short session-establish/
+handshake pair sent at the *start* of an OTA request (possibly to arm the
+keypad-wake requirement or negotiate a transfer session id), distinct from
+the *end*-of-transfer activation pair captured previously. The shared
+`2f d5 ef` prefix is a plausible session/sequence identifier for this
+specific exchange. This session never got far enough to also observe the
+end-of-transfer pair again, because:
+
+**New instability, also worth recording**: two separate download attempts
+this session (a fresh Polski download, then the Français re-download
+above) both stalled at 0% indefinitely after the initial handshake and had
+to be manually abandoned — a regression from prior sessions, where full
+transfers completed in a few minutes. `adb logcat` showed the BLE GATT
+link renegotiating PHY repeatedly (`onPhyUpdate` alternating 1x/2x every
+30–45s) but no explicit error. Two candidate causes, neither confirmed:
+(a) the Frida hook's own overhead — constructing a `Throwable` and walking
+`getStackTrace()` on *every single* `setValue` call — could be slow enough
+to desync a time-sensitive BLE write/ACK handshake during the real bulk
+transfer; (b) a genuine, hook-unrelated network/CDN hiccup fetching the
+voice-pack asset. **Next session should retry a full download with the
+hook detached (or a leaner hook that skips the backtrace on non-matching
+writes) to isolate which.**
+
+**Source hunt: still open.** None of `SecureRandom.nextBytes`,
+`UUID.randomUUID`, or `MessageDigest.digest()` (no-arg overload) fired
+with a matching value in the moments immediately before either write —
+ruling out those three specific Java-level RNG/hash paths as the direct
+source of this particular exchange's bytes. Not yet hooked: `MessageDigest
+.digest(byte[])`/`.update()` (only the no-arg overload was hooked), and
+`javax.crypto.Cipher.doFinal()` — a strong candidate given the project's
+existing evidence that BLE payloads are AES-encrypted with a cloud-KDF
+session key ([[app-reads-settings-bulk-blob]]). Next attempt should add a
+`Cipher.doFinal` hook alongside the existing three.
+
+**Loose end for next session**: while restoring the phone's language back
+to Español (the session's baseline) at the end of this investigation, the
+"Confirmar" write for an already-downloaded language (no OTA needed, just
+a small opcode) did not visibly take effect — the settings screen kept
+showing "Deutsch" after two clean confirm attempts. Given the PHY-
+renegotiation instability noted above, this is likely the same BLE
+flakiness rather than a new protocol finding. **The physical lock's voice
+language may currently be left on Deutsch, not Español — verify and fix
+next session** (quick top-level pick, no download needed, once the BLE
+link is stable again).
+
 #### Original 2026-08-29 note (superseded above, kept for history)
 
 `03 02 <val> 07` — same `kind=02`/`trailer=07` shape as `SET_DOORLOCK_ALARM_VOLUME`
