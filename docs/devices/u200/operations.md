@@ -790,83 +790,118 @@ even across a restart, look toward something persisted to disk instead
 covering the full download+activate sequence is blocked on nailing this
 one field, not on anything else in the framing above.
 
-#### 2026-09-01, later same day — live Frida Java-hook capture: a 4th data point that complicates the picture (two DIFFERENT `0x90` frames, not an identical pair; source still not found)
+#### 2026-09-01, later same day — root-caused via btsnoop: the `0x90` value is a per-process session token sent at BOTH ends, and the real stall is a silent app-side abort right after step 1 of the handshake
 
 Confirmed the previous session's Frida 17.2.12 finding is real and durable:
 a `Java.perform()` hook (`SecureRandom.nextBytes`, `UUID.randomUUID`,
 `MessageDigest.digest`, `BluetoothGattCharacteristic.setValue`) stayed
 attached through roughly 40 minutes of real app navigation — menu
 traversal, three keypad-gate cycles, two full download attempts — with
-zero SecNeo crash. This is now solid enough to consider promoting 17.2.12
-to the project's daily driver (see `frida-repack-strategy.md`).
+zero SecNeo crash. Solid enough to consider promoting 17.2.12 to the
+project's daily driver (see `frida-repack-strategy.md`).
 
-**The capture itself, triggered live** (re-downloaded Français while the
-hook was attached): two `BLE setValue` hits fired almost immediately after
-tapping "Descargar y usar", **not** at the end of a long transfer:
+**A live capture during this session initially looked like a new,
+different `0x90` exchange (see git history of this section for the
+original, now-superseded framing) — cross-checking it against a real
+`adb bugreport` btsnoop pull corrected the picture and answered the
+question this section is titled for**: two OTA downloads stalled at 0%
+this session (Polski, then a Français re-download); the question was
+whether the BLE radio disconnected or Frida was somehow blocking the
+transfer. **Neither.** The btsnoop capture (`FS/data/misc/bluetooth/
+logs/btsnoop_hci.log` from a fresh bugreport) shows, beyond doubt:
 
-```text
-[BLE setValue] len=17 hex=90 2f d5 ef 63 68 a3 93 57 88 ec 7d 61 af 3e 57 bf
-[BLE setValue] len=27 hex=90 2f d5 ef 59 58 e0 dd 10 9f e3 30 4d 56 2d 4a 3a
-                          7c a4 24 9f 5d 89 6d 43 e9 0c
-```
+- **The radio link never dropped.** A `Connection Events` / `stack::gatt`
+  check in the same bugreport shows a single unbroken `GATT_CH_OPEN` from
+  14:42:42 through the entire session (no `GATT_CH_CLOSE` in between), and
+  the encrypted control channel (handle `0x0031` write / `0x0033` notify)
+  kept exchanging a routine ~15s heartbeat continuously through both
+  stalls, with no gap.
+- **Frida did not block or slow the BLE write path.** The exact two
+  `setValue` hits the Frida hook caught turn out to be a normal, fast
+  **request/response pair**, not two app-side writes: `BluetoothGattCharacteristic.setValue`
+  fires both when the app *writes* a value AND when Android's BLE stack
+  caches an *incoming notification's* value into the characteristic object
+  before delivering `onCharacteristicChanged` — this hook was catching
+  both directions. The real over-the-air sequence, confirmed in btsnoop:
 
-This does not match the shape documented above ("two **identical** 17-byte
-`0x90` frames at the very end of a completed transfer"). Instead:
+  ```text
+  0x003f  WriteReq   len=2   0100                              (enable notifications, standard CCCD write)
+  0x003c  WriteCmd   len=17  90 2f d5 ef 63 68 a3 93 57 88 ec 7d 61 af 3e 57 bf   (phone -> lock)
+  0x003e  Notify     len=27  90 2f d5 ef 59 58 e0 dd 10 9f e3 30 4d 56 2d 4a 3a 7c a4 24 9f 5d 89 6d 43 e9 0c   (lock -> phone, ~28ms later)
+  ```
 
-- The two frames here are **different lengths (17 vs 27) and different
-  content** — not a repeated pair.
-- They share a 4-byte prefix, `90 2f d5 ef`, then diverge completely.
-- They fired **before any bulk `0x11` data chunk was ever observed** by
-  the hook (which was watching for byte[0] ∈ {0x11, 0x90} on every
-  `setValue` call) — and after these two frames, the download stalled at
-  0% and the app re-asked for the keypad-gate wake, i.e. the real transfer
-  had not actually started yet.
+  Both directions fired in **well under 30ms**, identically fast in both
+  the Polski and the Français attempt — there is no Frida-induced latency
+  here at all.
+- **The 17-byte value is confirmed to be a per-app-process session token,
+  not per-language and not per-transfer**: this exact same 17-byte value
+  (`902fd5ef6368a3935788ec7d61af3e57bf`) was sent for BOTH the Polski
+  attempt (14:59:09) AND the later Français attempt (15:04:29) — two
+  different languages, two separate download attempts — with byte-for-byte
+  identical value both times. Searching the same btsnoop file for the
+  OLDER captured value (`dc885ae8e29acad7d35ae75772fef244`, from earlier
+  today's Español capture) finds it **repeated at both the very start AND
+  immediately after the zeroed-134-byte-repeat frames at the end** of that
+  successful transfer — i.e. this handshake fires *twice* in a normal
+  transfer (open + close), always with the same value for a given app
+  process run. This **confirms the "once per app process lifetime"
+  hypothesis** from the earlier entry below: the value changed between
+  today's earlier Español capture and this session's Polski/Français
+  attempts because the Aqara app's Bluetooth GATT client re-registered
+  under a new `app_if` in between (`dumpsys bluetooth_manager` shows
+  `gatt_if: 93` disconnecting at 13:56:39 and a fresh `gatt_if: 96`
+  connecting at 14:42:42 — a real app force-stop/relaunch happened in that
+  gap), while the value stayed constant across every attempt *within* one
+  of those app-process lifetimes.
+- **The actual bug, precisely located**: in the working Español capture,
+  this opening handshake is immediately followed (within ~1.1s) by a
+  second request/response pair (a 110-byte write, a 25-byte notify reply),
+  then a tiny `1143`/`1106` exchange on `0x003e`, and only then the real
+  134-byte init frame and the hundreds of 244-byte bulk chunks. **In both
+  of this session's stalled attempts, nothing at all follows the opening
+  17/27-byte pair** — no second request, no init frame, no bulk chunk,
+  for the rest of each attempt (multiple minutes) until manually
+  abandoned. The BLE link stays idle (just the routine heartbeat)
+  throughout. This is an **app-side state-machine stall**, not a
+  transport-layer one: the phone app receives a completely normal-looking
+  reply to its first handshake message and then simply never sends the
+  next one.
 
-**Working theory, not confirmed**: these are a *different* `0x90`
-exchange from the one documented earlier — a short session-establish/
-handshake pair sent at the *start* of an OTA request (possibly to arm the
-keypad-wake requirement or negotiate a transfer session id), distinct from
-the *end*-of-transfer activation pair captured previously. The shared
-`2f d5 ef` prefix is a plausible session/sequence identifier for this
-specific exchange. This session never got far enough to also observe the
-end-of-transfer pair again, because:
-
-**New instability, also worth recording**: two separate download attempts
-this session (a fresh Polski download, then the Français re-download
-above) both stalled at 0% indefinitely after the initial handshake and had
-to be manually abandoned — a regression from prior sessions, where full
-transfers completed in a few minutes. `adb logcat` showed the BLE GATT
-link renegotiating PHY repeatedly (`onPhyUpdate` alternating 1x/2x every
-30–45s) but no explicit error. Two candidate causes, neither confirmed:
-(a) the Frida hook's own overhead — constructing a `Throwable` and walking
-`getStackTrace()` on *every single* `setValue` call — could be slow enough
-to desync a time-sensitive BLE write/ACK handshake during the real bulk
-transfer; (b) a genuine, hook-unrelated network/CDN hiccup fetching the
-voice-pack asset. **Next session should retry a full download with the
-hook detached (or a leaner hook that skips the backtrace on non-matching
-writes) to isolate which.**
-
-**Source hunt: still open.** None of `SecureRandom.nextBytes`,
-`UUID.randomUUID`, or `MessageDigest.digest()` (no-arg overload) fired
-with a matching value in the moments immediately before either write —
-ruling out those three specific Java-level RNG/hash paths as the direct
-source of this particular exchange's bytes. Not yet hooked: `MessageDigest
-.digest(byte[])`/`.update()` (only the no-arg overload was hooked), and
-`javax.crypto.Cipher.doFinal()` — a strong candidate given the project's
-existing evidence that BLE payloads are AES-encrypted with a cloud-KDF
-session key ([[app-reads-settings-bulk-blob]]). Next attempt should add a
-`Cipher.doFinal` hook alongside the existing three.
+**Working hypothesis for the stall itself, not confirmed**: SecNeo's
+anti-tampering may not always crash the process outright (as it used to
+on 16.7.19) — it may, on a newer/matched Frida+ART pairing like 17.2.12,
+fall back to silently sabotaging a specific sensitive step instead (a
+common evasive anti-Frida pattern: no crash, no error, the targeted
+operation just quietly never completes). The step that never fires here
+(the 110-byte second handshake message) is a good candidate for "the
+step that needs a cryptographic operation SecNeo can selectively
+neuter," given the project's existing evidence that this protocol is
+AES-encrypted with a cloud-KDF session key
+([[app-reads-settings-bulk-blob]]). **Next session's most direct test**:
+repeat a language download with NO Frida hook attached at all (fully
+un-instrumented app) — if it completes normally, this confirms
+instrumentation-triggered sabotage rather than an unrelated network/CDN
+issue, and narrows the "silent failure" to something Cipher-related worth
+hooking carefully (expect it might itself get sabotaged the moment it's
+observed, which would be a finding in itself).
 
 **Loose end for next session**: while restoring the phone's language back
-to Español (the session's baseline) at the end of this investigation, the
-"Confirmar" write for an already-downloaded language (no OTA needed, just
-a small opcode) did not visibly take effect — the settings screen kept
-showing "Deutsch" after two clean confirm attempts. Given the PHY-
-renegotiation instability noted above, this is likely the same BLE
-flakiness rather than a new protocol finding. **The physical lock's voice
-language may currently be left on Deutsch, not Español — verify and fix
-next session** (quick top-level pick, no download needed, once the BLE
-link is stable again).
+to Español at the end of this investigation, the "Confirmar" write for an
+already-downloaded language did not visibly take effect (settings screen
+kept showing "Deutsch" after two clean attempts) — given everything above,
+this was very likely the same class of app-side silent stall, not a BLE
+transport problem. **The physical lock's voice language may currently be
+left on Deutsch, not Español — verify and fix next session** (quick
+top-level pick, no download needed).
+
+**Practical note on the btsnoop timestamps**: `tools/parse_att_handle.py`
+prints the raw btsnoop `ts` field as-is; converting it to a real
+wall-clock time needs `unix_seconds = (ts_usec - 0x00E03AB44A676000) /
+1_000_000` per the btsnoop spec, but this phone's Bluetooth-controller
+clock (not the main OS clock, which is correct) is a clean 30 years
+behind real time — the formula's output lands on the right month/day but
+the wrong year. Anchor conversions empirically against the log file's own
+mtime instead of trusting either clock, if this ever needs redoing.
 
 #### Original 2026-08-29 note (superseded above, kept for history)
 
