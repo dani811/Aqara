@@ -30,6 +30,12 @@ VERSION="${1:?Usage: repack_apk.sh <frida-version> [path-to-original-apk]}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="$REPO_ROOT/tools/repacked-apks/frida-$VERSION"
 ORIGINAL_APK="${2:-$REPO_ROOT/tools/repacked-apks/original/aqara-official.apk}"
+# Resolve to an absolute path up front — the script cd's into a work dir
+# below, and objection's own APK-source check runs from there.
+case "$ORIGINAL_APK" in
+  /*) ;;
+  *) ORIGINAL_APK="$(cd "$(dirname "$ORIGINAL_APK")" && pwd)/$(basename "$ORIGINAL_APK")" ;;
+esac
 
 if [[ ! -f "$ORIGINAL_APK" ]]; then
   echo "error: original APK not found at $ORIGINAL_APK" >&2
@@ -43,6 +49,14 @@ mkdir -p "$OUT_DIR"
 echo "== Repacking Aqara Home with frida-gadget $VERSION =="
 echo "   source:  $ORIGINAL_APK"
 echo "   out dir: $OUT_DIR"
+
+# objection's own patchapk shells out to aapt (for the manifest edit) before
+# this script's own build-tools lookup would otherwise run — put build-tools
+# on PATH up front so both objection AND our own zipalign/apksigner find it.
+if ! command -v aapt >/dev/null 2>&1; then
+  BT=$(find "$HOME/Library/Android/sdk/build-tools" -maxdepth 1 -type d 2>/dev/null | sort -V | tail -1)
+  [[ -n "$BT" ]] && export PATH="$BT:$PATH"
+fi
 
 WORK="$OUT_DIR/.work"
 rm -rf "$WORK"
@@ -58,11 +72,17 @@ objection patchapk \
   -V "$VERSION" \
   -t com.secneo.apkwrapper.AW
 
-PATCHED_APK=$(ls ./*.objection.apk 2>/dev/null | head -1)
-if [[ -z "$PATCHED_APK" ]]; then
-  echo "error: objection did not produce a *.objection.apk — check its output above" >&2
+# objection writes its output NEXT TO THE SOURCE APK (i.e. in
+# $ORIGINAL_APK's directory), not into $PWD/$WORK — move it here so the
+# rest of this script can treat it uniformly.
+SRC_DIR="$(dirname "$ORIGINAL_APK")"
+RAW_OUTPUT=$(ls "$SRC_DIR"/*.objection.apk 2>/dev/null | head -1)
+if [[ -z "$RAW_OUTPUT" ]]; then
+  echo "error: objection did not produce a *.objection.apk next to $ORIGINAL_APK — check its output above" >&2
   exit 1
 fi
+PATCHED_APK="$(basename "$RAW_OUTPUT")"
+mv "$RAW_OUTPUT" "./$PATCHED_APK"
 
 # 2. Known objection packaging bug: the gadget .so lands at lib/arm64/
 #    instead of lib/arm64-v8a/. Android's PackageManager silently ignores
@@ -80,7 +100,14 @@ elif [[ -d "$UNPACK_DIR/lib/arm64" ]]; then
 fi
 
 FIXED_APK="$OUT_DIR/aqara-repacked.apk"
-(cd "$UNPACK_DIR" && zip -q -r -X "../fixed.apk" .)
+# resources.arsc MUST stay stored (uncompressed) — Android R+ rejects an
+# APK where it's compressed. objection's own output has it stored
+# correctly; a naive `zip -r` over the whole tree recompresses it and
+# breaks install with "Failed parse ... requires resources.arsc ... to be
+# stored uncompressed". Zip everything else normally, add this one file
+# separately with -0.
+(cd "$UNPACK_DIR" && zip -q -r -X "../fixed.apk" . -x "resources.arsc")
+(cd "$UNPACK_DIR" && zip -q -X -0 "../fixed.apk" resources.arsc)
 
 # 3. Locate Android build-tools (aapt2/zipalign/apksigner) if not on PATH.
 BUILD_TOOLS=""
@@ -95,7 +122,7 @@ fi
 # 4. zipalign, then re-sign with objection's own debug keystore (same one
 #    it always uses — this is a local debug key, not a secret).
 zipalign -f -p 4 fixed.apk aligned.apk
-OBJECTION_JKS=$(python3 -c "import objection, os; print(os.path.join(os.path.dirname(objection.__file__), 'utils', 'patchers', 'objection.jks'))")
+OBJECTION_JKS=$(python3 -c "import objection, os; print(os.path.join(os.path.dirname(objection.__file__), 'utils', 'assets', 'objection.jks'))")
 apksigner sign \
   --ks "$OBJECTION_JKS" \
   --ks-key-alias objection \

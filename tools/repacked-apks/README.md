@@ -29,9 +29,9 @@ the knowledge survives even when the binary doesn't.
 
 | Version | Host+gadget connect? | Java/ART hook survives? | Notes |
 | --- | --- | --- | --- |
-| `16.7.19` | ✅ yes | ❌ crashes (SecNeo suspends-all within minutes) | **Current daily driver** — pinned in `../requirements-frida.txt`. Confirmed working end-to-end 2026-08-27/28. Only native `Interceptor.attach` hooks (not touching ART/JNI) are stable on this build — see `../frida-setup.md`. |
+| `16.7.19` | ✅ yes | ❌ crashes (SecNeo suspends-all within minutes) | Was the daily driver through 2026-09-01. Confirmed working end-to-end 2026-08-27/28. Superseded for Java-hook work by 17.2.12 below — kept here as the known-safe fallback for native-only capture work. |
 | `17.17.0` | ❌ **no — gadget never connects** ("connection closed" before Frida can even report gadget version) | untested (never got that far) | Tried first, historically, before the project settled on 16.7.19. **Don't re-attempt without a real reason** — this is a recorded negative result, not a guess. If retried anyway, use this script so the attempt and its outcome get logged here instead of lost again. |
-| `17.2.12` | **untested** | **untested — this is the hypothesis worth testing** | Frida's own changelog: "fixes incorrect ART class spec offset detection, preventing crashes... now relies on runtime detection via known classes for greater reliability." This is a *different* fix than whatever broke 17.17.0's connection, and it directly targets the ART-detection class of bug — plausible (not confirmed) it also affects whether SecNeo's anti-Frida trips. See `frida-17.2.12/README.md` for the exact test plan. |
+| `17.2.12` | ✅ **yes** | ✅ **CONFIRMED SURVIVES — 2026-09-01 live test** | `Java.perform()` + `Java.use('android.app.ActivityThread')` + a 5s heartbeat ran 150s straight, zero crash, on a fresh repack of the pristine Play Store APK (6.3.9/6966). **This overturns the standing "any ART/JNI hook crashes SecNeo" finding — that was only ever true on 16.7.19.** See `frida-17.2.12/README.md` for the exact repro and the real next step (hooking the OTA-activation code path instead of a no-op). |
 
 ## `original/`
 

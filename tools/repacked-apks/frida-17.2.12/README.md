@@ -1,4 +1,56 @@
-# frida-17.2.12 — candidate to retest the ART/Java-hook crash
+# frida-17.2.12 — CONFIRMED: survives, use this for Java-level work
+
+**2026-09-01 result: `Java.perform()` survives.** Built fresh against a
+pristine Play Store pull (6.3.9/6966 — the previously-patched 16.7.19 APK
+was NOT reused as a base; repacking an already-repacked APK duplicates the
+gadget .so and is its own hazard, unrelated to this test — see the
+git history of this file if that ever needs re-explaining). Installed via
+`adb install-multiple` (base + `split_config.arm64_v8a`, both re-signed
+with objection's debug key). Host pinned to matching 17.2.12
+(`pip install "frida==17.2.12"` + the pipx `frida-tools` reinstall from
+`../../frida-setup.md`).
+
+Test script (`frida-java-bridge` via npm + `frida-compile`, since Frida 17
+unbundled the Java runtime bridge — a bare `Java.perform` in a raw
+Python-attached script throws `ReferenceError: 'Java' is not defined`
+without this):
+
+```js
+import Java from 'frida-java-bridge';
+Java.perform(() => {
+  send('[test] Java.perform succeeded, ART bridge attached');
+  const ActivityThread = Java.use('android.app.ActivityThread');
+  send('[test] Java.use(android.app.ActivityThread) succeeded too');
+});
+setInterval(() => send('[heartbeat]'), 5000);
+```
+
+Result: both `send()` calls fired, then **29 heartbeats over 150s with no
+crash, no detach, the app UI stayed fully responsive** (screenshotted
+mid-test — normal login screen, not frozen). Compare to the standing
+16.7.19 finding: "SecNeo suspends-all → gadget SIGSEGVs" within minutes of
+any ART/JNI-touching hook.
+
+**Practical fallout for the whole project**: the offline-password
+Kotlin-level investigation (flagged "untried, crash risk" for months) and
+the OTA-activation-value question ([[clean-session-start-here]]) are both
+unblocked — hook `handleSetLanguageByChannel`/`mapLanguageValueToChannel`
+(and, for the older investigation, `PeriodPasswordViewModel`/
+`CreatePeriodPasswordEntity`) directly now, no need for the native-Hermes
+workaround this README originally proposed as a fallback.
+
+**Open decision, not made yet**: should 17.2.12 become the new pinned
+"daily driver" in `tools/requirements-frida.txt`, replacing 16.7.19
+project-wide? Arguments for: strictly more capable (native hooks that
+worked on 16.7.19 have no reason to stop working on 17.2.12; Java hooks
+now also work). Arguments for caution: only smoke-tested with a trivial
+hook so far, not with the heavier native SSL/BLE capture scripts this
+project actually depends on day to day — verify those still work on
+17.2.12 before fully retiring 16.7.19, don't assume from one passing test.
+
+---
+
+## Original hypothesis (superseded by the result above, kept for provenance)
 
 ## Hypothesis
 
