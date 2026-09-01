@@ -1013,37 +1013,54 @@ machine:
   was the first-ever navigation to `VoiceOtaPage` in that fresh process
   and still stalled identically, so it isn't accumulated
   React-Navigation cruft either.
-- **The single most direct, concrete next check, not another blind
-  capture**: this build still ships live `console.log` calls from Hermes
-  (confirmed literally in the decompiled bytecode above) — `adb logcat -s
-  ReactNativeJS:*` during a fresh attempt should show directly whether
-  `'VoiceOtaPage start Ota info'` (and whether `fileInfo` was populated
-  or not) and `'start download File url'` ever print. If neither line
-  ever appears, the failure is upstream of `VoiceOtaPage` entirely
-  (a `fileInfo`/navigation problem, or the picker's `cloudLangList` row
-  itself came back malformed from `/app/dev/voice/list` for this
-  account/language right now); if `'start download File url'` DOES print
-  with a real URL but still nothing hits the wire, THEN it's worth
-  revisiting the native-networking-library-coverage question from the
-  SSL hook. Cheaper and more precise than re-guessing.
+- **`adb logcat -s ReactNativeJS:*` was tried and is a dead end for this
+  build**: zero lines of that tag appeared anywhere in the log across a
+  full fresh attempt (confirmed via a broader `grep -iE "reactnative|
+  hermes"` sweep of the whole buffer too — nothing). This is a release
+  build with Hermes/RN's `console.log` silenced at the native bridge
+  level, despite the calls being present in the bytecode. Don't reach for
+  this again on this build.
+- **Went one level more precise instead: hooked the real native module
+  directly.** `Java.enumerateLoadedClassesSync()` identified
+  `com.rnfs.Downloader`/`com.rnfs.DownloadParams` — this app uses the
+  well-known `react-native-fs` library for `downloadFileAsync`, not a
+  custom Aqara module. Hooked `Downloader.doInBackground` (where RNFS's
+  `AsyncTask` receives the URL) AND a generic `java.net.URL
+  .openConnection()` hook filtered for `aqara`/`lumi`/`.mp3`/`.zip` in
+  the URL, both via the same proven-stable Frida 17.2.12 Java bridge,
+  attached *before* tapping "Descargar y usar" this time (not
+  retroactively). **Neither fired once in 100+ seconds of a fresh
+  Français attempt.** `com.rnfs.Downloader` is never instantiated;
+  `URL.openConnection()` is never called for anything voice-related.
+  This is a third, independent confirmation (JS bytecode logic → SSL
+  wire capture → native module instrumentation, three different
+  vantage points, same answer) that **`startOta()`'s
+  `downloadFileAsync(...)` call is never reached at all** during a
+  stalled attempt — not throttled, not failing, not even attempted.
 
 **What's left, by elimination, across every layer checked this session**:
 phone radio (ruled out), Frida/SecNeo (ruled out), app process state
-(ruled out), all persisted app data (ruled out). Network/CDN is now
-"no attempt observed," which is a more precise, different claim than
-"ruled out" — see the correction above. The lock's own firmware-side
-session state is also still untested. **Two concrete next actions, in
-order of cost**: (1) the `adb logcat -s ReactNativeJS:*` check above,
-free and fast; (2) if that's inconclusive, power-cycle the physical lock
-(remove and reinsert the battery) to force its own OTA/session state back
-to a clean slate, then retry Français once. If that completes normally,
-the lock-side stuck-session theory is confirmed and the real lesson is
-"never abandon an OTA session mid-flight without a proper cancel
-handshake" for future testing. If it *still* stalls after a physical
-power-cycle, every layer this project knows how to inspect will have been
-excluded, and the next step is a totally fresh live capture comparing a
-working vs. failing attempt's full BLE trace side by side rather than
-inferring from absence of traffic.
+(ruled out), all persisted app data (ruled out), and now the CDN
+file-download step itself (confirmed never invoked, three independent
+ways). The failure is narrowed to a specific, small span of JS: somewhere
+between "`VoiceOtaPage` mounts with a `fileInfo` nav param" and "`startOta()`
+calls `downloadFileAsync`" — most likely `getPageParams().fileInfo` is
+empty/malformed for this account+language right now (which would silently
+throw the `'VoiceOtaPage empty file info'` `Error` — swallowed by
+whatever wraps the effect, since no error toast was ever seen), pointing
+at the **`/app/dev/voice/list` cloud response** itself as the next thing
+to inspect (does it currently return a valid `fileInfo` for `fr` at all?),
+rather than at BLE, Frida, or the download step. The lock's own
+firmware-side OTA session state is also still untested and remains a
+live alternative. **Next concrete action**: capture the actual
+`/app/dev/voice/list` response for this account (a plain authenticated
+GET, same signing scheme as `fetch_offline_passwords()` in `aqara_ble` —
+no phone needed at all for this one, it can be replayed from a script) and
+check whether Français's row carries a real `fileInfo` right now. If it's
+empty/broken cloud-side, that's the root cause, full stop. If it looks
+fine, power-cycle the physical lock (remove and reinsert the battery) as
+the next thing to rule out, since every phone-side layer is now
+exhausted.
 
 **Loose end for next session**: while restoring the phone's language back
 to Español at the end of this investigation, the "Confirmar" write for an
