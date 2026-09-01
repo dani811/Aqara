@@ -965,13 +965,76 @@ This rules out anything persisted on the **phone** side (SharedPreferences,
 AsyncStorage, cached BLE subscription state) as firmly as it already
 ruled out Frida, the network, and a merely-restarted app process.
 
+**Correction to "network/CDN ruled out" above — it was too coarse, and a
+concrete per-language CDN mechanism DOES exist and was missed on first
+pass.** Static analysis of the same decompiled plugin located the real
+per-language asset pipeline, in a different file than the BLE state
+machine:
+
+- Cloud endpoint `GET /app/dev/voice/list` (via the same generic
+  `Service.callSmartHomeGet` used everywhere else — same
+  `rpc-<region>.aqara.com` host and signed-header scheme this project has
+  already profiled, not a separate system) returns, per supported
+  language, a `fileInfo` field (a JSON string, `JSON.parse`d client-side)
+  — this populates Redux's `cloudLangList`, which is what the language
+  picker UI (`getCloudVoiceLanguageData` in
+  `Modules_common-lock_src_Pages_Settings_AlarmVolumeLanguage_
+  AlarmVolumeLanguageManager.ts`) renders.
+- Tapping an undownloaded language navigates to **`VoiceOtaPage.tsx`**
+  (`Modules_common-lock_src_Pages_Settings_AlarmVolumeLanguage_
+  VoiceOtaPage.tsx`) passing that row's `fileInfo` as a nav param.
+  `VoiceOtaPage`'s `startOta()` effect reads it via `getPageParams()`,
+  throws a `'VoiceOtaPage empty file info'` `Error` if it's missing, and
+  otherwise calls `startUpgradeFirmware(fileInfo)`, which builds
+  `url = fileInfo.url + '/' + fileInfo.fileInfo[0].fileName` and calls
+  `downloadFileAsync(url, ...)` with a `updateDownloadProgress` callback
+  — **this is literally what the on-screen "0%" is showing**: an HTTP
+  file-download percentage, not a BLE progress indicator. Both steps log
+  plainly via `console.log`: `'VoiceOtaPage start Ota info'`,
+  `'start download File url'`.
+- Cross-checked this against the **already-captured** native SSL log
+  from the earlier entry (`ssl_capture_final.log`, full 85 lines
+  re-read, not re-captured) instead of assuming it needed a new test:
+  it contains exactly two small `byResourceId` calls (generic UI-icon
+  resource lookups, unrelated to voice) and then **zero further network
+  bytes of any kind** — not even a failed/refused connection attempt —
+  for the whole 3+ minute stall. If `downloadFileAsync` had actually
+  fired and failed, a TLS ClientHello alone would show up here; it
+  doesn't. **This means `startOta()`/`downloadFileAsync` most likely
+  never executes at all during a stalled attempt** — a layer *above*
+  the network, not "the network is fine." The earlier framing ("stall is
+  upstream of both BLE and network, inside the OTA state machine") was
+  directionally right but imprecise about which state machine (the BLE
+  `BleCommander`, not `VoiceOtaPage`'s own `startOta` effect, which may
+  be a separate/earlier failure point).
+- **A stale-navigation-stack theory (leftover `VoiceOtaPage` instance
+  from a previous abandoned attempt swallowing the new nav params) does
+  NOT survive the evidence**: the post-app-data-clear Français attempt
+  was the first-ever navigation to `VoiceOtaPage` in that fresh process
+  and still stalled identically, so it isn't accumulated
+  React-Navigation cruft either.
+- **The single most direct, concrete next check, not another blind
+  capture**: this build still ships live `console.log` calls from Hermes
+  (confirmed literally in the decompiled bytecode above) — `adb logcat -s
+  ReactNativeJS:*` during a fresh attempt should show directly whether
+  `'VoiceOtaPage start Ota info'` (and whether `fileInfo` was populated
+  or not) and `'start download File url'` ever print. If neither line
+  ever appears, the failure is upstream of `VoiceOtaPage` entirely
+  (a `fileInfo`/navigation problem, or the picker's `cloudLangList` row
+  itself came back malformed from `/app/dev/voice/list` for this
+  account/language right now); if `'start download File url'` DOES print
+  with a real URL but still nothing hits the wire, THEN it's worth
+  revisiting the native-networking-library-coverage question from the
+  SSL hook. Cheaper and more precise than re-guessing.
+
 **What's left, by elimination, across every layer checked this session**:
 phone radio (ruled out), Frida/SecNeo (ruled out), app process state
-(ruled out), all persisted app data (ruled out), network/CDN (ruled out).
-The one layer never reset today is **the lock's own firmware-side session
-state** — plausible given how many OTA sessions were opened and abandoned
-mid-flight today without a clean close sequence ever reaching it. **Next
-concrete action, not another capture**: power-cycle the physical lock
+(ruled out), all persisted app data (ruled out). Network/CDN is now
+"no attempt observed," which is a more precise, different claim than
+"ruled out" — see the correction above. The lock's own firmware-side
+session state is also still untested. **Two concrete next actions, in
+order of cost**: (1) the `adb logcat -s ReactNativeJS:*` check above,
+free and fast; (2) if that's inconclusive, power-cycle the physical lock
 (remove and reinsert the battery) to force its own OTA/session state back
 to a clean slate, then retry Français once. If that completes normally,
 the lock-side stuck-session theory is confirmed and the real lesson is
