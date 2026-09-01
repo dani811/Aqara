@@ -43,9 +43,13 @@ and was retired in feature 015).
 ## Capture hooks (Frida)
 
 > **Setup & pinned versions: [`frida-setup.md`](frida-setup.md).** The host
-> `frida-tools` version MUST equal the gadget baked into the repacked app (pinned
-> to **17.17.0** in [`requirements-frida.txt`](requirements-frida.txt)); a drifted
-> host fails with "connection closed". Verify with `python tools/check_gadget.py`.
+> `frida-tools` version MUST equal the gadget baked into the repacked app —
+> see that file for the current pin and *why* (this line used to say 17.17.0,
+> which was wrong and never actually worked; don't duplicate the version
+> number here again, frida-setup.md is the one source of truth for it).
+> A drifted host fails with "connection closed". Verify with
+> `python tools/check_gadget.py`. Multiple repacked builds, one per Frida
+> version under test, live in [`repacked-apks/`](repacked-apks/README.md).
 
 | Tool | What it captures |
 | --- | --- |
