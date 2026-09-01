@@ -887,11 +887,7 @@ retried:
 **This conclusively rules out Frida/SecNeo as the cause of this
 session's stalls.** Something else changed between "Français completed
 cleanly earlier today" and "Français stalls every time now, Frida or no
-Frida" — leading candidates for next session, not yet tested: a
-cloud-side rate limit or cooldown on repeated OTA requests for the same
-account/device after many attempts in one afternoon; a stale/expired
-auth or session token after ~1.5+ hours of the app sitting mid-flow
-repeatedly; or a genuine CDN-side hiccup unrelated to anything client-side.
+Frida".
 
 **Also ruled out: bad in-memory app state from repeated attempts.** Fully
 force-stopped the app (`adb shell am force-stop`), relaunched it (needed
@@ -900,17 +896,36 @@ below — even though no script was attached, since the gadget itself still
 waits for a connection on the splash screen), and retried Français on a
 completely fresh process. **Stalled identically**, same ~135s, same
 mid-flow keypad-gate re-ask. Rules out "the app's own JS/native runtime
-got into a bad state after too many attempts" as an explanation — the
-cause survives a full app restart, pointing even more strongly at
-something server-side (rate limit, session/token staleness, or CDN) than
-anything client-side.
+got into a bad state after too many attempts" as an explanation.
 
-**Next session should check for an HTTP error response around the stall
-point** (a raw CDN GET for the voice-pack asset, likely not going through
-the signed-header interceptor our Java hooks were watching — plain
-`tcpdump`/mitmproxy on the phone's network traffic, not just BLE, is the
-right tool this time) before spending any more time on the BLE/crypto
-side of this investigation.
+**"It's probably a cloud rate-limit/CDN issue" was an unverified guess —
+checked directly, and it does NOT hold up.** Ported `capture_ssl_native.js`
+to the Frida 17.x GumJS API (`Module.findExportByName` was removed;
+fixed by using the per-`Module` instance method via
+`Process.getModuleByName(name).findExportByName(...)` instead — see
+`capture_ssl_native_v17.js` in this session's scratchpad, worth folding
+into the tools/ version) and hooked `SSL_read`/`SSL_write` natively (no
+ART/Java bridge involved) on `libssl.so`/`libjavacrypto.so` — this dumps
+actual pre-encryption/post-decryption plaintext to an on-device file, so
+it sees every HTTPS request/response regardless of certificate pinning.
+Result, triggering a fresh Français attempt with this hook live: a burst
+of ordinary HTTP/2 traffic (analytics/telemetry pings, `"code":0,
+"message":"Success"` acks — unrelated background noise) right as the
+screen navigation happened, and then **literally nothing** — not one
+byte of new SSL/TLS traffic, success or error — for the entire ~3+ minute
+stall, except a single lone 17-byte `SSL_read` about 3 minutes in (sized
+like an HTTP/2 `PING` keepalive frame, not application data). **The app
+never even attempts an HTTP request for the voice-pack asset during the
+stall.** This rules out a hung/failing/rate-limited CDN fetch just as
+firmly as it rules out a BLE-layer problem — whatever is stuck is
+upstream of BOTH the network and BLE writes: something in the app's own
+JS/native OTA state machine simply never fires the next step's I/O at
+all, silently, with nothing to observe on the wire in either direction.
+**Next session's most direct next step**: hook the RN bridge / JS side
+of this specific screen (the `handleSetLanguageByChannel`-adjacent code
+already located in `docs/reference/rn-device-plugins.md`) to see what
+condition is gating the second step, since neither the network nor BLE
+layer show any attempt at all.
 
 **Loose end for next session**: while restoring the phone's language back
 to Español at the end of this investigation, the "Confirmar" write for an
