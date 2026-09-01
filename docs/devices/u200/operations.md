@@ -867,32 +867,47 @@ logs/btsnoop_hci.log` from a fresh bugreport) shows, beyond doubt:
   reply to its first handshake message and then simply never sends the
   next one.
 
-**Working hypothesis for the stall itself, not confirmed**: SecNeo's
-anti-tampering may not always crash the process outright (as it used to
-on 16.7.19) — it may, on a newer/matched Frida+ART pairing like 17.2.12,
-fall back to silently sabotaging a specific sensitive step instead (a
-common evasive anti-Frida pattern: no crash, no error, the targeted
-operation just quietly never completes). The step that never fires here
-(the 110-byte second handshake message) is a good candidate for "the
-step that needs a cryptographic operation SecNeo can selectively
-neuter," given the project's existing evidence that this protocol is
-AES-encrypted with a cloud-KDF session key
-([[app-reads-settings-bulk-blob]]). **Next session's most direct test**:
-repeat a language download with NO Frida hook attached at all (fully
-un-instrumented app) — if it completes normally, this confirms
-instrumentation-triggered sabotage rather than an unrelated network/CDN
-issue, and narrows the "silent failure" to something Cipher-related worth
-hooking carefully (expect it might itself get sabotaged the moment it's
-observed, which would be a finding in itself).
+**The SecNeo/Frida-sabotage hypothesis was tested immediately and RULED
+OUT.** Fully detached Frida (verified via `ps aux | grep frida` on the
+host — zero Frida processes running, nothing attached to the gadget) and
+retried:
+
+1. A **fresh Polski attempt** — stalled at 0% identically, ~90+ seconds,
+   no different from the Frida-attached attempts. On its own this is
+   inconclusive (Polski has never once completed in this project's
+   history — it could just be a broken/unavailable asset on Aqara's CDN).
+2. The real test: **re-downloaded Français** — the exact language that
+   completed successfully earlier the same day, before Frida was ever
+   attached this session. **It stalled at 0% too**, for 130+ seconds,
+   needing the same keypad-gate re-wake mid-flow as before, then never
+   progressing — manually abandoned. Same phone, same lock, same
+   language, same app process, only difference: no Frida anywhere in the
+   picture.
+
+**This conclusively rules out Frida/SecNeo as the cause of this
+session's stalls.** Something else changed between "Français completed
+cleanly earlier today" and "Français stalls every time now, Frida or no
+Frida" — leading candidates for next session, not yet tested: a
+cloud-side rate limit or cooldown on repeated OTA requests for the same
+account/device after many attempts in one afternoon; a stale/expired
+auth or session token after ~1.5+ hours of the app sitting mid-flow
+repeatedly; or a genuine CDN-side hiccup unrelated to anything client-side.
+**Next session should check for an HTTP error response around the stall
+point** (a raw CDN GET for the voice-pack asset, likely not going through
+the signed-header interceptor our Java hooks were watching — plain
+`tcpdump`/mitmproxy on the phone's network traffic, not just BLE, is the
+right tool this time) before spending any more time on the BLE/crypto
+side of this investigation.
 
 **Loose end for next session**: while restoring the phone's language back
 to Español at the end of this investigation, the "Confirmar" write for an
 already-downloaded language did not visibly take effect (settings screen
-kept showing "Deutsch" after two clean attempts) — given everything above,
-this was very likely the same class of app-side silent stall, not a BLE
-transport problem. **The physical lock's voice language may currently be
-left on Deutsch, not Español — verify and fix next session** (quick
-top-level pick, no download needed).
+kept showing "Deutsch" after multiple clean attempts) — likely the same
+class of app-side silent stall now confirmed above, not a BLE transport
+problem. **The physical lock's voice language may currently be left on
+Deutsch, not Español — verify and fix next session** (quick top-level
+pick, no download needed, once whatever is causing today's stalls is
+understood or has cleared on its own).
 
 **Practical note on the btsnoop timestamps**: `tools/parse_att_handle.py`
 prints the raw btsnoop `ts` field as-is; converting it to a real
