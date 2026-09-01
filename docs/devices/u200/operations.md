@@ -921,11 +921,66 @@ firmly as it rules out a BLE-layer problem — whatever is stuck is
 upstream of BOTH the network and BLE writes: something in the app's own
 JS/native OTA state machine simply never fires the next step's I/O at
 all, silently, with nothing to observe on the wire in either direction.
-**Next session's most direct next step**: hook the RN bridge / JS side
-of this specific screen (the `handleSetLanguageByChannel`-adjacent code
-already located in `docs/reference/rn-device-plugins.md`) to see what
-condition is gating the second step, since neither the network nor BLE
-layer show any attempt at all.
+**Static analysis of the real plugin code, fetched fresh from the CDN
+(`https://cdn.aqara.com/cdn/appadmin/mainland/rn/eddb8f69feea48368f8827bac13a37f9.zip`,
+`bundleId: aqara.matter.4447_10242`) and decompiled with `hbc-decompiler`,
+located the actual state machine**: `Modules_function_modules_src_ble_
+utils_OtaUtils` / `BleCommanderClass` handles the low-level OTA session.
+Two concrete, code-level facts explain why a stall here is *silent
+forever* rather than erroring out:
+
+1. `BleCommanderClass` defines a `BLE_RESPONSE_OVER_TIME = 10000` (10s)
+   write-timeout, used for ordinary BLE commands — **but `sendData()`
+   explicitly skips arming this timeout whenever `isOtaCommander` is
+   true** (`if (isOtaCommander) return; /* else */ setTimeout(...)`).
+   The OTA transfer path has **no timeout, no retry, and no error
+   surfacing at all** by design — if the expected follow-up notification
+   never fires the registered `onCharacteristicValueChanged` callback,
+   the JS state machine waits literally forever with nothing to show for
+   it. This matches every observation this session down to the letter:
+   no error toast, no retry, indefinite "0%" until manually abandoned.
+2. `onCharacteristicValueChanged` only proceeds past its `if` guard when
+   the incoming characteristic's UUID matches the currently-registered
+   `notifyCharacterUUID` for that specific `BleCommander` instance —
+   any mismatch (e.g. a leftover/orphaned listener from a *previous*,
+   manually-abandoned session still attached) silently no-ops instead of
+   erroring.
+
+(Separately, confirmed `handleSetLanguageByChannel`/`setLanguageByChannel`
+in `Modules_common-lock_src_Http_SettingChannelHttpHandler.ts` is a
+**different, unrelated** cloud-relay path — `publishToDeviceByChannel`,
+gated on a `PushModule` push message — used only by the top-level
+quick-pick languages, not by "Otros idiomas → Descargar y usar". Don't
+conflate the two when reading this section again.)
+
+**This pointed at leftover/orphaned app-side session state from
+today's many manually-abandoned attempts as the most likely cause —
+tested directly, and it does NOT hold up either.** Fully cleared the
+app's data (Ajustes → Apps → Aqara Home → Almacenamiento → Borrar datos —
+confirmed by the app requiring a fresh login and re-showing first-run
+onboarding, not just a process restart) and retried Français from a
+completely clean install. **Stalled identically** — same ~130s+, same
+mid-flow keypad-gate re-ask, same total silence on both BLE and network.
+This rules out anything persisted on the **phone** side (SharedPreferences,
+AsyncStorage, cached BLE subscription state) as firmly as it already
+ruled out Frida, the network, and a merely-restarted app process.
+
+**What's left, by elimination, across every layer checked this session**:
+phone radio (ruled out), Frida/SecNeo (ruled out), app process state
+(ruled out), all persisted app data (ruled out), network/CDN (ruled out).
+The one layer never reset today is **the lock's own firmware-side session
+state** — plausible given how many OTA sessions were opened and abandoned
+mid-flight today without a clean close sequence ever reaching it. **Next
+concrete action, not another capture**: power-cycle the physical lock
+(remove and reinsert the battery) to force its own OTA/session state back
+to a clean slate, then retry Français once. If that completes normally,
+the lock-side stuck-session theory is confirmed and the real lesson is
+"never abandon an OTA session mid-flight without a proper cancel
+handshake" for future testing. If it *still* stalls after a physical
+power-cycle, every layer this project knows how to inspect will have been
+excluded, and the next step is a totally fresh live capture comparing a
+working vs. failing attempt's full BLE trace side by side rather than
+inferring from absence of traffic.
 
 **Loose end for next session**: while restoring the phone's language back
 to Español at the end of this investigation, the "Confirmar" write for an
