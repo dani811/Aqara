@@ -1163,6 +1163,17 @@ only ~half the transfer each) in `captures/ota/`.
   is **byte-identical to the OPENING 0x90 handshake** of the same transfer —
   one per-app-process token, constant across open + commit. We hold a real
   captured value now.
+- **Framing refinement (2026-09-02, corrected):** the `02 <seq> <0xff-seq>`
+  markers are per **~1024-byte block**, NOT per manifest file, and each block
+  also carries a **2-byte field** just before its marker (e.g. `b6 05`) whose
+  formula is **not** CRC-16/ARC nor a plain byte-sum — still undecoded. So a
+  from-scratch (no-capture) builder for an *arbitrary* language still needs
+  this 2-byte-per-block field cracked. **But this does NOT block the decisive
+  test:** `captures/ota/btsnoop_end.log` turned out to hold the **entire**
+  transfer verbatim (8138 ff91 writes covering `.bin[0:end]` + the full
+  activation tail + the 0x90) — the HCI buffer was big enough. So the Français
+  transfer can be **replayed frame-for-frame with zero framing knowledge**;
+  only *other* languages we haven't captured need the from-scratch path.
 - **Decisive open question → next step:** does the lock *validate* the 0x90
   or treat it as opaque? Build `OtaLanguageTransfer` in `aqara_ble` (init
   frame + manifest-driven segmented chunks from the `.bin` + activation tail
