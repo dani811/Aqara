@@ -62,8 +62,10 @@ from .lock_state import (
     decode_state_report,
 )
 from .scanner import scan, select_preferred
+from .ota import OtaResult, stream_language_ota
 from .session import (
     OperationInProgressError,
+    PostAuthContext,
     SessionMaterial,
     run_authenticated_lock_operation,
 )
@@ -273,6 +275,69 @@ class U200Client:
             session=material,
             observed_locked=observed[-1] if observed else None,
         )
+
+    async def push_language_ota(
+        self,
+        frames: list[bytes],
+        *,
+        delay: float = 0.006,
+        handshake_pause_s: float = 1.5,
+        trailing_listen_s: float = 5.0,
+        arm: bool = True,
+        progress: Any = None,
+    ) -> OtaResult:
+        """Stream a language voice-pack OTA to ff91 INSIDE an authenticated session.
+
+        The wire evidence (2026-09-02) proved the OTA is not a standalone plaintext
+        blast: it runs inside the aqara session (auth + CCCD on ff92 + live control
+        channel) and the lock block-acks on ff92. This authenticates like any
+        operation, then — via the session's ``post_auth`` hook — streams ``frames``
+        verbatim while draining ff92 acks and keeping control alive.
+
+        ``frames`` are the raw ff91 write values in order (e.g. extracted from a
+        captured transfer). Returns an :class:`~aqara_ble.ota.OtaResult`;
+        ``result.lock_engaged`` says whether the lock ack'd anything at all.
+        """
+
+        if not self.connected or self._gatt is None:
+            raise U200ClientError(
+                FlowPhase.OPERATION, "el cliente está cerrado/desconectado; vuelve a conectar"
+            )
+
+        result_box: list[OtaResult] = []
+
+        async def _hook(ctx: PostAuthContext) -> None:
+            result_box.append(
+                await stream_language_ota(
+                    ctx,
+                    frames,
+                    delay=delay,
+                    handshake_pause_s=handshake_pause_s,
+                    trailing_listen_s=trailing_listen_s,
+                    arm=arm,
+                    progress=progress,
+                )
+            )
+
+        try:
+            await run_authenticated_lock_operation(
+                client=self._gatt,
+                device_id=self.device_id,
+                auth_headers=None,
+                region=self.region,
+                base_url=self.base_url,
+                operation=LockOperation.KEEPALIVE,  # placeholder; never sent (post_auth)
+                notify_timeout=self.notify_timeout,
+                auth=self.auth,
+                post_auth=_hook,
+            )
+        except (OperationInProgressError, CloudServiceError, U200ClientError):
+            raise
+        except Exception as exc:
+            raise U200ClientError(FlowPhase.OPERATION, f"language-ota: {exc}") from exc
+        if not result_box:
+            raise U200ClientError(FlowPhase.OPERATION, "language-ota: el hook no produjo resultado")
+        return result_box[0]
 
     async def lock(self, *, listen_after: float = 0.0) -> str | None:
         return (await self.operate(LockOperation.LOCK, listen_after=listen_after)).response_hex

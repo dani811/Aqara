@@ -77,3 +77,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Local RE scratchpad — proprietary decompiled app / APKs / native libs, re-derivable, never commit
+scratchpad/
