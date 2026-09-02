@@ -1062,6 +1062,79 @@ fine, power-cycle the physical lock (remove and reinsert the battery) as
 the next thing to rule out, since every phone-side layer is now
 exhausted.
 
+**2026-09-02 — `/app/dev/voice/list` captured; cloud + CDN both ruled out
+(the leading hypothesis is dead).** Ran the concrete test above with a
+pure-cloud, no-phone script (`tools/probe_voice_list.py`, signs with the
+same `make_local_signer`/`compute_sign` scheme as
+`fetch_offline_passwords()`). Findings:
+
+- The endpoint is `GET /app/dev/voice/list` with query `did=<did>` (the
+  parameterless and `did=&model=` variants both return `code=106`; only
+  the bare `did=<did>` form is accepted → `code=0`, `message=Success`).
+- The response is **fully valid for Français right now**: row
+  `lang=13, langName="Français", version="1"`, with a real
+  `url = https://cdn.aqara.com/cdn/opencloud-product/mainland/product-voice/prd/aqara.matter.4447_10242/20240611190727`
+  and `fileInfo = [{"fileName":"U200_FR_audio_burn.bin","md5":"2fb6a8e43870816c3e5c3319afd903fd"}]`.
+  All 12 rows (中文 lang 1/2, Polski 17, Русский 10, Español 12, Français
+  13) carry a valid `url` + `fileInfo`. So `getPageParams().fileInfo`
+  being empty/malformed is **disproven** — the "swallowed empty file
+  info" theory is dead.
+- Note the real row shape vs. the decompiled code: each row already has
+  `url` and `fileInfo` (a JSON *string* that parses to a **list** of
+  `{fileName, md5}`), so the nav param passed to `VoiceOtaPage` is the
+  whole row and `startUpgradeFirmware` builds
+  `url + '/' + fileInfo[0].fileName` =
+  `.../20240611190727/U200_FR_audio_burn.bin`.
+- **Downloaded that exact URL directly** (public CDN, no auth): HTTP 200,
+  1 664 596 bytes, **MD5 matches the manifest byte-for-byte**
+  (`2fb6a8e43870816c3e5c3319afd903fd`). So the CDN asset layer is healthy
+  too, and we now hold the real Français voice bundle bytes
+  (`captures/U200_FR_audio_burn.bin`, git-ignored) — the seed for a
+  replay-based `OtaLanguageTransfer` builder.
+- **By elimination, every phone-side AND cloud-side layer is now
+  exhausted**: radio, Frida/SecNeo, app process, persisted app data, the
+  CDN download step (never invoked), the `/app/dev/voice/list` metadata,
+  and the CDN asset itself. The only untested layer left is the **physical
+  lock's own firmware-side OTA session state** → next action is the
+  battery power-cycle (user, physical). A parallel, app-independent path
+  worth pursuing instead: push this exact `.bin` to the lock ourselves
+  over the plaintext OTA GATT channel (handle `0x003c`, `0x11`/`0x52`)
+  from `aqara_ble`, which sidesteps the app's stall entirely — blocked
+  only on resolving the `0x90` per-app-process activation token (needs a
+  live Frida hook to observe its source).
+
+**2026-09-02 — OTA channel mapped to its real UUID; direct BLE stack
+confirmed healthy post-power-cycle.** After a battery power-cycle of the
+lock (to clear the app-side OTA stall state), verified the whole thing
+independently of the phone/app via the bumble/ESP32-S3 transport:
+- Lock advertises and connects cleanly: `aqara battery` over bumble
+  returned 100% in 5.4s (login → connect 3.4s → read). The direct stack
+  is stable.
+- Ran a full read-only GATT discovery (`tools/dump_gatt.py`) and mapped
+  the OTA voice-pack channel to its concrete characteristic: **ATT value
+  handle `0x003c` (60) = UUID `0000ff91-2333-5b1e-9d7c-c687fd2f04f2`,
+  `WRITE_WITHOUT_RESPONSE`, on the AUX service `0000ff90`**. Its paired
+  notify is handle `0x003e` = `0000ff92` (the already-known
+  `AUX_NOTIFY_UUID`). Added as `AUX_WRITE_UUID` in `gatt_uuids.py`. This
+  was the last *addressing* unknown: `aqara_ble` can now target the OTA
+  channel via `write_gatt_char(AUX_WRITE_UUID, data, response=False)`.
+- Full service map for reference: `fcb9` (ff07 write / ff08 notify =
+  auth), `ff60` (ff61 write / ff62 notify / ff63 write / ff64 notify =
+  control), `ff80` (ff81 write / ff82 notify), `ff70` (ff71 / ff72 both
+  write-no-resp), `ff90` (ff91 write = **OTA** / ff92 notify), plus a
+  `fff6` service with three vendor 128-bit chars (18ee2ef5…11/…12 +
+  64630238…04 = **Matter BTP commissioning** C1/C2/C3, not firmware OTA —
+  see `gatt-map.md`, which already had the full table since 2026-08-19).
+  This live dump only re-confirmed that existing map (same handles/UUIDs);
+  it added no new services.
+- **Still blocked for a real push** (unchanged): the per-chunk header
+  framing (2-byte seq + descending marker) and the `0x90` activation
+  token are both undecoded, and no raw capture of a full transfer exists
+  in-repo. A blind write to `ff91` without those is deliberately NOT
+  attempted (risks leaving the lock in a half-OTA state). The unblocking
+  step remains one clean, Frida-instrumented capture of a full Français
+  transfer, verifiable against `captures/U200_FR_audio_burn.bin`.
+
 **Loose end for next session**: while restoring the phone's language back
 to Español at the end of this investigation, the "Confirmar" write for an
 already-downloaded language did not visibly take effect (settings screen
