@@ -1135,6 +1135,42 @@ independently of the phone/app via the bumble/ESP32-S3 transport:
   step remains one clean, Frida-instrumented capture of a full Français
   transfer, verifiable against `captures/U200_FR_audio_burn.bin`.
 
+**2026-09-02 (later) — full transfer captured post-power-cycle; framing
+DECODED; the 0x90 is a per-process token (now captured).** After the battery
+power-cycle the Français download **ran to completion** (0%→100%,
+user-confirmed) — the stall was firmware-side OTA session state, cleared by
+the battery pull. Captured end-to-end via **btsnoop, no Frida** (the
+Frida-Java hook route is dead under SecNeo — see [[frida-repack-strategy]];
+used the CLEAN Play-Store app, `tools/repacked-apks/original/`, not the
+gadget repack). Two `adb bugreport` pulls (start + end; the HCI buffer holds
+only ~half the transfer each) in `captures/ota/`.
+
+- **Chunks are the `.bin` verbatim.** The first manifest chunk's payload is
+  byte-identical to `U200_FR_audio_burn.bin[0:]` (`50 00 00 00 4f 00 00 00
+  01 00 00 01 2e 00 00 00 66 72 …`). Tool: `tools/decode_ota_framing.py`.
+- **Framing (decoded):** every ff91 write is `0x11` + 243 bytes of a logical
+  stream; that stream = the `.bin` with a 3-byte segment marker
+  `02 <seq> <0xff-seq>` inserted at each file boundary. seq increments per
+  segment (01, 02…), marker = `0xff - seq` (fe, fd…). Segment 1 is the
+  manifest; its 4-byte LE fields (prior sessions' "undecoded" ones) are the
+  per-file offset/length that place the markers. Each segment's last chunk is
+  short. From-scratch builder = parse manifest → insert `02 <seq> <0xff-seq>`
+  at each boundary → chunk into 243-byte `0x11`-prefixed writes.
+- **Activation tail (captured, matches the 2026-09-01 shape exactly):**
+  `11 ff…`(244) → `11 00…`(244) → `11 1a…`(244)+`11 1a…`(58) → `11 04`(2) →
+  `11 0100 ff 00…`(134)×2 → **`90 0d 55d9bea3755376155b749ca0066d93`(17)×2**.
+- **The 0x90 token:** the commit value `900d55d9bea3755376155b749ca0066d93`
+  is **byte-identical to the OPENING 0x90 handshake** of the same transfer —
+  one per-app-process token, constant across open + commit. We hold a real
+  captured value now.
+- **Decisive open question → next step:** does the lock *validate* the 0x90
+  or treat it as opaque? Build `OtaLanguageTransfer` in `aqara_ble` (init
+  frame + manifest-driven segmented chunks from the `.bin` + activation tail
+  with the captured 0x90) and push to `ff91` over bumble. Accept → builder
+  done, 0x90 opaque, no Frida/root ever needed. Reject at the 0x90 → token is
+  session-bound, needs a native-hook/root capture of its generator. (Lock is
+  currently on **Français**; restore to Español once builder work settles.)
+
 **Loose end for next session**: while restoring the phone's language back
 to Español at the end of this investigation, the "Confirmar" write for an
 already-downloaded language did not visibly take effect (settings screen
