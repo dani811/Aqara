@@ -75,25 +75,29 @@ tree. See Constitution Principle I in
 
 ## License
 
-Copyright (c) 2026 dani811. **All rights reserved except as granted below.**
+Copyright (c) 2026 dani811.
 
-This project is **source-available, not open source**. It is licensed under the
-[PolyForm Noncommercial License 1.0.0](LICENSE):
+This project is **free and open source** under the
+[GNU Affero General Public License v3.0 (AGPL-3.0-only)](LICENSE). In plain terms:
 
-- ✅ **Permitted, free of charge:** personal use, study, research, experiment,
-  testing, hobby and amateur projects, and use by charitable, educational,
-  public-research, public-safety/health, environmental and government
-  organizations — any genuinely **noncommercial** purpose.
-- ⛔ **Not permitted without a separate written license:** any **commercial or
-  for-profit** use, including selling, sublicensing, offering it as a paid or
-  ad-supported product or service, or using it to build or run a commercial
-  product. Reusing this work without permission to profit from it is a licensing
-  violation.
+- ✅ **You may** use it (including for home automation — e.g. a
+  [Home Assistant](https://www.home-assistant.io/) custom integration), study it,
+  run it, share it and modify it, free of charge.
+- 🔁 **Copyleft — the catch that protects the work:** if you distribute it or
+  offer it to others over a network (as a service), you **must** release your
+  full source under this same AGPL license and **keep the author's copyright and
+  attribution**. Nobody can take this code, close it up, and sell it as a
+  proprietary product.
+- 📛 **Attribution is mandatory:** the copyright notice and per-file license
+  headers must stay intact in any copy or derivative.
 
-You must keep the copyright notice and the `Required Notice:` line from
-[LICENSE](LICENSE) with any copy or derivative you distribute.
+**Home Assistant:** the AGPL is compatible with a Home Assistant **custom
+integration** (installed by the user, e.g. via HACS) for personal/home use. Note
+that Home Assistant *Core* only accepts permissively licensed
+(Apache-2.0-compatible) dependencies, so an official-core integration would
+require different terms.
 
-**Want to use this commercially?** Commercial licenses are available — open an
-issue or contact the author via [the repository](https://github.com/dani811/Aqara)
-to arrange terms. The full legal text is in [LICENSE](LICENSE); this summary is
-for convenience and does not replace it.
+**Relicensing:** dani811 is the sole copyright holder and may release future
+versions of this project under different terms (for example, a permissive
+Apache-2.0 license) at any time. The full legal text is in [LICENSE](LICENSE);
+this summary is for convenience and does not replace it.

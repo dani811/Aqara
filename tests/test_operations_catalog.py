@@ -1,9 +1,10 @@
-# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-License-Identifier: AGPL-3.0-only
 # SPDX-FileCopyrightText: 2026 dani811 <https://github.com/dani811/Aqara>
 #
-# Aqara BLE. Source-available under the PolyForm Noncommercial License 1.0.0.
-# Noncommercial use only; any commercial or for-profit use requires a separate
-# written license from the copyright holder. See the LICENSE file for the terms.
+# This file is part of Aqara BLE, licensed under the GNU Affero General Public
+# License v3.0 (AGPL-3.0-only). You may use, study, share and modify it; any
+# distributed or network-served derivative must stay licensed under the AGPL
+# and keep this notice. See the LICENSE file for the full terms.
 
 """Tests for the operation & settings catalog and the generic builder (feature 010).
 

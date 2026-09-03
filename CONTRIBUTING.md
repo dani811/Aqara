@@ -87,22 +87,24 @@ fidelity; refactors must keep outputs bit-identical.
 
 ## Licensing of contributions
 
-This project is **source-available under the
-[PolyForm Noncommercial License 1.0.0](LICENSE)** — noncommercial use is free,
-commercial use requires a separate written license from the copyright holder
-(dani811).
+This project is **free and open source under the
+[GNU Affero General Public License v3.0 (AGPL-3.0-only)](LICENSE)**. Distributed
+or network-served derivatives must stay under the AGPL and keep attribution.
 
 By submitting a contribution (a pull request, patch, or any other change) you
 agree that:
 
 - Your contribution is licensed to the project and its users under the same
-  PolyForm Noncommercial License 1.0.0.
+  AGPL-3.0-only license.
 - You grant the copyright holder (dani811) a perpetual, worldwide, irrevocable,
-  royalty-free license to use, relicense, and sublicense your contribution,
-  including under separate **commercial** license terms, so the project can be
-  offered commercially by the copyright holder.
+  royalty-free license to use, relicense, and sublicense your contribution
+  **under any license terms**, including permissive open-source licenses (e.g.
+  Apache-2.0) and separate commercial terms. This lets dani811, as sole
+  copyright holder, relicense the project in the future — for instance to migrate
+  to Apache-2.0 so it can become an official Home Assistant Core integration —
+  without needing to track down every contributor.
 - You have the right to make the contribution (it is your original work, or you
   otherwise hold the rights to submit it under these terms).
 
-Do not add code under a license incompatible with the above, and do not remove
-or alter the SPDX headers or the `LICENSE` / `NOTICE` files.
+Do not add code under a license incompatible with the AGPL, and do not remove or
+alter the SPDX headers or the `LICENSE` file.
