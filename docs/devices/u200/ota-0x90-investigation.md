@@ -143,10 +143,13 @@ blocks) and one run reached **~1160 blocks (59 %) — the furthest yet**. BUT th
 Mac's CoreBluetooth link is unstable for this workload: connects are slow/variable
 (7–25 s) and the connection **drops mid-transfer** (`Service Discovery has not
 been performed yet` = the peripheral disconnected), even with a lock battery-pull
-first. Also nailed the presence rule: the lock needs a keypad touch roughly every
-~15 s (`switch.pulsador`) or it starts NAK'ing (`1115`) and, after ~7 NAKs on a
-block, **the LOCK itself aborts** — so presence must be refreshed continuously
-during the whole ~100–165 s stream (but never during the auth phase). Net: ESP32 =
+first. ~~Presence rule: keypad touch every ~15 s or it NAKs and aborts~~
+**[CORRECTED 2026-09-03 — this was a MISDIAGNOSIS.** The ~40 s / ~16-block "NAK
+then abort" was NOT keypad-presence expiry; it was the missing VOICE_OTA_INFO_SET
+command (see the SOLVED section). With that command sent, a **single** keypad
+touch (for the manifest handshake) carries the whole ~10-minute transfer to 100 %
+— presence does NOT need refreshing during the stream. The keypad gate applies
+once, to authorise the OTA start, not periodically.]** Net: ESP32 =
 stable link / corrupt data; Mac = clean data / unstable link — neither host
 transport completes. **The app succeeds because the phone's own BLE stack is both
 stable and clean.** Options to finish: an Android/phone-hosted push, a better HCI
