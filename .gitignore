@@ -11,6 +11,9 @@ secrets/
 **/token*.txt
 **/*token*.json
 
+# Compiled Frida agents (build artifacts of frida-compile; keep only the .js source)
+tools/*.agent.js
+
 # Raw radio / HCI / bug-report captures (may embed keys, MACs, personal data)
 captures/
 evidence/raw/
@@ -74,3 +77,8 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Local RE scratchpad — proprietary decompiled app / APKs / native libs, re-derivable, never commit
+scratchpad/
+
+node_modules/

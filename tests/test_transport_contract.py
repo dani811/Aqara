@@ -243,7 +243,7 @@ def _install_fake_bumble(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return captured
 
 
-def test_bumble_transport_connects_like_the_phone_and_never_pairs(
+def test_bumble_transport_uses_fast_ota_interval_and_never_pairs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured = _install_fake_bumble(monkeypatch)
@@ -259,11 +259,14 @@ def test_bumble_transport_connects_like_the_phone_and_never_pairs(
     assert isinstance(gatt, BumbleGattAdapter)
     assert captured["port"] == "serial:/dev/fake,115200"
     assert captured["connect_addr"] == MAC
+    # Over the raw HCI controller we drop to the 7.5 ms interval floor so each OTA
+    # write-without-response lands in its own connection event (avoids the lock's
+    # RX-buffer overflow → 0x1115 NAK). The link stays unbonded (never pairs).
     assert captured["prefs"] == {
-        "connection_interval_min": 45.0,
-        "connection_interval_max": 45.0,
+        "connection_interval_min": 7.5,
+        "connection_interval_max": 15.0,
         "max_latency": 0,
-        "supervision_timeout": 5000,
+        "supervision_timeout": 20000,
     }
     assert captured["phy_keys"] == ["LE_1M"]
     assert captured["discovered"] == ["services", "characteristics"]

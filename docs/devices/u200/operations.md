@@ -710,6 +710,497 @@ only infer from the app's decompiled code:
   connection attempts in a row before a third succeeded — a transient
   device-side hiccup, not a real blocker; retry if it happens again.
 
+#### 2026-09-01 — the "activate" trigger frame, TWO independent captures (Français + Español)
+
+The one open piece flagged above — the exact end-of-transfer activation
+frame — is now captured **twice, from two genuinely independent completed
+transfers** (a Français download that ran to completion, and a later
+Español download that also ran to completion after fixing an unrelated
+Bluetooth-proxy outage), letting the shape be told apart from any
+per-transfer noise. Both transfers, immediately after the last real audio
+chunk, end with the **exact same sequence of frame types in the same
+order**, all still on handle `0x003c` / write-prefix `0x11` unless noted:
+
+1. One all-`0xFF` padding chunk (244 bytes).
+2. One all-`0x00` padding chunk (244 bytes).
+3. Two all-`0x1A` marker chunks (244 bytes, then a shorter 58-byte one).
+4. A tiny 2-byte frame: `11 04`.
+5. **Two identical** 134-byte frames shaped exactly like the transfer's own
+   init frame but zeroed out: `11 0100 ff <244 bytes... all 0x00>` — i.e.
+   the same `<prefix><seq=1><marker=0xff>` header as the very first chunk
+   of the transfer, this time with an empty/zeroed body instead of a
+   filename+size string. Sent twice, back to back, byte-identical both
+   times within each transfer.
+6. **Two identical** 17-byte frames using a **different write-prefix,
+   `0x90`** (every other frame in the whole transfer uses `0x11`):
+   - Français: `90 1b7da3a951649f46b00a6e18acae2823`
+   - Español: `90 dc885ae8e29acad7d35ae75772fef244`
+
+The structural shape (padding → marker → `11 04` → zeroed-init-repeat ×2 →
+`0x90`-prefixed 17-byte frame ×2) is now confirmed language-independent —
+this is very likely the real "commit/activate this language now" signal
+the app sends once it's satisfied the transfer landed cleanly, replacing
+the earlier open question with a concrete, reproducible sequence.
+
+**Follow-up, same session, THIRD data point — content ruled out, points at
+a phone/app-side rotating value instead.** Ran the exact isolation
+experiment this section originally proposed: downloaded Français a
+*second* time (same bundle content and size as the first Français
+capture above), immediately after the Español download completed. Result:
+
+| Download | Order | `0x90` payload |
+| --- | --- | --- |
+| Français (1st) | 1st | `1b7da3a951649f46b00a6e18acae2823` |
+| Español | 2nd | `dc885ae8e29acad7d35ae75772fef244` |
+| Français (2nd) | 3rd | `dc885ae8e29acad7d35ae75772fef244` |
+
+The 2nd and 3rd rows are **byte-identical** despite different content
+(Español vs. Français — different bundle, different size, different
+manifest) and a completely separate BLE connection/session for each. This
+**rules out both of the two leading candidates**: it is not a hash/CRC of
+the transferred bundle (different content, same value) and not a
+per-connection nonce (different BLE sessions, same value). The 1st and
+2nd/3rd rows differ despite rows 1 and 3 sharing identical content
+(Français both times) — so it isn't a per-language constant either.
+
+The 2nd and 3rd downloads were ~28 minutes apart by the capture
+timestamps, one order of magnitude longer than the offline-password
+feature's 10-minute rotation grid, so a short time-windowed rotation (the
+first instinct, given that other feature's precedent) doesn't fit
+either — 28 minutes elapsed with zero change. What *did* happen between
+the 1st Français capture and the 2nd/3rd (which share their value): a
+long gap of unrelated work (over an hour) during which the Aqara app was
+**force-stopped and cold-relaunched several times** (chasing an unrelated
+Bluetooth-proxy outage), while between the 2nd and 3rd captures the app
+process ran continuously with no restart. **Leading hypothesis, not yet
+confirmed**: this value is generated once per app **process lifetime**
+(e.g. a random token/nonce the app creates at cold start and reuses for
+every OTA activation until it next restarts), not derived from the
+transfer's content or its BLE session at all. Confirming this needs one
+more data point: force-stop and cold-relaunch the app, then download any
+language and check whether the `0x90` payload changes from
+`dc885ae8e29acad7d35ae75772fef244` — if it does, the per-process-lifetime
+theory is confirmed (and the value must come from somewhere restart-reset
+on the phone, e.g. a fresh CSRNG draw kept in memory, needing a live
+Frida hook to actually observe rather than infer); if it stays the same
+even across a restart, look toward something persisted to disk instead
+(shared prefs / local DB row) that a plain force-stop doesn't clear.
+`aqara_ble` still only exposes `build_set_language_english()`/`_deutsch()`
+(the cached-language shortcut path); a real `OtaLanguageTransfer` builder
+covering the full download+activate sequence is blocked on nailing this
+one field, not on anything else in the framing above.
+
+#### 2026-09-01, later same day — root-caused via btsnoop: the `0x90` value is a per-process session token sent at BOTH ends, and the real stall is a silent app-side abort right after step 1 of the handshake
+
+Confirmed the previous session's Frida 17.2.12 finding is real and durable:
+a `Java.perform()` hook (`SecureRandom.nextBytes`, `UUID.randomUUID`,
+`MessageDigest.digest`, `BluetoothGattCharacteristic.setValue`) stayed
+attached through roughly 40 minutes of real app navigation — menu
+traversal, three keypad-gate cycles, two full download attempts — with
+zero SecNeo crash. Solid enough to consider promoting 17.2.12 to the
+project's daily driver (see `frida-repack-strategy.md`).
+
+**A live capture during this session initially looked like a new,
+different `0x90` exchange (see git history of this section for the
+original, now-superseded framing) — cross-checking it against a real
+`adb bugreport` btsnoop pull corrected the picture and answered the
+question this section is titled for**: two OTA downloads stalled at 0%
+this session (Polski, then a Français re-download); the question was
+whether the BLE radio disconnected or Frida was somehow blocking the
+transfer. **Neither.** The btsnoop capture (`FS/data/misc/bluetooth/
+logs/btsnoop_hci.log` from a fresh bugreport) shows, beyond doubt:
+
+- **The radio link never dropped.** A `Connection Events` / `stack::gatt`
+  check in the same bugreport shows a single unbroken `GATT_CH_OPEN` from
+  14:42:42 through the entire session (no `GATT_CH_CLOSE` in between), and
+  the encrypted control channel (handle `0x0031` write / `0x0033` notify)
+  kept exchanging a routine ~15s heartbeat continuously through both
+  stalls, with no gap.
+- **Frida did not block or slow the BLE write path.** The exact two
+  `setValue` hits the Frida hook caught turn out to be a normal, fast
+  **request/response pair**, not two app-side writes: `BluetoothGattCharacteristic.setValue`
+  fires both when the app *writes* a value AND when Android's BLE stack
+  caches an *incoming notification's* value into the characteristic object
+  before delivering `onCharacteristicChanged` — this hook was catching
+  both directions. The real over-the-air sequence, confirmed in btsnoop:
+
+  ```text
+  0x003f  WriteReq   len=2   0100                              (enable notifications, standard CCCD write)
+  0x003c  WriteCmd   len=17  90 2f d5 ef 63 68 a3 93 57 88 ec 7d 61 af 3e 57 bf   (phone -> lock)
+  0x003e  Notify     len=27  90 2f d5 ef 59 58 e0 dd 10 9f e3 30 4d 56 2d 4a 3a 7c a4 24 9f 5d 89 6d 43 e9 0c   (lock -> phone, ~28ms later)
+  ```
+
+  Both directions fired in **well under 30ms**, identically fast in both
+  the Polski and the Français attempt — there is no Frida-induced latency
+  here at all.
+- **The 17-byte value is confirmed to be a per-app-process session token,
+  not per-language and not per-transfer**: this exact same 17-byte value
+  (`902fd5ef6368a3935788ec7d61af3e57bf`) was sent for BOTH the Polski
+  attempt (14:59:09) AND the later Français attempt (15:04:29) — two
+  different languages, two separate download attempts — with byte-for-byte
+  identical value both times. Searching the same btsnoop file for the
+  OLDER captured value (`dc885ae8e29acad7d35ae75772fef244`, from earlier
+  today's Español capture) finds it **repeated at both the very start AND
+  immediately after the zeroed-134-byte-repeat frames at the end** of that
+  successful transfer — i.e. this handshake fires *twice* in a normal
+  transfer (open + close), always with the same value for a given app
+  process run. This **confirms the "once per app process lifetime"
+  hypothesis** from the earlier entry below: the value changed between
+  today's earlier Español capture and this session's Polski/Français
+  attempts because the Aqara app's Bluetooth GATT client re-registered
+  under a new `app_if` in between (`dumpsys bluetooth_manager` shows
+  `gatt_if: 93` disconnecting at 13:56:39 and a fresh `gatt_if: 96`
+  connecting at 14:42:42 — a real app force-stop/relaunch happened in that
+  gap), while the value stayed constant across every attempt *within* one
+  of those app-process lifetimes.
+- **The actual bug, precisely located**: in the working Español capture,
+  this opening handshake is immediately followed (within ~1.1s) by a
+  second request/response pair (a 110-byte write, a 25-byte notify reply),
+  then a tiny `1143`/`1106` exchange on `0x003e`, and only then the real
+  134-byte init frame and the hundreds of 244-byte bulk chunks. **In both
+  of this session's stalled attempts, nothing at all follows the opening
+  17/27-byte pair** — no second request, no init frame, no bulk chunk,
+  for the rest of each attempt (multiple minutes) until manually
+  abandoned. The BLE link stays idle (just the routine heartbeat)
+  throughout. This is an **app-side state-machine stall**, not a
+  transport-layer one: the phone app receives a completely normal-looking
+  reply to its first handshake message and then simply never sends the
+  next one.
+
+**The SecNeo/Frida-sabotage hypothesis was tested immediately and RULED
+OUT.** Fully detached Frida (verified via `ps aux | grep frida` on the
+host — zero Frida processes running, nothing attached to the gadget) and
+retried:
+
+1. A **fresh Polski attempt** — stalled at 0% identically, ~90+ seconds,
+   no different from the Frida-attached attempts. On its own this is
+   inconclusive (Polski has never once completed in this project's
+   history — it could just be a broken/unavailable asset on Aqara's CDN).
+2. The real test: **re-downloaded Français** — the exact language that
+   completed successfully earlier the same day, before Frida was ever
+   attached this session. **It stalled at 0% too**, for 130+ seconds,
+   needing the same keypad-gate re-wake mid-flow as before, then never
+   progressing — manually abandoned. Same phone, same lock, same
+   language, same app process, only difference: no Frida anywhere in the
+   picture.
+
+**This conclusively rules out Frida/SecNeo as the cause of this
+session's stalls.** Something else changed between "Français completed
+cleanly earlier today" and "Français stalls every time now, Frida or no
+Frida".
+
+**Also ruled out: bad in-memory app state from repeated attempts.** Fully
+force-stopped the app (`adb shell am force-stop`), relaunched it (needed
+the usual Frida-gadget cold-start unblock — see the standing procedure
+below — even though no script was attached, since the gadget itself still
+waits for a connection on the splash screen), and retried Français on a
+completely fresh process. **Stalled identically**, same ~135s, same
+mid-flow keypad-gate re-ask. Rules out "the app's own JS/native runtime
+got into a bad state after too many attempts" as an explanation.
+
+**"It's probably a cloud rate-limit/CDN issue" was an unverified guess —
+checked directly, and it does NOT hold up.** Ported `capture_ssl_native.js`
+to the Frida 17.x GumJS API (`Module.findExportByName` was removed;
+fixed by using the per-`Module` instance method via
+`Process.getModuleByName(name).findExportByName(...)` instead — see
+`capture_ssl_native_v17.js` in this session's scratchpad, worth folding
+into the tools/ version) and hooked `SSL_read`/`SSL_write` natively (no
+ART/Java bridge involved) on `libssl.so`/`libjavacrypto.so` — this dumps
+actual pre-encryption/post-decryption plaintext to an on-device file, so
+it sees every HTTPS request/response regardless of certificate pinning.
+Result, triggering a fresh Français attempt with this hook live: a burst
+of ordinary HTTP/2 traffic (analytics/telemetry pings, `"code":0,
+"message":"Success"` acks — unrelated background noise) right as the
+screen navigation happened, and then **literally nothing** — not one
+byte of new SSL/TLS traffic, success or error — for the entire ~3+ minute
+stall, except a single lone 17-byte `SSL_read` about 3 minutes in (sized
+like an HTTP/2 `PING` keepalive frame, not application data). **The app
+never even attempts an HTTP request for the voice-pack asset during the
+stall.** This rules out a hung/failing/rate-limited CDN fetch just as
+firmly as it rules out a BLE-layer problem — whatever is stuck is
+upstream of BOTH the network and BLE writes: something in the app's own
+JS/native OTA state machine simply never fires the next step's I/O at
+all, silently, with nothing to observe on the wire in either direction.
+**Static analysis of the real plugin code, fetched fresh from the CDN
+(`https://cdn.aqara.com/cdn/appadmin/mainland/rn/eddb8f69feea48368f8827bac13a37f9.zip`,
+`bundleId: aqara.matter.4447_10242`) and decompiled with `hbc-decompiler`,
+located the actual state machine**: `Modules_function_modules_src_ble_
+utils_OtaUtils` / `BleCommanderClass` handles the low-level OTA session.
+Two concrete, code-level facts explain why a stall here is *silent
+forever* rather than erroring out:
+
+1. `BleCommanderClass` defines a `BLE_RESPONSE_OVER_TIME = 10000` (10s)
+   write-timeout, used for ordinary BLE commands — **but `sendData()`
+   explicitly skips arming this timeout whenever `isOtaCommander` is
+   true** (`if (isOtaCommander) return; /* else */ setTimeout(...)`).
+   The OTA transfer path has **no timeout, no retry, and no error
+   surfacing at all** by design — if the expected follow-up notification
+   never fires the registered `onCharacteristicValueChanged` callback,
+   the JS state machine waits literally forever with nothing to show for
+   it. This matches every observation this session down to the letter:
+   no error toast, no retry, indefinite "0%" until manually abandoned.
+2. `onCharacteristicValueChanged` only proceeds past its `if` guard when
+   the incoming characteristic's UUID matches the currently-registered
+   `notifyCharacterUUID` for that specific `BleCommander` instance —
+   any mismatch (e.g. a leftover/orphaned listener from a *previous*,
+   manually-abandoned session still attached) silently no-ops instead of
+   erroring.
+
+(Separately, confirmed `handleSetLanguageByChannel`/`setLanguageByChannel`
+in `Modules_common-lock_src_Http_SettingChannelHttpHandler.ts` is a
+**different, unrelated** cloud-relay path — `publishToDeviceByChannel`,
+gated on a `PushModule` push message — used only by the top-level
+quick-pick languages, not by "Otros idiomas → Descargar y usar". Don't
+conflate the two when reading this section again.)
+
+**This pointed at leftover/orphaned app-side session state from
+today's many manually-abandoned attempts as the most likely cause —
+tested directly, and it does NOT hold up either.** Fully cleared the
+app's data (Ajustes → Apps → Aqara Home → Almacenamiento → Borrar datos —
+confirmed by the app requiring a fresh login and re-showing first-run
+onboarding, not just a process restart) and retried Français from a
+completely clean install. **Stalled identically** — same ~130s+, same
+mid-flow keypad-gate re-ask, same total silence on both BLE and network.
+This rules out anything persisted on the **phone** side (SharedPreferences,
+AsyncStorage, cached BLE subscription state) as firmly as it already
+ruled out Frida, the network, and a merely-restarted app process.
+
+**Correction to "network/CDN ruled out" above — it was too coarse, and a
+concrete per-language CDN mechanism DOES exist and was missed on first
+pass.** Static analysis of the same decompiled plugin located the real
+per-language asset pipeline, in a different file than the BLE state
+machine:
+
+- Cloud endpoint `GET /app/dev/voice/list` (via the same generic
+  `Service.callSmartHomeGet` used everywhere else — same
+  `rpc-<region>.aqara.com` host and signed-header scheme this project has
+  already profiled, not a separate system) returns, per supported
+  language, a `fileInfo` field (a JSON string, `JSON.parse`d client-side)
+  — this populates Redux's `cloudLangList`, which is what the language
+  picker UI (`getCloudVoiceLanguageData` in
+  `Modules_common-lock_src_Pages_Settings_AlarmVolumeLanguage_
+  AlarmVolumeLanguageManager.ts`) renders.
+- Tapping an undownloaded language navigates to **`VoiceOtaPage.tsx`**
+  (`Modules_common-lock_src_Pages_Settings_AlarmVolumeLanguage_
+  VoiceOtaPage.tsx`) passing that row's `fileInfo` as a nav param.
+  `VoiceOtaPage`'s `startOta()` effect reads it via `getPageParams()`,
+  throws a `'VoiceOtaPage empty file info'` `Error` if it's missing, and
+  otherwise calls `startUpgradeFirmware(fileInfo)`, which builds
+  `url = fileInfo.url + '/' + fileInfo.fileInfo[0].fileName` and calls
+  `downloadFileAsync(url, ...)` with a `updateDownloadProgress` callback
+  — **this is literally what the on-screen "0%" is showing**: an HTTP
+  file-download percentage, not a BLE progress indicator. Both steps log
+  plainly via `console.log`: `'VoiceOtaPage start Ota info'`,
+  `'start download File url'`.
+- Cross-checked this against the **already-captured** native SSL log
+  from the earlier entry (`ssl_capture_final.log`, full 85 lines
+  re-read, not re-captured) instead of assuming it needed a new test:
+  it contains exactly two small `byResourceId` calls (generic UI-icon
+  resource lookups, unrelated to voice) and then **zero further network
+  bytes of any kind** — not even a failed/refused connection attempt —
+  for the whole 3+ minute stall. If `downloadFileAsync` had actually
+  fired and failed, a TLS ClientHello alone would show up here; it
+  doesn't. **This means `startOta()`/`downloadFileAsync` most likely
+  never executes at all during a stalled attempt** — a layer *above*
+  the network, not "the network is fine." The earlier framing ("stall is
+  upstream of both BLE and network, inside the OTA state machine") was
+  directionally right but imprecise about which state machine (the BLE
+  `BleCommander`, not `VoiceOtaPage`'s own `startOta` effect, which may
+  be a separate/earlier failure point).
+- **A stale-navigation-stack theory (leftover `VoiceOtaPage` instance
+  from a previous abandoned attempt swallowing the new nav params) does
+  NOT survive the evidence**: the post-app-data-clear Français attempt
+  was the first-ever navigation to `VoiceOtaPage` in that fresh process
+  and still stalled identically, so it isn't accumulated
+  React-Navigation cruft either.
+- **`adb logcat -s ReactNativeJS:*` was tried and is a dead end for this
+  build**: zero lines of that tag appeared anywhere in the log across a
+  full fresh attempt (confirmed via a broader `grep -iE "reactnative|
+  hermes"` sweep of the whole buffer too — nothing). This is a release
+  build with Hermes/RN's `console.log` silenced at the native bridge
+  level, despite the calls being present in the bytecode. Don't reach for
+  this again on this build.
+- **Went one level more precise instead: hooked the real native module
+  directly.** `Java.enumerateLoadedClassesSync()` identified
+  `com.rnfs.Downloader`/`com.rnfs.DownloadParams` — this app uses the
+  well-known `react-native-fs` library for `downloadFileAsync`, not a
+  custom Aqara module. Hooked `Downloader.doInBackground` (where RNFS's
+  `AsyncTask` receives the URL) AND a generic `java.net.URL
+  .openConnection()` hook filtered for `aqara`/`lumi`/`.mp3`/`.zip` in
+  the URL, both via the same proven-stable Frida 17.2.12 Java bridge,
+  attached *before* tapping "Descargar y usar" this time (not
+  retroactively). **Neither fired once in 100+ seconds of a fresh
+  Français attempt.** `com.rnfs.Downloader` is never instantiated;
+  `URL.openConnection()` is never called for anything voice-related.
+  This is a third, independent confirmation (JS bytecode logic → SSL
+  wire capture → native module instrumentation, three different
+  vantage points, same answer) that **`startOta()`'s
+  `downloadFileAsync(...)` call is never reached at all** during a
+  stalled attempt — not throttled, not failing, not even attempted.
+
+**What's left, by elimination, across every layer checked this session**:
+phone radio (ruled out), Frida/SecNeo (ruled out), app process state
+(ruled out), all persisted app data (ruled out), and now the CDN
+file-download step itself (confirmed never invoked, three independent
+ways). The failure is narrowed to a specific, small span of JS: somewhere
+between "`VoiceOtaPage` mounts with a `fileInfo` nav param" and "`startOta()`
+calls `downloadFileAsync`" — most likely `getPageParams().fileInfo` is
+empty/malformed for this account+language right now (which would silently
+throw the `'VoiceOtaPage empty file info'` `Error` — swallowed by
+whatever wraps the effect, since no error toast was ever seen), pointing
+at the **`/app/dev/voice/list` cloud response** itself as the next thing
+to inspect (does it currently return a valid `fileInfo` for `fr` at all?),
+rather than at BLE, Frida, or the download step. The lock's own
+firmware-side OTA session state is also still untested and remains a
+live alternative. **Next concrete action**: capture the actual
+`/app/dev/voice/list` response for this account (a plain authenticated
+GET, same signing scheme as `fetch_offline_passwords()` in `aqara_ble` —
+no phone needed at all for this one, it can be replayed from a script) and
+check whether Français's row carries a real `fileInfo` right now. If it's
+empty/broken cloud-side, that's the root cause, full stop. If it looks
+fine, power-cycle the physical lock (remove and reinsert the battery) as
+the next thing to rule out, since every phone-side layer is now
+exhausted.
+
+**2026-09-02 — `/app/dev/voice/list` captured; cloud + CDN both ruled out
+(the leading hypothesis is dead).** Ran the concrete test above with a
+pure-cloud, no-phone script (`tools/probe_voice_list.py`, signs with the
+same `make_local_signer`/`compute_sign` scheme as
+`fetch_offline_passwords()`). Findings:
+
+- The endpoint is `GET /app/dev/voice/list` with query `did=<did>` (the
+  parameterless and `did=&model=` variants both return `code=106`; only
+  the bare `did=<did>` form is accepted → `code=0`, `message=Success`).
+- The response is **fully valid for Français right now**: row
+  `lang=13, langName="Français", version="1"`, with a real
+  `url = https://cdn.aqara.com/cdn/opencloud-product/mainland/product-voice/prd/aqara.matter.4447_10242/20240611190727`
+  and `fileInfo = [{"fileName":"U200_FR_audio_burn.bin","md5":"2fb6a8e43870816c3e5c3319afd903fd"}]`.
+  All 12 rows (中文 lang 1/2, Polski 17, Русский 10, Español 12, Français
+  13) carry a valid `url` + `fileInfo`. So `getPageParams().fileInfo`
+  being empty/malformed is **disproven** — the "swallowed empty file
+  info" theory is dead.
+- Note the real row shape vs. the decompiled code: each row already has
+  `url` and `fileInfo` (a JSON *string* that parses to a **list** of
+  `{fileName, md5}`), so the nav param passed to `VoiceOtaPage` is the
+  whole row and `startUpgradeFirmware` builds
+  `url + '/' + fileInfo[0].fileName` =
+  `.../20240611190727/U200_FR_audio_burn.bin`.
+- **Downloaded that exact URL directly** (public CDN, no auth): HTTP 200,
+  1 664 596 bytes, **MD5 matches the manifest byte-for-byte**
+  (`2fb6a8e43870816c3e5c3319afd903fd`). So the CDN asset layer is healthy
+  too, and we now hold the real Français voice bundle bytes
+  (`captures/U200_FR_audio_burn.bin`, git-ignored) — the seed for a
+  replay-based `OtaLanguageTransfer` builder.
+- **By elimination, every phone-side AND cloud-side layer is now
+  exhausted**: radio, Frida/SecNeo, app process, persisted app data, the
+  CDN download step (never invoked), the `/app/dev/voice/list` metadata,
+  and the CDN asset itself. The only untested layer left is the **physical
+  lock's own firmware-side OTA session state** → next action is the
+  battery power-cycle (user, physical). A parallel, app-independent path
+  worth pursuing instead: push this exact `.bin` to the lock ourselves
+  over the plaintext OTA GATT channel (handle `0x003c`, `0x11`/`0x52`)
+  from `aqara_ble`, which sidesteps the app's stall entirely — blocked
+  only on resolving the `0x90` per-app-process activation token (needs a
+  live Frida hook to observe its source).
+
+**2026-09-02 — OTA channel mapped to its real UUID; direct BLE stack
+confirmed healthy post-power-cycle.** After a battery power-cycle of the
+lock (to clear the app-side OTA stall state), verified the whole thing
+independently of the phone/app via the bumble/ESP32-S3 transport:
+- Lock advertises and connects cleanly: `aqara battery` over bumble
+  returned 100% in 5.4s (login → connect 3.4s → read). The direct stack
+  is stable.
+- Ran a full read-only GATT discovery (`tools/dump_gatt.py`) and mapped
+  the OTA voice-pack channel to its concrete characteristic: **ATT value
+  handle `0x003c` (60) = UUID `0000ff91-2333-5b1e-9d7c-c687fd2f04f2`,
+  `WRITE_WITHOUT_RESPONSE`, on the AUX service `0000ff90`**. Its paired
+  notify is handle `0x003e` = `0000ff92` (the already-known
+  `AUX_NOTIFY_UUID`). Added as `AUX_WRITE_UUID` in `gatt_uuids.py`. This
+  was the last *addressing* unknown: `aqara_ble` can now target the OTA
+  channel via `write_gatt_char(AUX_WRITE_UUID, data, response=False)`.
+- Full service map for reference: `fcb9` (ff07 write / ff08 notify =
+  auth), `ff60` (ff61 write / ff62 notify / ff63 write / ff64 notify =
+  control), `ff80` (ff81 write / ff82 notify), `ff70` (ff71 / ff72 both
+  write-no-resp), `ff90` (ff91 write = **OTA** / ff92 notify), plus a
+  `fff6` service with three vendor 128-bit chars (18ee2ef5…11/…12 +
+  64630238…04 = **Matter BTP commissioning** C1/C2/C3, not firmware OTA —
+  see `gatt-map.md`, which already had the full table since 2026-08-19).
+  This live dump only re-confirmed that existing map (same handles/UUIDs);
+  it added no new services.
+- **Still blocked for a real push** (unchanged): the per-chunk header
+  framing (2-byte seq + descending marker) and the `0x90` activation
+  token are both undecoded, and no raw capture of a full transfer exists
+  in-repo. A blind write to `ff91` without those is deliberately NOT
+  attempted (risks leaving the lock in a half-OTA state). The unblocking
+  step remains one clean, Frida-instrumented capture of a full Français
+  transfer, verifiable against `captures/U200_FR_audio_burn.bin`.
+
+**2026-09-02 (later) — full transfer captured post-power-cycle; framing
+DECODED; the 0x90 is a per-process token (now captured).** After the battery
+power-cycle the Français download **ran to completion** (0%→100%,
+user-confirmed) — the stall was firmware-side OTA session state, cleared by
+the battery pull. Captured end-to-end via **btsnoop, no Frida** (the
+Frida-Java hook route is dead under SecNeo — see [[frida-repack-strategy]];
+used the CLEAN Play-Store app, `tools/repacked-apks/original/`, not the
+gadget repack). Two `adb bugreport` pulls (start + end; the HCI buffer holds
+only ~half the transfer each) in `captures/ota/`.
+
+- **Chunks are the `.bin` verbatim.** The first manifest chunk's payload is
+  byte-identical to `U200_FR_audio_burn.bin[0:]` (`50 00 00 00 4f 00 00 00
+  01 00 00 01 2e 00 00 00 66 72 …`). Tool: `tools/decode_ota_framing.py`.
+- **Framing (decoded):** every ff91 write is `0x11` + 243 bytes of a logical
+  stream; that stream = the `.bin` with a 3-byte segment marker
+  `02 <seq> <0xff-seq>` inserted at each file boundary. seq increments per
+  segment (01, 02…), marker = `0xff - seq` (fe, fd…). Segment 1 is the
+  manifest; its 4-byte LE fields (prior sessions' "undecoded" ones) are the
+  per-file offset/length that place the markers. Each segment's last chunk is
+  short. From-scratch builder = parse manifest → insert `02 <seq> <0xff-seq>`
+  at each boundary → chunk into 243-byte `0x11`-prefixed writes.
+- **Activation tail (captured, matches the 2026-09-01 shape exactly):**
+  `11 ff…`(244) → `11 00…`(244) → `11 1a…`(244)+`11 1a…`(58) → `11 04`(2) →
+  `11 0100 ff 00…`(134)×2 → **`90 0d 55d9bea3755376155b749ca0066d93`(17)×2**.
+- **The 0x90 token:** the commit value `900d55d9bea3755376155b749ca0066d93`
+  is **byte-identical to the OPENING 0x90 handshake** of the same transfer —
+  one per-app-process token, constant across open + commit. We hold a real
+  captured value now.
+- **Framing refinement (2026-09-02, corrected):** the `02 <seq> <0xff-seq>`
+  markers are per **~1024-byte block**, NOT per manifest file, and each block
+  also carries a **2-byte field** just before its marker (e.g. `b6 05`) whose
+  formula is **not** CRC-16/ARC nor a plain byte-sum — still undecoded. So a
+  from-scratch (no-capture) builder for an *arbitrary* language still needs
+  this 2-byte-per-block field cracked. **But this does NOT block the decisive
+  test:** `captures/ota/btsnoop_end.log` turned out to hold the **entire**
+  transfer verbatim (8138 ff91 writes covering `.bin[0:end]` + the full
+  activation tail + the 0x90) — the HCI buffer was big enough. So the Français
+  transfer can be **replayed frame-for-frame with zero framing knowledge**;
+  only *other* languages we haven't captured need the from-scratch path.
+- **Decisive open question → next step:** does the lock *validate* the 0x90
+  or treat it as opaque? Build `OtaLanguageTransfer` in `aqara_ble` (init
+  frame + manifest-driven segmented chunks from the `.bin` + activation tail
+  with the captured 0x90) and push to `ff91` over bumble. Accept → builder
+  done, 0x90 opaque, no Frida/root ever needed. Reject at the 0x90 → token is
+  session-bound, needs a native-hook/root capture of its generator. (Lock is
+  currently on **Français**; restore to Español once builder work settles.)
+
+**Loose end for next session**: while restoring the phone's language back
+to Español at the end of this investigation, the "Confirmar" write for an
+already-downloaded language did not visibly take effect (settings screen
+kept showing "Deutsch" after multiple clean attempts) — likely the same
+class of app-side silent stall now confirmed above, not a BLE transport
+problem. **The physical lock's voice language may currently be left on
+Deutsch, not Español — verify and fix next session** (quick top-level
+pick, no download needed, once whatever is causing today's stalls is
+understood or has cleared on its own).
+
+**Practical note on the btsnoop timestamps**: `tools/parse_att_handle.py`
+prints the raw btsnoop `ts` field as-is; converting it to a real
+wall-clock time needs `unix_seconds = (ts_usec - 0x00E03AB44A676000) /
+1_000_000` per the btsnoop spec, but this phone's Bluetooth-controller
+clock (not the main OS clock, which is correct) is a clean 30 years
+behind real time — the formula's output lands on the right month/day but
+the wrong year. Anchor conversions empirically against the log file's own
+mtime instead of trusting either clock, if this ever needs redoing.
+
 #### Original 2026-08-29 note (superseded above, kept for history)
 
 `03 02 <val> 07` — same `kind=02`/`trailer=07` shape as `SET_DOORLOCK_ALARM_VOLUME`

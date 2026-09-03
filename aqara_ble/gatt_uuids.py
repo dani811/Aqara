@@ -28,6 +28,11 @@ CONTROL_NOTIFY_UUID = "0000ff62-2333-5b1e-9d7c-c687fd2f04f2"
 # Notificaciones secundarias (svc ff60): la app las habilita antes del auth.
 CONTROL_NOTIFY2_UUID = "0000ff64-2333-5b1e-9d7c-c687fd2f04f2"
 AUX_SERVICE_UUID = "0000ff90-2333-5b1e-9d7c-c687fd2f04f2"
+# OTA voice-pack write channel: ATT value handle 0x003c (60),
+# WRITE_WITHOUT_RESPONSE (opcode 0x52, fire-and-forget). Plaintext — no AES-CCM.
+# Confirmed by live GATT discovery 2026-09-02 (tools/dump_gatt.py). This is the
+# characteristic the language-OTA transfer streams its ~6800 chunks over.
+AUX_WRITE_UUID = "0000ff91-2333-5b1e-9d7c-c687fd2f04f2"
 AUX_NOTIFY_UUID = "0000ff92-2333-5b1e-9d7c-c687fd2f04f2"
 
 # ── U200 service-UUID tuples (identification + macOS discovery restriction) ───

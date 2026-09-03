@@ -1,0 +1,802 @@
+[
+  {
+    "bundleId": "app.group.thermostat_cooler",
+    "label": "温控组",
+    "models": [
+      "app.group.thermostat_cooler",
+      "app.group.thermostat_heater",
+      "app.group.thermostat_radiator_new"
+    ],
+    "pluginVersion": "3.0.4",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/ab729534c98c4269a7f5b2b9f9d967a7.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.bn.switch",
+    "label": "bn 开关",
+    "models": [
+      "lumi.models.4447_4146"
+    ],
+    "pluginVersion": "3.0.2",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/7c4aa14101594ba5ba76345f183d1aba.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.gamut.light",
+    "label": "淡彩全色域灯",
+    "models": [
+      "aqara.matter.4447_6182",
+      "aqara.matter.4447_6184",
+      "lumi.models.4447_6208",
+      "aqara.matter.4447_6179",
+      "lumi.models.4447_6182",
+      "aqara.matter.4447_6180",
+      "lumi.models.4447_6209",
+      "lumi.models.4447_6178",
+      "aqara.matter.4447_6185",
+      "lumi.models.4447_6213",
+      "aqara.matter.4447_6215",
+      "lumi.models.4447_6214",
+      "lumi.models.4447_6218",
+      "lumi.models.4447_6219"
+    ],
+    "pluginVersion": "3.0.40",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/60d60185215a4172a1e4a5f6407928f6.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.lock.acn002",
+    "label": "智能门锁S100",
+    "models": [
+      "aqara.lock.acn002"
+    ],
+    "pluginVersion": "3.0.7",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/cc0be393655346e68f63059d3a5042fb.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.lock.acn005",
+    "label": "门锁D200i",
+    "models": [
+      "aqara.lock.acn005"
+    ],
+    "pluginVersion": "3.0.8",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/df8da5a6036b4695aa255a4686a52a43.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.lock.acn008",
+    "label": "智能门锁 N200",
+    "models": [
+      "aqara.lock.acn008"
+    ],
+    "pluginVersion": "3.0.2",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/a262eeead5d84714b011dda6daaa7b0b.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.lock.acn10",
+    "label": "DA1 智能门锁U100",
+    "models": [
+      "aqara.lock.acn10"
+    ],
+    "pluginVersion": "3.0.8",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/a1b7cacdd63f421684e276f93f7d968d.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.lock.agl002",
+    "label": "智能门锁A100海外版",
+    "models": [
+      "aqara.lock.agl002"
+    ],
+    "pluginVersion": "3.0.3",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/491b278fa9df46edaed0ecc9e515ef59.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.lock.aqgl01",
+    "label": "智能门锁D100A",
+    "models": [
+      "aqara.lock.aqgl01"
+    ],
+    "pluginVersion": "3.0.8",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/552e7d447c234244999f8aea07c46bc4.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.lock.aus001",
+    "label": "DA1L 门锁U50",
+    "models": [
+      "aqara.lock.aus001"
+    ],
+    "pluginVersion": "3.0.8",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/c5c9cfb68a5b4ee09e314ea4eee78ee1.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.lock.bzacn3",
+    "label": "N100(DL1A)业务包",
+    "models": [
+      "aqara.lock.bzacn4"
+    ],
+    "pluginVersion": "3.0.1",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/2b725236412b4b7bb57c94a4c832064a.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.lock.dacn02",
+    "label": "DZ1&DZ1L 插件包",
+    "models": [
+      "aqara.lock.dacn03",
+      "aqara.lock.dacn02"
+    ],
+    "pluginVersion": "3.0.7",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/e6a9a8b5fbc34bd0bbbbc548daa5e0dd.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.matter.4447_10241",
+    "label": "门锁U300 DA3",
+    "models": [
+      "aqara.matter.4447_10241"
+    ],
+    "pluginVersion": "3.0.8",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/3e821baf5cee4b25bca93b9a7b7a55c8.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.matter.4447_10242",
+    "label": "门锁 U200 DA2",
+    "models": [
+      "lumi.lock.acn010",
+      "aqara.matter.4447_10242"
+    ],
+    "pluginVersion": "3.0.5",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/eddb8f69feea48368f8827bac13a37f9.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.matter.4447_10245",
+    "label": "门锁J200 DA2JP Set 套装版本",
+    "models": [
+      "aqara.matter.4447_10245"
+    ],
+    "pluginVersion": "3.0.5",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/1ee43cff365c43dbbfd96618395768bd.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.matter.4447_10247",
+    "label": "DA2L 门锁U200Lite",
+    "models": [
+      "aqara.matter.4447_10247"
+    ],
+    "pluginVersion": "3.0.8",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/359dd0a3029549f689503b39c3f0ddf8.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.matter.4447_10253",
+    "label": "门锁 J200 DA2 JP 单主机版本",
+    "models": [
+      "aqara.matter.4447_10253"
+    ],
+    "pluginVersion": "3.0.5",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/04dc1e9cd1bd4481b51d229bc09ba8c7.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.matter.4447_10254",
+    "label": "DO4 门锁 U500",
+    "models": [
+      "aqara.matter.4447_10256",
+      "aqara.matter.4447_10255",
+      "aqara.matter.4447_10254"
+    ],
+    "pluginVersion": "3.0.8",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/9c66ed5a81d64f46a964f8ceb676a4a0.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.matter.4447_10314",
+    "label": "智能门锁 DA6UK U600",
+    "models": [
+      "aqara.matter.4447_10314"
+    ],
+    "pluginVersion": "3.0.5",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/578369e5868b47ec93bba4ce083a53a2.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.matter.4447_16386",
+    "label": "语音伴侣H1",
+    "models": [
+      "aqara.matter.4447_16386"
+    ],
+    "pluginVersion": "3.0.5",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/9b843d711a2247b89d75de932690f969.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.matter.4447_8201",
+    "label": "fp400传感器 标准版",
+    "models": [
+      "lumi.models.4447_8295",
+      "aqara.matter.4447_8201"
+    ],
+    "pluginVersion": "3.0.27",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/bba0a8a789a043eab5b1ad226153fa3e.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.matter.devices",
+    "label": "matter 子设备通用包",
+    "models": [],
+    "pluginVersion": "3.0.2",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/b89c1219280249e992671f17a450aa12.zip",
+    "pluginType": 3
+  },
+  {
+    "bundleId": "aqara.matter.light",
+    "label": "Matter 自研灯",
+    "models": [
+      "lumi.light.acn040",
+      "lumi.light.agl006",
+      "lumi.light.agl005",
+      "lumi.light.agl004",
+      "lumi.light.agl003",
+      "aqara.matter.4447_6147",
+      "aqara.matter.4447_6148",
+      "aqara.matter.4447_6149",
+      "aqara.matter.4447_6150"
+    ],
+    "pluginVersion": "3.0.4",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/3af27c5688424a0084a9d183feda7902.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.matter.rotary",
+    "label": "欧标旋钮",
+    "models": [
+      "aqara.matter.4447_4102",
+      "lumi.switch.agl007",
+      "lumi.switch.agl011",
+      "aqara.matter.4447_4106"
+    ],
+    "pluginVersion": "3.0.3",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/bf475d6164ef46e0a0d8a316964627b7.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.matter.switch",
+    "label": "Matter 自研开关",
+    "models": [
+      "aqara.matter.4447_4101",
+      "aqara.matter.4447_4100",
+      "aqara.matter.4447_4099",
+      "aqara.matter.4447_4104",
+      "aqara.matter.4447_4105"
+    ],
+    "pluginVersion": "3.0.3",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/af34b1f5714a49fd8ea19dd8e5979189.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.module.log",
+    "label": "日志插件",
+    "models": [],
+    "pluginVersion": "3.1.2",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/fa4d882573b24b899bf22ba7b975cea1.zip",
+    "pluginType": 3
+  },
+  {
+    "bundleId": "aqara.plugin.general.features",
+    "label": "第三方服务授权",
+    "models": [],
+    "pluginVersion": "1.2.0",
+    "pluginUrl": "https://aiot-common-ger.s3.eu-central-1.amazonaws.com/cdn/uplusadmin/mainland/rn/cc5d4a56eb4748b1b0b4933de635d12b.zip",
+    "pluginType": 2
+  },
+  {
+    "bundleId": "aqara.rn.base",
+    "label": "RN基础包",
+    "models": [],
+    "pluginVersion": "2.0.45",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/1d5611fc1b7043b1b855d24dc6f277bd.zip",
+    "pluginType": 3
+  },
+  {
+    "bundleId": "aqara.sensor.devices",
+    "label": "基础传感器通用插件",
+    "models": [
+      "aqara.matter.4447_8195",
+      "aqara.matter.4447_8194"
+    ],
+    "pluginVersion": "3.0.4",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/82042e6671d741689b8f49a6224a4a8e.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.spec.station",
+    "label": "新物模型基站",
+    "models": [
+      "lumi.models.4447_2096"
+    ],
+    "pluginVersion": "3.1.3",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/363ed6af7d84484b8177f225b37e0d80.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.switch.screen",
+    "label": "美标带屏开关 S100",
+    "models": [
+      "aqara.matter.4447_4145"
+    ],
+    "pluginVersion": "3.0.7",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/523330fc0166406085d5aec4b5774724.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.tape.light",
+    "label": "屋檐灯串灯落地灯灯带",
+    "models": [
+      "lumi.models.4447_6174",
+      "aqara.matter.4447_6175",
+      "lumi.models.4447_6206",
+      "aqara.matter.4447_6177",
+      "lumi.models.4447_6176",
+      "lumi.models.4447_6207",
+      "aqara.matter.4447_6173",
+      "lumi.models.4447_6172",
+      "lumi.models.4447_6205",
+      "aqara.matter.4447_6183",
+      "lumi.models.4447_6212"
+    ],
+    "pluginVersion": "3.0.105",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/d6737b1ce00248659b1468f60bffcdb8.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.thermostat.floor",
+    "label": "地暖温控器 W500",
+    "models": [
+      "aqara.matter.4447_18435",
+      "lumi.airrtc.aeu001"
+    ],
+    "pluginVersion": "3.0.2",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/3c524c94df974df883f266f90b215aa0.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "aqara.zigbee.switch",
+    "label": "Aqara zigbee 开关",
+    "models": [
+      "lumi.switch.agl010",
+      "lumi.switch.agl009",
+      "lumi.switch.agl006",
+      "lumi.switch.agl005",
+      "lumi.switch.agl004"
+    ],
+    "pluginVersion": "3.0.1",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/9c184ec0d2e74cc98e84806fe3ece6fd.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.airrtc.acn002",
+    "label": "智能温控器S4 (氟机版)",
+    "models": [
+      "lumi.airrtc.acn002"
+    ],
+    "pluginVersion": "3.0.1",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/6728444c209240e99edee4a7a4275a83.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.airrtc.acn003",
+    "label": "智能温控器S4 (水机版)",
+    "models": [
+      "lumi.airrtc.acn003"
+    ],
+    "pluginVersion": "3.0.1",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/d35c9b3c60f24207a1b772bd67bd1b56.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.airrtc.aeu005",
+    "label": "智能阀式温控器W600",
+    "models": [
+      "lumi.airrtc.aeu005",
+      "aqara.matter.4447_18437"
+    ],
+    "pluginVersion": "3.0.6",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/b242780c9563419f8a307221941fd8ce.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.airrtc.aus001",
+    "label": "法拉盛",
+    "models": [
+      "lumi.airrtc.aus001",
+      "lumi.airrtc.aus002"
+    ],
+    "pluginVersion": "3.2.0",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/6f225cb96ef842969e5112b18d4d6d1e.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.aoke.modules",
+    "label": "奥科模组",
+    "models": [
+      "lumi.curtain.fngl02",
+      "lumi.curtain.fngl01",
+      "aqara.matter.5274_8229",
+      "aqara.matter.5274_8213",
+      "aqara.matter.4447_14338"
+    ],
+    "pluginVersion": "3.0.2",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/f8b41709300c418e952aa9cf0ec3ccaa.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.curtain.acn010",
+    "label": "窗帘电机",
+    "models": [
+      "lumi.curtain.acn010"
+    ],
+    "pluginVersion": "3.0.1",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/d45caf3aa0bd46c2a21b11b393a6c8ab.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.fitting.agl001",
+    "label": "互感器",
+    "models": [
+      "lumi.fitting.agl001"
+    ],
+    "pluginVersion": "3.0.0",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/c227e26abfff4a5da76ab8bfcc6cd97a.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.gateway.acn012",
+    "label": "M3网关",
+    "models": [
+      "lumi.gateway.acn012",
+      "lumi.gateway.agl011",
+      "lumi.gateway.agl021"
+    ],
+    "pluginVersion": "3.2.3",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/4dd8c9318768436f93ab7ca2b2d72e1e.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.gateway.agl004",
+    "label": "M3 中枢网关(海外版)",
+    "models": [
+      "lumi.gateway.agl004"
+    ],
+    "pluginVersion": "3.2.3",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/a10d270cc7a14d0fa3cd89da181cf5f7.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.gateway.agl008",
+    "label": "网关 M100 海外版",
+    "models": [
+      "lumi.gateway.agl008"
+    ],
+    "pluginVersion": "3.2.0",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/0818b0a991e94089a764d8e0d199fb6a.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.gateway.agl012",
+    "label": "Hub M300",
+    "models": [
+      "lumi.gateway.agl012"
+    ],
+    "pluginVersion": "3.0.9",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/c605bfc38b8944d185635552a3e4caf7.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.gateway.agl013",
+    "label": "485网关",
+    "models": [
+      "lumi.gateway.agl013"
+    ],
+    "pluginVersion": "3.0.1",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/ae88aaa5c49c44c1888d5172cd6d0397.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.gateway.agl014",
+    "label": "网关 M410",
+    "models": [
+      "lumi.gateway.agl014"
+    ],
+    "pluginVersion": "3.0.6",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/17be670e5344454eb63c433f61157c55.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.gateway.agl015",
+    "label": "妙控场景屏 AX100S",
+    "models": [
+      "lumi.gateway.agl015"
+    ],
+    "pluginVersion": "3.0.2",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/c4e20c96353d454398ec9b218964d6d3.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.light.acn038",
+    "label": "485灯箱",
+    "models": [
+      "lumi.light.acn038"
+    ],
+    "pluginVersion": "3.0.0",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/680f1237c94441c9a3122abd81d58d03.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.light.acn041",
+    "label": "万象天镜",
+    "models": [
+      "lumi.light.acn041"
+    ],
+    "pluginVersion": "3.0.3",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/322185b72bec447ca427071fdb7122ef.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.lock.acn006",
+    "label": "智能门 RD1",
+    "models": [
+      "lumi.lock.acn006"
+    ],
+    "pluginVersion": "3.0.4",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/c955890ccf7b483c8a26716a047e3a0c.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.lock.netAccess",
+    "label": "门锁入网模块",
+    "models": [],
+    "pluginVersion": "3.0.3",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/9d1e4fbc5ecb4d26b10e01d791f80466.zip",
+    "pluginType": 2
+  },
+  {
+    "bundleId": "lumi.models.4447_14362",
+    "label": "百叶帘调光伴侣C100",
+    "models": [
+      "lumi.models.4447_14362",
+      "aqara.matter.4447_14363"
+    ],
+    "pluginVersion": "3.0.43",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/df094b0e7eae4ed5b4a69871ef206009.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.models.4447_8249",
+    "label": "空间有无人软传感",
+    "models": [
+      "lumi.models.4447_8249"
+    ],
+    "pluginVersion": "3.0.2",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/1c7e4cf5e71f4a7cb623e80be9ae48a7.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.motion.ac01",
+    "label": "体征探测器T1",
+    "models": [
+      "lumi.motion.ac01"
+    ],
+    "pluginVersion": "3.0.0",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/ce1fb42e7db04e5881c909f0cf383309.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.plug.common",
+    "label": "Aqara 插座",
+    "models": [
+      "aqara.matter.4447_4110",
+      "lumi.plug.aeu002"
+    ],
+    "pluginVersion": "3.0.3",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/f505330b275f4f60baf1b493628ac501.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.plug.move",
+    "label": "Aqara欧标移动插座",
+    "models": [
+      "aqara.matter.4447_4162",
+      "lumi.plug.aeu006",
+      "lumi.plug.aeu007",
+      "lumi.plug.aeu009",
+      "lumi.plug.aeu008",
+      "lumi.plug.aeu005",
+      "aqara.matter.4447_4160",
+      "aqara.matter.4447_4154",
+      "aqara.matter.4447_4152",
+      "lumi.plug.aeu004",
+      "aqara.matter.4447_4156",
+      "aqara.matter.4447_4158"
+    ],
+    "pluginVersion": "3.0.2",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/b40a73f7756049048b31059fa07e3dbf.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.plugin.common",
+    "label": "晾衣机和窗帘A1行程引导",
+    "models": [
+      "lumi.curtain.hagl08",
+      "lumi.curtain.acn002",
+      "lumi.airer.acn02",
+      "lumi.curtain.acn014"
+    ],
+    "pluginVersion": "3.0.0",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/5908b2ae402c4e6e8045f73cefa6f2cf.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.remote.cagl02",
+    "label": "魔方控制器 T1 Pro",
+    "models": [
+      "lumi.remote.cagl02"
+    ],
+    "pluginVersion": "3.0.1",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/647ece8cfdad48e1a89ba0a07c6569f5.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.sensor.fp3",
+    "label": "AI智能存在传感器 FP3",
+    "models": [
+      "lumi.sensor_occupy.agl8",
+      "aqara.matter.4447_8197",
+      "lumi.sensor_occupy.acn1",
+      "aqara.matter.4447_8206"
+    ],
+    "pluginVersion": "3.0.7",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/35ac79c60e734848933533c33aa03ec6.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.sensor.p100",
+    "label": "多功能传感器P100",
+    "models": [
+      "lumi.vibration.agl002",
+      "aqara.matter.4447_8203"
+    ],
+    "pluginVersion": "3.0.21",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/042906b1ca884ce4a27d8be1c8558755.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.sensor_ht.agl001",
+    "label": "温控伴侣",
+    "models": [
+      "aqara.matter.4447_8196",
+      "lumi.sensor_ht.agl001"
+    ],
+    "pluginVersion": "3.0.1",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/139cd9c478fa42f3b81af1ab0c8013ff.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.sensor_occupy.agl9",
+    "label": "fp400 zigbee插件",
+    "models": [
+      "lumi.sensor_occupy.agl9"
+    ],
+    "pluginVersion": "3.0.12",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/dabe3fbce33e4e94878e3083b5e89545.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.sensor_smoke.acn03",
+    "label": "烟气感的设备自检",
+    "models": [
+      "lumi.sensor_gas.acn01",
+      "lumi.sensor_gas.acn02",
+      "lumi.sensor_smoke.acn03"
+    ],
+    "pluginVersion": "3.0.0",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/1d01b2375e9f4d21aa21b82c6f8298bc.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.switch.acn066",
+    "label": "妙控场景屏 S100",
+    "models": [
+      "lumi.switch.acn066"
+    ],
+    "pluginVersion": "3.0.4",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/9219ba508f714318bd845a9bd1e96f2c.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.switch.acn080",
+    "label": "精英开关H2",
+    "models": [
+      "lumi.switch.acn080"
+    ],
+    "pluginVersion": "3.0.0",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/9a32783b906b42b5a2c2e07bdd5de469.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.switch.aeu003",
+    "label": "卷帘开关",
+    "models": [
+      "aqara.matter.4447_4109",
+      "lumi.switch.aeu003"
+    ],
+    "pluginVersion": "3.0.5",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/db0ed1bb73154acdb22ee0547120f4de.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.switch.agl01",
+    "label": "车库门",
+    "models": [
+      "lumi.switch.agl01"
+    ],
+    "pluginVersion": "3.0.0",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/1f7e8d8ab2c84a04b94d1fd87c9238c1.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.switch.b1nc01",
+    "label": "智能墙壁开关 E1",
+    "models": [
+      "lumi.switch.b2nc01",
+      "lumi.switch.b2lc04",
+      "lumi.switch.b1nc01",
+      "lumi.switch.b1lc04"
+    ],
+    "pluginVersion": "3.0.1",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/895addd736944596aa1ca960bfc2cc68.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "lumi.switch.legacy_upgrade",
+    "label": "开关类老翻新项目",
+    "models": [
+      "lumi.switch.n3acn1",
+      "lumi.switch.n2acn1",
+      "lumi.switch.n1acn1",
+      "lumi.switch.l3acn1",
+      "lumi.switch.l2acn1",
+      "lumi.switch.l1acn1"
+    ],
+    "pluginVersion": "3.1.3",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/dc17e4d7a4004fb7b8e2830e69acf728.zip",
+    "pluginType": 1
+  },
+  {
+    "bundleId": "matter.commission.core",
+    "label": "Matter直连入网插件",
+    "models": [],
+    "pluginVersion": "3.0.1",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/70a934194df64d58b71a0d393b9ce060.zip",
+    "pluginType": 3
+  },
+  {
+    "bundleId": "softsensor.temperature.humidity",
+    "label": "温湿度软传感",
+    "models": [
+      "lumi.models.4447_8265",
+      "lumi.models.4447_8266"
+    ],
+    "pluginVersion": "3.0.3",
+    "pluginUrl": "https://cdn.aqara.com/cdn/appadmin/mainland/rn/562df4ca586242368b585993e732308a.zip",
+    "pluginType": 1
+  }
+]

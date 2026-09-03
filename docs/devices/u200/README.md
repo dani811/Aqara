@@ -13,7 +13,7 @@ specific to the U200; the reusable mechanisms it builds on live in
 | Connectivity | BLE + Thread, **no Wi-Fi** |
 | Region confirmed | EU (`status: confirmed`); other regions `unverified` |
 | BLE security | No SMP bonding; security at the application layer |
-| Advertising | Only after the keypad is physically activated |
+| Advertising | Continuous & connectable (`DoorLocker`) — actuation/status need **no** keypad; keypad touch gates **settings/ajustes** ops only (corrected 2026-09-03 live: scan→connect→LOCK→status with zero keypad activity) |
 | Confirmed operations | `UNLOCK`, `LOCK`, `KEEPALIVE` (2 opcodes verified live) |
 
 ## Documents

@@ -108,3 +108,42 @@ python3 tools/run_hook.py tools/capture_all_http.js > /tmp/allhttp.log 2>&1 &
   badly enough that `uiautomator`/taps stop registering (looks like a frozen app, not
   a crash). Attach it only right before the action you need to capture, detach right
   after.
+
+## Multiple repacked builds, one per Frida version
+
+Past sessions repacked, tested, and threw the APK away each time — see
+[`repacked-apks/`](repacked-apks/README.md) for a per-version status table
+(which ones connect, which ones survive a Java hook) plus
+[`repack_apk.sh`](repack_apk.sh), a single parameterized script replacing
+the one-off shell commands that used to live only in this file's history.
+Building a new version to test never risks the current daily-driver
+build — they coexist in separate folders; only *installing* one on the
+phone is exclusive at a time.
+
+## The SecNeo Java-hook crash: two different strategies, not one
+
+The "any hook touching ART/JNI crashes" finding above was recorded entirely
+on **16.7.19** — no attempt has combined a modern, matched 17.x host+gadget
+pair with a Java-level hook. Frida 17.2.12+ fixed real ART class-offset
+detection bugs unrelated to whatever broke 17.17.0's gadget handshake (see
+[`repacked-apks/frida-17.2.12/README.md`](repacked-apks/frida-17.2.12/README.md)
+for the exact test plan). This is a real hypothesis, not a confirmed fix —
+the SecNeo crash is attributed to **deliberate** anti-tampering detection,
+which an ART-compatibility fix may or may not defeat.
+
+**A more targeted alternative, untried so far**: the app is React Native /
+Hermes. `handleSetLanguageByChannel`/`mapLanguageValueToChannel` and
+similar logic already located by static decompilation
+(`docs/reference/rn-device-plugins.md`) run as Hermes bytecode, inside
+**`libhermes.so`** — a native library with its own C++ call surface,
+separate from the app's own ART/JNI classes that SecNeo watches. A
+**native** `Interceptor.attach` on Hermes's own exports (the same
+technique already proven stable for BoringSSL in `capture_ssl_native.js` —
+never touches ART) could observe Hermes-level function calls without ever
+crossing into the ART/Java bridge SecNeo defends. Concretely: enumerate
+`Process.getModuleByName('libhermes.so').enumerateExports()` to find the
+right entry point (candidates: `HermesRuntime::evaluateJavaScript`, the
+bytecode interpreter's call-dispatch function, or a JSI `Runtime::call`
+implementation), then hook it to log arguments/backtraces at the moment
+the OTA activation value is built. Not attempted yet — the exact symbol
+names need probing live before this becomes a real script.

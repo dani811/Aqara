@@ -79,10 +79,10 @@ transient lock-side elevated state the app had just established.
 
 1. ~~**BLE central identity**~~ — **REFUTED 2026-08-27 by btsnoop analysis** (no
    live test needed). The phone connects with a **rotating RPA** (`LE Set Random
-   Address 4a:a9:6b:54:eb:06`, own_addr_type=1; MSB `4a` bits `01` = resolvable
-   private address), and the link is unbonded (no IRK). A rotating, unresolvable
-   central address gives the lock NO stable identity to gate on → the privilege
-   tier is NOT bound to the central address. Its public BD_ADDR (74:be:f3:16:77:f3)
+   Address`, own_addr_type=1; the address's two most-significant bits are `01` =
+   resolvable private address), and the link is unbonded (no IRK). A rotating,
+   unresolvable central address gives the lock NO stable identity to gate on → the
+   privilege tier is NOT bound to the central address. The phone's public BD_ADDR
    is not used for the connection.
 2. **Cloud session material / cloud request (PRIME lead after 2026-08-27).** The
    app is privileged from the FIRST post-auth command: its first gated op (log sync

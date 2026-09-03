@@ -56,7 +56,6 @@ from dataclasses import dataclass
 from typing import Any, cast
 from urllib import error as urlerror
 from urllib import request as urlrequest
-from urllib.parse import urlencode
 
 # Pure cloud crypto lives in cloud_crypto (feature 027): HKDF, the native Sign,
 # the RSA login-password envelope and the x-aes128gcm body codec. This module is
@@ -95,16 +94,20 @@ _PATH_PUBLICKEY = "/dev/bluetooth/login/assure/publickey"
 _PATH_VERIFY = "/dev/bluetooth/login/assure/verify"
 #: Account device inventory (POST, empty body) → result: {data: [...], totalCount}.
 _PATH_DEVICE_LIST = "/dev/query"
-#: Offline-password batch fetch (feature 038, GET, no body) → result:
-#: {passwd: ["<6-digit code>", ...]} — the current 10-minute window's pending
-#: codes. Confirmed live 2026-08-30 (docs/devices/u200/operations.md); the
-#: exact query/header shape for `did` is NOT yet confirmed byte-for-byte
-#: (see specs/038-offline-password-cloud User Story 3) — this path is.
+#: Offline-password batch fetch → result: {passwd: ["<6-digit code>", ...]}.
+#: CONFIRMED BYTE-FOR-BYTE 2026-09-02 (getSignHead + SSL correlated capture,
+#: paired by the shared `sign` value): this is a **POST** with a JSON body
+#: ``{"did":"<did>"}``, NOT a GET. Using GET (any body shape) was the actual
+#: cause of the persistent code=106 "Invalid sign" on this endpoint — the
+#: sign was correct, the METHOD was wrong.
 _PATH_OFFLINE_PASSWORD = "/dev/bluetooth/lock/passwd"
-#: Offline-password issuance history (feature 038, GET) → result: [{createTime,
-#: startTime, endTime, did}, ...]. did/startTime/endTime confirmed in the
-#: query string by the same 2026-08-30 capture.
-_PATH_OFFLINE_PASSWORD_LOG = "/dev/bluetooth/lock/password/log/query"
+#: Offline-password issuance history → result: [{createTime, startTime,
+#: endTime, did}, ...]. CONFIRMED BYTE-FOR-BYTE 2026-09-02 (same correlated
+#: capture): the real path is ``/dev/lock/one/password/log/query`` (NOT
+#: ``/dev/bluetooth/lock/password/log/query`` — that old path was wrong), a
+#: **GET** whose Sign preimage body is the raw query string
+#: ``did=<did>&endTime=<ms>&startTime=<ms>``.
+_PATH_OFFLINE_PASSWORD_LOG = "/dev/lock/one/password/log/query"
 _REQUIRED_AUTH_HEADERS = (
     "Lang",
     "Cuty",
@@ -307,7 +310,7 @@ _SENSITIVE_DEBUG_HEADERS = frozenset({"sign", "token"})
 def _request_json(
     method: str,
     url: str,
-    payload: Mapping[str, Any],
+    payload: Mapping[str, Any] | None,
     auth_headers: Mapping[str, str] | None = None,
     timeout: float = 10,
     signer: Signer | None = None,
@@ -315,23 +318,47 @@ def _request_json(
     encrypt_appkey: str | None = None,
 ) -> dict[str, Any]:
     """Issue a signed Aqara cloud request. Shared by ``_post_json`` (POST,
-    the historical name) and the GET-based endpoints (feature 038) — nothing
-    below this line depends on the HTTP method except which verb goes on the
-    wire and whether a body is sent at all.
+    the historical name) and the GET-based endpoints (feature 038).
+
+    What goes into the Sign preimage's body slot depends on WHERE the
+    request's data actually lives, not on the HTTP method:
+
+    - URL has a `?query`: CONFIRMED 2026-09-01 via a live-captured real
+      Sign (native SSL hook + HTTP/2 HPACK decode of the app's own
+      `GET .../position/device/query?positionId=...`, see
+      docs/devices/u200/operations.md) — the preimage's body slot is the
+      URL's raw query string (no leading `?`), and no bytes are sent on
+      the wire as a body at all. Feeding that string into `compute_sign()`
+      reproduced the app's real Sign byte-for-byte; feeding `""` (the
+      original assumption) did not.
+    - No query string, but a JSON `payload`: CONFIRMED 2026-08-31 via a
+      live capture of a real, server-ACCEPTED
+      `GET /dev/bluetooth/lock/passwd` request with body
+      `{"did":"matt...."}` (see the same operations.md doc, "T018/T019
+      live verification") — here the JSON body IS the wire body AND the
+      Sign preimage's body slot. Do not special-case this away by method;
+      an earlier same-night edit briefly assumed "GET never has a JSON
+      body," which is false for this endpoint specifically and broke it
+      (see cloud-signing-broken-2026-09-01 memory).
+    - Neither: empty body slot, no bytes sent (e.g. `POST /dev/query`).
     """
-    # Serialize compactly (no spaces) so the body matches the exact bytes the
-    # Aqara app signs/sends; okhttp+gson emit `{"deviceId":"..."}` with no space.
-    body_str = json.dumps(payload, separators=(",", ":")) if payload else ""
-    # El Sign SIEMPRE se calcula sobre el PLAINTEXT (body_str), aunque el cuerpo
-    # viaje cifrado. Con cifrado x-aes128gcm se envia el BLOB pero se firma el claro.
-    # A GET with no payload has no body at all (not even "{}") — this matches
-    # the real app, which never sends a body on its GET-verb endpoints either.
-    if not body_str:
+    if "?" in url:
+        body_str = url.split("?", 1)[1]
         data = None
-    elif encrypt_appkey is not None:
-        data = aes128gcm_encrypt_body(body_str.encode("utf-8"), encrypt_appkey).encode("utf-8")
     else:
-        data = body_str.encode("utf-8")
+        # Serialize compactly (no spaces) so the body matches the exact bytes
+        # the Aqara app signs/sends; okhttp+gson emit `{"deviceId":"..."}`
+        # with no space.
+        body_str = json.dumps(payload, separators=(",", ":")) if payload else ""
+        # El Sign SIEMPRE se calcula sobre el PLAINTEXT (body_str), aunque el
+        # cuerpo viaje cifrado. Con cifrado x-aes128gcm se envia el BLOB pero
+        # se firma el claro. Un body vacio no manda ni siquiera "{}".
+        if not body_str:
+            data = None
+        elif encrypt_appkey is not None:
+            data = aes128gcm_encrypt_body(body_str.encode("utf-8"), encrypt_appkey).encode("utf-8")
+        else:
+            data = body_str.encode("utf-8")
     if signer is not None:
         # El firmante devuelve cabeceras YA firmadas sobre el cuerpo en claro. El
         # Sign NO cubre la URL (solo cabeceras+body en claro).
@@ -748,19 +775,18 @@ def fetch_offline_passwords(
     _now_ms: Any = None,
 ) -> OfflinePasswordBatch:
     """Fetch the offline-password codes pending for the lock's current
-    10-minute window (``GET /dev/bluetooth/lock/passwd``) — no BLE
+    10-minute window (``POST /dev/bluetooth/lock/passwd``) — no BLE
     connection to the lock at any point, this is a pure cloud call.
 
     Args:
-        device_id: Lock DID (``matt.<...>``). Confirmed live 2026-08-31 (native
-            SSL hook, fresh capture) that it DOES ride on the wire — as a JSON
-            request **body** (``{"did": "<device_id>"}``) on the GET request,
-            not a header or query param. The earlier capture only recovered
-            the literal ``GET /app/v1.0/lumi/dev/bluetooth/lock/passwd``
-            ``:path`` (HPACK dynamic-table desync hid the rest); this capture
-            caught the ``SSL_write`` immediately preceding a real
-            ``passwd`` response and its plaintext body was exactly
-            ``{"did":"matt.<...>"}`` — real device, real account.
+        device_id: Lock DID (``matt.<...>``). Rides as a JSON request
+            **body**, ``{"did": "<device_id>"}``, on a **POST** — confirmed
+            byte-for-byte 2026-09-02 by a getSignHead+SSL correlated capture
+            paired on the shared ``sign`` value (see the
+            cloud-signing-broken-2026-09-01 memory). The persistent
+            ``code=106`` before this was NOT a sign bug (compute_sign is
+            byte-perfect vs the app's real getSignHead) — it was this call
+            using GET instead of POST.
         auth_headers: Same auth headers as the rest of this module's cloud
             calls.
         base_url: Region base URL, e.g. ``REGION_BASE_URLS["EU"]``.
@@ -772,7 +798,7 @@ def fetch_offline_passwords(
         CloudServiceError: the cloud answered with a non-zero ``code``.
     """
     data = _request_json(
-        "GET",
+        "POST",
         f"{base_url}{_PATH_OFFLINE_PASSWORD}",
         {"did": device_id},
         auth_headers,
@@ -808,14 +834,23 @@ def fetch_offline_password_log(
     Entries missing any of the four required fields are dropped silently
     (never invented) rather than failing the whole call.
 
+    CONFIRMED BYTE-FOR-BYTE 2026-09-02 (getSignHead+SSL correlated capture,
+    paired on the shared ``sign`` value): this is a **GET** to
+    ``/dev/lock/one/password/log/query`` whose Sign preimage body is the
+    raw query string ``did=<did>&endTime=<ms>&startTime=<ms>`` (that exact
+    key order), with the same query string on the URL. Earlier confusion
+    (JSON body; the ``/dev/bluetooth/lock/...`` path) is superseded — both
+    were wrong, see the cloud-signing-broken-2026-09-01 memory.
+
     Raises:
         CloudServiceError: the cloud answered with a non-zero ``code``.
     """
-    query = urlencode({"did": device_id, "startTime": start_time_ms, "endTime": end_time_ms})
+    # Order matters: the app signs did, then endTime, then startTime.
+    query = f"did={device_id}&endTime={int(end_time_ms)}&startTime={int(start_time_ms)}"
     data = _request_json(
         "GET",
         f"{base_url}{_PATH_OFFLINE_PASSWORD_LOG}?{query}",
-        {},
+        None,
         auth_headers,
         signer=signer,
         path_rel=_PATH_OFFLINE_PASSWORD_LOG,

@@ -79,6 +79,69 @@ def test_compute_sign_omits_token_field_when_empty() -> None:
     assert got != with_token
 
 
+class _FakeHTTPResponse:
+    """Minimal stand-in for the context-manager `http.client.HTTPResponse`
+    that `urlrequest.urlopen(...)` returns — just enough for `_request_json`
+    to read a JSON body and check `Content-Encoding`.
+    """
+
+    def __init__(self, body: bytes, headers: dict[str, str] | None = None) -> None:
+        self._body = body
+        self.headers = headers or {}
+
+    def read(self) -> bytes:
+        return self._body
+
+    def __enter__(self) -> "_FakeHTTPResponse":
+        return self
+
+    def __exit__(self, *exc: Any) -> bool:
+        return False
+
+
+def test_get_request_signs_the_raw_query_string_not_an_empty_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CONFIRMED 2026-09-01, live against the real Aqara cloud: a GET's Sign
+    preimage is NOT computed over an empty body (the old behavior — which
+    made every `fetch_offline_passwords()` call fail with
+    `code=106 "Invalid sign"`, see the cloud-signing-broken-2026-09-01
+    memory), and NOT over a JSON body either (a real but never-actually-
+    accepted 2026-08-31 capture had briefly suggested otherwise). It's the
+    URL's raw query string, unmodified, no leading `?`. Proven by replaying
+    a live-captured real Sign from `.../position/device/query?positionId=
+    ...&size=300&startIndex=0` through `compute_sign()`: only matched when
+    `body` was that literal query string.
+
+    This test doesn't repeat that live network proof (no real credentials
+    belong in the repo) — it locks in the resulting *wiring*: a GET with a
+    `?query` in its URL must hand that exact query string to the signer,
+    with no separate JSON payload sent on the wire.
+    """
+    captured: dict[str, Any] = {}
+
+    def spy_signer(path_rel: str | None, body: str) -> dict[str, str]:
+        captured["path_rel"] = path_rel
+        captured["body"] = body
+        return {"Appid": "fake", "Sign": "fake-sign"}
+
+    def fake_urlopen(request: Any, timeout: float = 10, context: Any = None) -> _FakeHTTPResponse:
+        captured["url"] = request.full_url
+        captured["data"] = request.data
+        return _FakeHTTPResponse(b'{"code":0,"result":{}}')
+
+    monkeypatch.setattr(kdf.urlrequest, "urlopen", fake_urlopen)
+    kdf._request_json(
+        "GET",
+        "https://example.test/dev/bluetooth/lock/passwd?did=matt.fake",
+        None,
+        signer=spy_signer,
+        path_rel=kdf._PATH_OFFLINE_PASSWORD,
+    )
+    assert captured["body"] == "did=matt.fake"
+    assert captured["data"] is None  # a GET sends no body bytes at all
+
+
 def test_hkdf_sha256_rfc5869_test_case_1() -> None:
     # RFC 5869, Appendix A.1
     ikm = bytes.fromhex("0b" * 22)
@@ -498,23 +561,37 @@ def test_fetch_offline_passwords_parses_the_real_response(
     assert batch.codes == ("651399", "637408")
 
 
-def test_fetch_offline_passwords_calls_the_get_endpoint(
+def test_fetch_offline_passwords_posts_did_as_json_body(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Confirmed byte-for-byte live 2026-09-02 (getSignHead+SSL correlated
+    capture): this endpoint is a POST with a JSON body {"did": ...}, and
+    both real functions return code=0 live. Using GET was the actual cause
+    of the persistent 106. See cloud-signing-broken-2026-09-01 memory.
+    """
     seen = _capture_request_json(monkeypatch, OFFLINE_PASSWORD_RESPONSE)
     kdf.fetch_offline_passwords("matt.fake", None, "https://example.test")
-    assert seen["method"] == "GET"
+    assert seen["method"] == "POST"
     assert seen["url"] == "https://example.test" + kdf._PATH_OFFLINE_PASSWORD
+    assert seen["payload"] == {"did": "matt.fake"}
 
 
 def test_fetch_offline_passwords_sends_did_as_a_json_body(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Confirmed live 2026-08-31 (native SSL hook, fresh capture): the real
-    app's GET request to this endpoint carries a JSON body ``{"did": "..."}``
-    — not a bodyless GET as originally assumed, and not a header/query param
-    either. Captured the exact SSL_write immediately preceding a real
-    passwd response on the maintainer's own account/device.
+    """Confirmed live 2026-08-31 (native SSL hook, full round trip — the
+    response's `passwd` codes matched what the app's UI showed, not just
+    "the app sent this"): the real app's GET request to this endpoint
+    carries a JSON body ``{"did": "..."}``.
+
+    NOT RECONCILED as of 2026-09-01 night: every live attempt at this
+    exact shape from `aqara_ble`'s own client got `code=106` this session
+    regardless of code changes here, while a *different* authenticated GET
+    proved a query-string-based Sign preimage live (see `_request_json`'s
+    docstring). Both are real, captured shapes — this endpoint's has not
+    been RE-verified against a fresh live capture since the 106s started.
+    Don't "fix" this test/endpoint again without one — see the
+    cloud-signing-broken-2026-09-01 memory's NEXT SESSION plan.
     """
     seen = _capture_request_json(monkeypatch, OFFLINE_PASSWORD_RESPONSE)
     kdf.fetch_offline_passwords("matt.fake", None, "https://example.test")
@@ -571,16 +648,23 @@ def test_fetch_offline_password_log_parses_the_real_response(
     assert entry.device_id == "matt.73cb7865154223b90e81d000"
 
 
-def test_fetch_offline_password_log_builds_the_query_string(
+def test_fetch_offline_password_log_gets_the_query_string_endpoint(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Confirmed byte-for-byte live 2026-09-02 (getSignHead+SSL correlated
+    capture, verified code=0 live): a GET to /dev/lock/one/password/log/query
+    (NOT the old /dev/bluetooth/lock/... path) whose signed body is the raw
+    query string `did=<did>&endTime=<ms>&startTime=<ms>` in that key order.
+    See the cloud-signing-broken-2026-09-01 memory.
+    """
     seen = _capture_request_json(monkeypatch, OFFLINE_PASSWORD_LOG_RESPONSE)
     kdf.fetch_offline_password_log("matt.abc", 111, 222, None, "https://example.test")
     assert seen["method"] == "GET"
-    assert seen["url"].startswith("https://example.test" + kdf._PATH_OFFLINE_PASSWORD_LOG + "?")
-    assert "did=matt.abc" in seen["url"]
-    assert "startTime=111" in seen["url"]
-    assert "endTime=222" in seen["url"]
+    assert seen["payload"] is None
+    assert seen["url"] == (
+        "https://example.test" + kdf._PATH_OFFLINE_PASSWORD_LOG
+        + "?did=matt.abc&endTime=222&startTime=111"
+    )
 
 
 def test_fetch_offline_password_log_drops_incomplete_entries(

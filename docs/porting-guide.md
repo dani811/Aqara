@@ -86,7 +86,25 @@ service/characteristic UUIDs and ATT handles for auth, control, OTA, and bulk.
 Compare against the U200's map ([devices/u200/gatt-map.md](devices/u200/gatt-map.md))
 as a template.
 
-- **Reuse (transversal):** the four-role model, the fragmentation scheme.
+Use `tools/dump_gatt.py` to produce the raw table — it does a read-only,
+no-auth service discovery and prints every service, characteristic, value
+handle, properties and descriptor:
+
+```bash
+# ESP32-S3 HCI (required on macOS to see the Matter fff6 service CoreBluetooth hides):
+.venv/bin/python tools/dump_gatt.py --transport bumble --port serial:/dev/cu.usbmodemNNNN,115200
+# or the native adapter (Linux/BlueZ sees everything):
+.venv/bin/python tools/dump_gatt.py --transport bleak
+# omit --mac to connect to the first identified Aqara candidate (unknown-MAC device);
+# --flag-handle 0x3c highlights a handle of interest.
+```
+
+Paste its output into `devices/<device>/gatt-map.md` and map each characteristic
+to its role. Note handles are **not** stable across firmware — the code always
+resolves by UUID (`aqara_ble/gatt_uuids.py`), so record UUIDs as the source of
+truth and handles only for orientation.
+
+- **Reuse (transversal):** the four-role model, the fragmentation scheme, `tools/dump_gatt.py`.
 - **Discover (device):** the UUIDs and handles → write `devices/<device>/gatt-map.md`.
 - **Watch out:** the U200 only advertises after its keypad is activated; a new
   device may gate discovery differently.

@@ -42,7 +42,7 @@ including the ones the protocol does not use:
 | `0x0024`–`0x0028` | `ff70` (vendor) **unknown** | `ff71` `0x0025`/`0x0026` | write-no-rsp | — | Not used by the app flow we reproduce; no notify side |
 | | | `ff72` `0x0027`/`0x0028` | write-no-rsp | — | idem |
 | `0x0029`–`0x002e` | `ff80` (vendor) **unknown** | `ff81` `0x002a`/`0x002b` | write-no-rsp | — | Not used by the app flow we reproduce |
-| | | `ff82` `0x002c`/`0x002d` | notify | CCCD `0x002e` | Never subscribed by us — candidate for a state/event channel |
+| | | `ff82` `0x002c`/`0x002d` | notify | CCCD `0x002e` | The LOCK's ff82 is silent. But the KEYPAD is a SEPARATE BLE device `vuart:ktunnel` (`11:22:33:44:55:66`, same GATT) whose ff82 emits the keypad↔lock tunnel (`5aa5…` heartbeat, ~5 s). That is the real presence channel behind the settings/OTA gate — see memory `keypad-vuart-ktunnel-presence-channel`. |
 | `0x002f`–`0x0039` | `ff60` Control | `ff61` `0x0030`/`0x0031` | write-no-rsp | — | control write |
 | | | `ff62` `0x0032`/`0x0033` | notify | CCCD `0x0034` | control notify |
 | | | `ff63` `0x0035`/`0x0036` | write-no-rsp | — | OTA write |
@@ -99,8 +99,13 @@ are listed here only for orientation when reading a capture.
 ## Discovery notes
 
 - `status: confirmed` against real captures of the reference device.
-- The U200 was observed to **advertise only after its keypad is physically
-  activated**; a passive scan finds nothing until then. This behaviour may differ
-  on other devices.
+- **Advertising is continuous and connectable** (adv name `DoorLocker`, model
+  `U200`) — a passive scan finds it with no keypad activity, and
+  scan→connect→`LOCK`→`lockstatus` all succeed with the keypad untouched
+  (verified live 2026-09-03 via the bleak transport, rssi ≈ -55). The
+  **keypad-presence gate applies only to SETTINGS/ajustes operations**, not to
+  advertising, connection, or actuation. (An earlier note here claimed "advertises
+  only after the keypad" — that was wrong/stale, likely observed on an idle or
+  pre-Matter-commissioned unit; corrected.)
 - Handles are stable for this firmware family but should be re-read (service
   discovery) rather than hard-assumed on a new device or firmware.

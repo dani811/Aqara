@@ -9,7 +9,7 @@ import os
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
@@ -34,6 +34,7 @@ from .gatt_uuids import (
     AUTH_NOTIFY_UUID,
     AUTH_WRITE_UUID,
     AUX_NOTIFY_UUID,
+    AUX_WRITE_UUID,
     CONTROL_NOTIFY2_UUID,
     CONTROL_NOTIFY_UUID,
     CONTROL_WRITE_UUID,
@@ -182,6 +183,104 @@ class SessionMaterial:
     lock_public_key_hex: str
 
 
+async def _await_wor_ready(client: object, *, timeout: float = 3.0) -> None:
+    """Gate a WRITE_WITHOUT_RESPONSE on macOS/CoreBluetooth readiness.
+
+    CoreBluetooth silently DROPS write-without-response packets sent faster than
+    the controller can take them, and bleak does not gate on the "ready to send"
+    signal (its ``peripheralIsReadyToSendWriteWithoutResponse`` callback is never
+    called in practice — bleak discussion #1589). Sending a large OTA in a tight
+    loop therefore corrupts blocks (the lock NAKs) and can make macOS drop the
+    link entirely. We poll ``CBPeripheral.canSendWriteWithoutResponse`` ourselves
+    before each ff91 write. No-op on every other backend (bumble/BlueZ/WinRT do
+    their own ACL flow control), so this is safe and transport-agnostic."""
+    backend = getattr(client, "_backend", None)
+    peripheral = getattr(backend, "_peripheral", None)
+    ready = getattr(peripheral, "canSendWriteWithoutResponse", None)
+    if ready is None:
+        return
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            if ready():
+                return
+        except Exception:
+            return
+        await asyncio.sleep(0.002)
+
+
+@dataclass
+class PostAuthContext:
+    """Handed to a ``post_auth`` hook once the aqara session is fully established
+    (ECDH done, session key derived, CCCD enabled on ff62/ff64/ff92/ff08).
+
+    It exposes exactly the primitives an out-of-band bulk transfer (the language
+    voice-pack OTA on the AUX channel ff91/ff92) needs, without that logic having
+    to re-implement the auth handshake. The wire evidence (2026-09-02) proved the
+    OTA is NOT a standalone plaintext blast: it runs inside this authenticated,
+    subscribed session, the lock block-acks on ff92, and the control channel must
+    stay alive throughout (it goes quiet ~30 s after the last keepalive).
+
+    - ``write_aux(frame)``   → one WRITE_WITHOUT_RESPONSE to ff91 (the OTA channel).
+    - ``aux_reports``        → queue of ``(channel, bytes)``; ff92 (OTA acks) and
+                               ff64 land here. Drain it to observe the lock's acks.
+    - ``send_keepalive()``   → the encrypted 2f012f control keepalive on ff61, so
+                               the session survives a long transfer.
+    - ``send_control(pt)``   → encrypt a control plaintext and write it to ff61
+                               (e.g. the pre-OTA arming reads SYNC_OTA_URL /
+                               VOICE_OTA_INFO_GET the app issues before streaming).
+    - ``read_control(...)``  → await + decrypt the next ff62 control response.
+    """
+
+    client: GattClient
+    session_key_hex: str
+    nonce_hex: str
+    aux_reports: asyncio.Queue[tuple[str, bytes]]
+    control_responses: asyncio.Queue[bytes]
+    _keepalive_frame: bytes
+
+    async def write_aux(self, frame: bytes, *, response: bool = False) -> None:
+        await _await_wor_ready(self.client)
+        # response=True (write-WITH-response) makes each fragment reliable and
+        # self-pacing: the next write only goes once the previous one is confirmed
+        # delivered over the link. Over an ESPHome proxy this is essential — the
+        # macOS ``_await_wor_ready`` WoR flow-control gate is a no-op there, so a
+        # free WoR blast overruns the proxy's BLE queue and silently drops a
+        # fragment ~every 80 writes (a block CRC fail → 0x1115 NAK ~block 16).
+        await self.client.write_gatt_char(AUX_WRITE_UUID, bytes(frame), response=response)
+
+    async def send_keepalive(self) -> None:
+        with contextlib.suppress(Exception):
+            await self.client.write_gatt_char(
+                CONTROL_WRITE_UUID, self._keepalive_frame, response=False
+            )
+
+    async def send_control(self, plaintext: bytes, *, write_prefix: int = 0x01) -> None:
+        """Encrypt ``plaintext`` under the session key/nonce and write it to ff61,
+        exactly like the normal control path (``write_prefix`` + AES-CCM payload)."""
+        enc = encrypt_control_payload(
+            self.session_key_hex, self.nonce_hex, plaintext=bytes(plaintext)
+        )
+        await self.client.write_gatt_char(
+            CONTROL_WRITE_UUID, bytes((write_prefix,)) + enc, response=False
+        )
+
+    async def read_control(self, *, timeout: float) -> bytes | None:
+        """Await the next ff62 control frame and return its decrypted plaintext
+        (``None`` on timeout or a too-short frame)."""
+        try:
+            frame = await asyncio.wait_for(self.control_responses.get(), timeout=timeout)
+        except (TimeoutError, asyncio.TimeoutError):
+            return None
+        if len(frame) < 2:
+            return None
+        with contextlib.suppress(Exception):
+            return decrypt_control_payload(
+                self.session_key_hex, self.nonce_hex, ciphertext=frame[1:]
+            )
+        return None
+
+
 # Per-device concurrency tracking: one flag per device_id to prevent concurrent
 # run_authenticated_lock_operation() calls on the same lock.
 # Feature 012: Cloud I/O Async-Safe (fail-fast concurrency control)
@@ -204,9 +303,19 @@ async def run_authenticated_lock_operation(
     low_power_connection: bool = False,
     follow_up_ops: list[LockOperationWrite] | None = None,
     follow_up_out: list[tuple[Any, str | None]] | None = None,
+    post_auth: Callable[[PostAuthContext], Awaitable[None]] | None = None,
+    precomputed_cloud_pubkey: str | None = None,
 ) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
     """
     Authenticate with the lock, send a command, and receive the response.
+
+    ``post_auth`` (optional): once the session is fully authenticated and
+    subscribed, this hook is awaited with a :class:`PostAuthContext` INSTEAD of
+    sending ``operation`` on the control channel. It exists for out-of-band bulk
+    transfers that must run inside the authenticated session — the language
+    voice-pack OTA (ff91/ff92). When set, no lock control command is written and
+    ``listen_after``/``follow_up_ops`` are ignored; the return's response hex is
+    ``None``.
 
     ``listen_after`` (seconds) keeps the connection open after the command's first
     response and forwards every additional frame — control ff62 (decrypted),
@@ -258,6 +367,8 @@ async def run_authenticated_lock_operation(
                 low_power_connection=low_power_connection,
                 follow_up_ops=follow_up_ops,
                 follow_up_out=follow_up_out,
+                post_auth=post_auth,
+                precomputed_cloud_pubkey=precomputed_cloud_pubkey,
             )
         except CloudServiceError as exc:
             can_retry = (
@@ -292,6 +403,8 @@ async def _run_authenticated_lock_operation_once(
     low_power_connection: bool = False,
     follow_up_ops: list[LockOperationWrite] | None = None,
     follow_up_out: list[tuple[Any, str | None]] | None = None,
+    post_auth: Callable[[PostAuthContext], Awaitable[None]] | None = None,
+    precomputed_cloud_pubkey: str | None = None,
 ) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
     """
     Single attempt of the authenticated lock operation (see the public wrapper
@@ -585,14 +698,24 @@ async def _run_authenticated_lock_operation_once(
         await enable_cccd_in_app_order()
         try:
             resolved_base_url = base_url or REGION_BASE_URLS.get(region, REGION_BASE_URLS["EU"])
-            cloud_public_key_hex = await _run_cloud_phase(
-                "cloud_get_public_key",
-                cloud_get_public_key,
-                device_id=device_id,
-                auth_headers=auth_headers,
-                base_url=resolved_base_url,
-                signer=signer,
-            )
+            # Prefer a cloud pubkey fetched BEFORE the BLE connect (see
+            # ``precomputed_cloud_pubkey``): the OTA needs the keypad-touch presence
+            # to still be active when this BLE auth completes, and doing the ~POST
+            # /publickey round-trip here — between connect and the auth write — burns
+            # that presence window (the lock then NAKs the OTA mid-stream). The call
+            # only needs the device id + signer, nothing from the live link, so it can
+            # be done up front and injected. Falls back to fetching inline.
+            if precomputed_cloud_pubkey is not None:
+                cloud_public_key_hex = precomputed_cloud_pubkey
+            else:
+                cloud_public_key_hex = await _run_cloud_phase(
+                    "cloud_get_public_key",
+                    cloud_get_public_key,
+                    device_id=device_id,
+                    auth_headers=auth_headers,
+                    base_url=resolved_base_url,
+                    signer=signer,
+                )
             app_token_key = int.from_bytes(os.urandom(2), "little")
             await write_auth_message(
                 build_auth_message(
@@ -651,6 +774,35 @@ async def _run_authenticated_lock_operation_once(
                 raise RuntimeError(f"se esperaba ACK auth 0x07 y llegó {auth_ack.frame_type:#x}")
 
             write = build_lock_operation_write(operation)
+
+            # Out-of-band bulk transfer (language OTA on ff91/ff92): run INSIDE
+            # this authenticated, subscribed session instead of writing a lock
+            # control command. See PostAuthContext. This is a real device write,
+            # so no reauth after it (FR-016).
+            if post_auth is not None:
+                actuation_state["done"] = True
+                keepalive_frame = bytes((0x01,)) + encrypt_control_payload(
+                    session["sessionKey"],
+                    session["nonce"],
+                    plaintext=bytes.fromhex("2f012f"),
+                )
+                ctx = PostAuthContext(
+                    client=client,
+                    session_key_hex=session["sessionKey"],
+                    nonce_hex=session["nonce"],
+                    aux_reports=report_queue,
+                    control_responses=control_queue,
+                    _keepalive_frame=keepalive_frame,
+                )
+                await post_auth(ctx)
+                material = SessionMaterial(
+                    session_key_hex=session["sessionKey"],
+                    nonce_hex=session["nonce"],
+                    verify_data_hex=session["verifyData"],
+                    lock_public_key_hex=lock_key_message.body.hex(),
+                )
+                return material, write, None
+
             encrypted_payload = encrypt_control_payload(
                 session["sessionKey"],
                 session["nonce"],
