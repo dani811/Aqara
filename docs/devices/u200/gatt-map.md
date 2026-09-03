@@ -99,8 +99,13 @@ are listed here only for orientation when reading a capture.
 ## Discovery notes
 
 - `status: confirmed` against real captures of the reference device.
-- The U200 was observed to **advertise only after its keypad is physically
-  activated**; a passive scan finds nothing until then. This behaviour may differ
-  on other devices.
+- **Advertising is continuous and connectable** (adv name `DoorLocker`, model
+  `U200`) — a passive scan finds it with no keypad activity, and
+  scan→connect→`LOCK`→`lockstatus` all succeed with the keypad untouched
+  (verified live 2026-09-03 via the bleak transport, rssi ≈ -55). The
+  **keypad-presence gate applies only to SETTINGS/ajustes operations**, not to
+  advertising, connection, or actuation. (An earlier note here claimed "advertises
+  only after the keypad" — that was wrong/stale, likely observed on an idle or
+  pre-Matter-commissioned unit; corrected.)
 - Handles are stable for this firmware family but should be re-read (service
   discovery) rather than hard-assumed on a new device or firmware.
