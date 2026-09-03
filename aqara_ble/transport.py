@@ -52,6 +52,16 @@ DEFAULT_CONNECT_TIMEOUT = 20.0
 DEFAULT_DISCOVERY_TIMEOUT = 15.0
 DISCONNECT_TIMEOUT = 5.0
 
+#: Max in-flight ACL data packets over the bumble/ESP32 HCI link. The ESP32-S3
+#: over-reports its buffer, so we cap this to avoid silent WoR packet drops (OTA
+#: block corruption). 2 STILL corrupted every block (systematic 0x1115 NAK over a
+#: full 2 MB OTA, 2026-09-02): the controller drops WoR packets whenever more than
+#: one is queued. 1 = strict stop-and-wait — bumble waits for the ESP32's
+#: "number of completed packets" HCI event before sending the next, which the
+#: over-reported buffer size cannot defeat. Slower but the only setting that
+#: streams clean blocks over this controller.
+_MAX_ACL_IN_FLIGHT = 1
+
 
 def normalize_mac(value: str) -> str:
     """Uppercase, colon-separated MAC (accepts `aa-bb-…`, `aabbcc…`, `AA:BB:…`)."""
@@ -384,9 +394,17 @@ class BumbleTransport:
 
         device = await self._ensure_device()
         mac = target.address if isinstance(target, ScanCandidate) else target
+        # Minimum connection interval (7.5 ms). The OTA sends 5 WoR writes per
+        # block; at a 30-60 ms interval all 5 land in one connection event and
+        # overflow the lock's RX buffer → dropped write → block CRC fails → 0x1115
+        # NAK on nearly every block (the ESP32 corruption we chased 2026-09-02).
+        # CoreBluetooth avoids this by pacing WoR on canSendWriteWithoutResponse;
+        # over the raw HCI controller we instead give each write its own connection
+        # event by dropping the interval to the 7.5 ms floor, so the lock never
+        # overflows and blocks stream clean (and faster, beating any drop).
         prefs = self._bumble_device.ConnectionParametersPreferences(
-            connection_interval_min=30.0,
-            connection_interval_max=60.0,
+            connection_interval_min=7.5,
+            connection_interval_max=15.0,
             max_latency=0,
             supervision_timeout=20000,
         )
@@ -398,6 +416,17 @@ class BumbleTransport:
             timeout=timeout,
         )
         self._connection = connection
+        # Cap in-flight ACL data packets. The ESP32-S3 HCI controller over-reports
+        # its ACL buffer via LE Read Buffer Size, so bumble streams more
+        # WRITE_WITHOUT_RESPONSE than the controller can actually hold and it
+        # silently drops some — corrupting OTA blocks (the lock NAKs 0x1115).
+        # Pacing strictly (few packets in flight) never overflows it. Harmless for
+        # normal small ops; decisive for the ~2 MB language OTA. See
+        # docs/devices/u200/ota-0x90-investigation.md.
+        with contextlib.suppress(Exception):
+            queue = getattr(device.host, "le_acl_packet_queue", None)
+            if queue is not None and getattr(queue, "max_in_flight", 0) > _MAX_ACL_IN_FLIGHT:
+                queue.max_in_flight = _MAX_ACL_IN_FLIGHT
         # No pairing/bonding on purpose (see class docstring): straight to discovery.
         peer = self._bumble_device.Peer(connection)
         await asyncio.wait_for(peer.discover_services(), timeout=self.discovery_timeout)

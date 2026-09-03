@@ -183,6 +183,32 @@ class SessionMaterial:
     lock_public_key_hex: str
 
 
+async def _await_wor_ready(client: object, *, timeout: float = 3.0) -> None:
+    """Gate a WRITE_WITHOUT_RESPONSE on macOS/CoreBluetooth readiness.
+
+    CoreBluetooth silently DROPS write-without-response packets sent faster than
+    the controller can take them, and bleak does not gate on the "ready to send"
+    signal (its ``peripheralIsReadyToSendWriteWithoutResponse`` callback is never
+    called in practice — bleak discussion #1589). Sending a large OTA in a tight
+    loop therefore corrupts blocks (the lock NAKs) and can make macOS drop the
+    link entirely. We poll ``CBPeripheral.canSendWriteWithoutResponse`` ourselves
+    before each ff91 write. No-op on every other backend (bumble/BlueZ/WinRT do
+    their own ACL flow control), so this is safe and transport-agnostic."""
+    backend = getattr(client, "_backend", None)
+    peripheral = getattr(backend, "_peripheral", None)
+    ready = getattr(peripheral, "canSendWriteWithoutResponse", None)
+    if ready is None:
+        return
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            if ready():
+                return
+        except Exception:
+            return
+        await asyncio.sleep(0.002)
+
+
 @dataclass
 class PostAuthContext:
     """Handed to a ``post_auth`` hook once the aqara session is fully established
@@ -213,8 +239,15 @@ class PostAuthContext:
     control_responses: asyncio.Queue[bytes]
     _keepalive_frame: bytes
 
-    async def write_aux(self, frame: bytes) -> None:
-        await self.client.write_gatt_char(AUX_WRITE_UUID, bytes(frame), response=False)
+    async def write_aux(self, frame: bytes, *, response: bool = False) -> None:
+        await _await_wor_ready(self.client)
+        # response=True (write-WITH-response) makes each fragment reliable and
+        # self-pacing: the next write only goes once the previous one is confirmed
+        # delivered over the link. Over an ESPHome proxy this is essential — the
+        # macOS ``_await_wor_ready`` WoR flow-control gate is a no-op there, so a
+        # free WoR blast overruns the proxy's BLE queue and silently drops a
+        # fragment ~every 80 writes (a block CRC fail → 0x1115 NAK ~block 16).
+        await self.client.write_gatt_char(AUX_WRITE_UUID, bytes(frame), response=response)
 
     async def send_keepalive(self) -> None:
         with contextlib.suppress(Exception):
@@ -271,6 +304,7 @@ async def run_authenticated_lock_operation(
     follow_up_ops: list[LockOperationWrite] | None = None,
     follow_up_out: list[tuple[Any, str | None]] | None = None,
     post_auth: Callable[[PostAuthContext], Awaitable[None]] | None = None,
+    precomputed_cloud_pubkey: str | None = None,
 ) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
     """
     Authenticate with the lock, send a command, and receive the response.
@@ -334,6 +368,7 @@ async def run_authenticated_lock_operation(
                 follow_up_ops=follow_up_ops,
                 follow_up_out=follow_up_out,
                 post_auth=post_auth,
+                precomputed_cloud_pubkey=precomputed_cloud_pubkey,
             )
         except CloudServiceError as exc:
             can_retry = (
@@ -369,6 +404,7 @@ async def _run_authenticated_lock_operation_once(
     follow_up_ops: list[LockOperationWrite] | None = None,
     follow_up_out: list[tuple[Any, str | None]] | None = None,
     post_auth: Callable[[PostAuthContext], Awaitable[None]] | None = None,
+    precomputed_cloud_pubkey: str | None = None,
 ) -> tuple[SessionMaterial, LockOperationWrite, str | None]:
     """
     Single attempt of the authenticated lock operation (see the public wrapper
@@ -662,14 +698,24 @@ async def _run_authenticated_lock_operation_once(
         await enable_cccd_in_app_order()
         try:
             resolved_base_url = base_url or REGION_BASE_URLS.get(region, REGION_BASE_URLS["EU"])
-            cloud_public_key_hex = await _run_cloud_phase(
-                "cloud_get_public_key",
-                cloud_get_public_key,
-                device_id=device_id,
-                auth_headers=auth_headers,
-                base_url=resolved_base_url,
-                signer=signer,
-            )
+            # Prefer a cloud pubkey fetched BEFORE the BLE connect (see
+            # ``precomputed_cloud_pubkey``): the OTA needs the keypad-touch presence
+            # to still be active when this BLE auth completes, and doing the ~POST
+            # /publickey round-trip here — between connect and the auth write — burns
+            # that presence window (the lock then NAKs the OTA mid-stream). The call
+            # only needs the device id + signer, nothing from the live link, so it can
+            # be done up front and injected. Falls back to fetching inline.
+            if precomputed_cloud_pubkey is not None:
+                cloud_public_key_hex = precomputed_cloud_pubkey
+            else:
+                cloud_public_key_hex = await _run_cloud_phase(
+                    "cloud_get_public_key",
+                    cloud_get_public_key,
+                    device_id=device_id,
+                    auth_headers=auth_headers,
+                    base_url=resolved_base_url,
+                    signer=signer,
+                )
             app_token_key = int.from_bytes(os.urandom(2), "little")
             await write_auth_message(
                 build_auth_message(

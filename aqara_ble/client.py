@@ -61,8 +61,8 @@ from .lock_state import (
     decode_pull_spring,
     decode_state_report,
 )
+from .ota import OtaResult, VoicePackResult, run_voice_pack_ota, stream_language_ota
 from .scanner import scan, select_preferred
-from .ota import OtaResult, stream_language_ota
 from .session import (
     OperationInProgressError,
     PostAuthContext,
@@ -337,6 +337,65 @@ class U200Client:
             raise U200ClientError(FlowPhase.OPERATION, f"language-ota: {exc}") from exc
         if not result_box:
             raise U200ClientError(FlowPhase.OPERATION, "language-ota: el hook no produjo resultado")
+        return result_box[0]
+
+    async def push_voice_pack_ota(
+        self,
+        blob: bytes,
+        filename: str,
+        *,
+        arm: bool = True,
+        data_delay: float = 0.006,
+        window: int = 3,
+        resume_from: int = 0,
+        skip_manifest: bool = False,
+        manifest_wait_s: float = 90.0,
+        post_manifest_settle_s: float = 4.0,
+        keepalive_every_s: float = 8.0,
+        precomputed_cloud_pubkey: str | None = None,
+        progress: Any = None,
+    ) -> VoicePackResult:
+        """Push a language voice-pack OTA FROM SCRATCH (not a replay) inside an
+        authenticated session — builds the JSON handshake + manifest + XMODEM
+        data stream from ``blob`` and drives :func:`run_voice_pack_ota`.
+        ``filename`` is the CDN name (e.g. ``U200_ES_audio_burn.bin``)."""
+
+        if not self.connected or self._gatt is None:
+            raise U200ClientError(
+                FlowPhase.OPERATION, "el cliente está cerrado/desconectado; vuelve a conectar"
+            )
+
+        result_box: list[VoicePackResult] = []
+
+        async def _hook(ctx: PostAuthContext) -> None:
+            result_box.append(
+                await run_voice_pack_ota(
+                    ctx, blob, filename, arm=arm, data_delay=data_delay, window=window,
+                    resume_from=resume_from, skip_manifest=skip_manifest,
+                    manifest_wait_s=manifest_wait_s, keepalive_every_s=keepalive_every_s,
+                    post_manifest_settle_s=post_manifest_settle_s, progress=progress
+                )
+            )
+
+        try:
+            await run_authenticated_lock_operation(
+                client=self._gatt,
+                device_id=self.device_id,
+                auth_headers=None,
+                region=self.region,
+                base_url=self.base_url,
+                operation=LockOperation.KEEPALIVE,  # placeholder; never sent (post_auth)
+                notify_timeout=self.notify_timeout,
+                auth=self.auth,
+                post_auth=_hook,
+                precomputed_cloud_pubkey=precomputed_cloud_pubkey,
+            )
+        except (OperationInProgressError, CloudServiceError, U200ClientError):
+            raise
+        except Exception as exc:
+            raise U200ClientError(FlowPhase.OPERATION, f"voice-pack-ota: {exc}") from exc
+        if not result_box:
+            raise U200ClientError(FlowPhase.OPERATION, "voice-pack-ota: el hook no produjo resultado")
         return result_box[0]
 
     async def lock(self, *, listen_after: float = 0.0) -> str | None:

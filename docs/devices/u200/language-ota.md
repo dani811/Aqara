@@ -1,12 +1,28 @@
 # U200 — Language voice-pack OTA (consolidated investigation)
 
-**Layer:** device-specific (U200). **Status (2026-09-02):** replay/reconstruction
-approach exhausted; blocked on the `0x90` commit token, which is session-bound.
-Everything except that one value is understood and reproduced.
+**Layer:** device-specific (U200). **Status (2026-09-03): ✅ SOLVED — the library
+completes the OTA to 100% from scratch, no app.** `run_voice_pack_ota` streamed the
+full ~2 MB ES pack over the ESPHome proxy (1984/1984 blocks, 0 NAKs) and the lock
+returned `{"ID":0,"xfer_statu":"success","progress":100}` — Spanish applied. The
+`0x90` token was never session-bound (it's computed under our own session key); the
+two real blockers, both found by decoding the app's OWN captures, were:
 
-Goal: switch the lock's spoken-prompt language autonomously from `aqara_ble`,
-i.e. download a language voice pack and push it to the lock over BLE the way the
-official app does — the user's "réplica exacta de la app" ask.
+1. **The VOICE_OTA_INFO_SET command + its framing.** After the manifest the app
+   writes to **ff61** a frame `3f a5 ff || CCM(01 21 <md5(bin) hex-ascii:32> 00 02
+   <len(lang)+1> <lang-utf8> 00)` — a **3-byte cleartext header `3f a5 ff`** (0xa5 =
+   SET opcode) before the CCM payload, NOT our usual single `0x01` control prefix.
+   Without it the lock capped the transfer at exactly **16 blocks** (it read the
+   `0x01`-prefixed frame as a version GET). This is the file MD5 (as an ASCII hex
+   string) + the language display name.
+2. **Last-block padding.** The lock validates the whole received image against the
+   declared MD5/CRC and reports `abort` (not `success`) on mismatch. The final
+   partial block must be **padded up to 1024 bytes with `0x1a`** before its CRC16
+   (verified byte-exact vs the app, CRC `2df0`). A short final block passes its own
+   per-block CRC (0x1106-acked) but fails the image check.
+
+Full blow-by-blow: [ota-0x90-investigation.md](ota-0x90-investigation.md) (2026-09-03
+SOLVED). Goal met: switch the lock's spoken-prompt language autonomously from
+`aqara_ble` — the user's "réplica exacta de la app" ask.
 
 ## 1. Where the voice pack comes from (SOLVED — cloud + public CDN)
 
