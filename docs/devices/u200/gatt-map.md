@@ -42,7 +42,7 @@ including the ones the protocol does not use:
 | `0x0024`–`0x0028` | `ff70` (vendor) **unknown** | `ff71` `0x0025`/`0x0026` | write-no-rsp | — | Not used by the app flow we reproduce; no notify side |
 | | | `ff72` `0x0027`/`0x0028` | write-no-rsp | — | idem |
 | `0x0029`–`0x002e` | `ff80` (vendor) **unknown** | `ff81` `0x002a`/`0x002b` | write-no-rsp | — | Not used by the app flow we reproduce |
-| | | `ff82` `0x002c`/`0x002d` | notify | CCCD `0x002e` | Subscribed + tested 2026-09-03: **SILENT on a keypad touch** (drove the fingerbot while connected, 0 frames on ff82/ff62/ff64/ff92). Keypad "presence" is an internal lock state with no BLE signal → not replicable/injectable over BLE. |
+| | | `ff82` `0x002c`/`0x002d` | notify | CCCD `0x002e` | The LOCK's ff82 is silent. But the KEYPAD is a SEPARATE BLE device `vuart:ktunnel` (`C3:E3:E3:8B:CE:80`, same GATT) whose ff82 emits the keypad↔lock tunnel (`5aa5…` heartbeat, ~5 s). That is the real presence channel behind the settings/OTA gate — see memory `keypad-vuart-ktunnel-presence-channel`. |
 | `0x002f`–`0x0039` | `ff60` Control | `ff61` `0x0030`/`0x0031` | write-no-rsp | — | control write |
 | | | `ff62` `0x0032`/`0x0033` | notify | CCCD `0x0034` | control notify |
 | | | `ff63` `0x0035`/`0x0036` | write-no-rsp | — | OTA write |
