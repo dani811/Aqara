@@ -2,6 +2,33 @@
 
 All notable changes to aqara-ble are documented in this file.
 
+## [1.10.0] — Language voice-pack OTA, end to end (2026-09-03)
+
+### Added
+- `U200Client.change_language(language, *, verify_md5=True, **ota_kwargs)`: switch
+  the lock's spoken-prompt language phone-free, in one call — look the pack up in
+  the cloud voice list, download it from the public CDN (md5-verified), and stream
+  it to the lock FROM SCRATCH (not a replay). `language` accepts the cloud code
+  ("13"), the display name ("Español"), or the file-name code ("ES").
+- `voice_ota` module: `cloud_get_voice_list(device_id, base_url, signer)` (signed
+  `GET /app/dev/voice/list?did=<did>`), `download_voice_pack(info)` (CDN fetch +
+  md5 verify), `parse_voice_list(payload)` and `select_voice_pack(rows, language)`
+  (both pure/unit-tested), and the `VoicePackInfo` dataclass.
+- `run_voice_pack_ota` / `push_voice_pack_ota` gain `language_name`, threaded into
+  the on-lock VOICE_OTA_INFO_SET label so it matches the pack.
+
+### Notes
+- The change is gated by a physical keypad-presence press within a short window
+  after the manifest opens. That press is external to the library (e.g. a
+  fingerbot); `change_language` holds the manifest handshake open (`manifest_wait_s`,
+  default 90 s) so one press anywhere in the window authorises the whole transfer.
+
+### Fixed
+- Secret-hygiene guard: replaced real-looking MACs in tracked docs/code with
+  allow-listed placeholders. Updated the Bumble transport contract test to the
+  7.5 ms OTA connection-interval floor (each write-without-response in its own
+  connection event) that replaced the phone-mirroring 45 ms parameters.
+
 ## [1.9.0] — Offline-password cloud fetch + write-opcode sweep (2026-08-31)
 
 ### Added
