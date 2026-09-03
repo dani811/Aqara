@@ -20,9 +20,12 @@ two real blockers, both found by decoding the app's OWN captures, were:
    (verified byte-exact vs the app, CRC `2df0`). A short final block passes its own
    per-block CRC (0x1106-acked) but fails the image check.
 
-Full blow-by-blow: [ota-0x90-investigation.md](ota-0x90-investigation.md) (2026-09-03
-SOLVED). Goal met: switch the lock's spoken-prompt language autonomously from
-`aqara_ble` — the user's "réplica exacta de la app" ask.
+**→ Concrete, byte-level, reproducible procedure: [language-ota-recipe.md](language-ota-recipe.md)**
+(the exact command, the full on-wire frame sequence with ES values, the ff92 codes, the
+transport tuning, the keypad recipe, and a symptom→fix table). Full blow-by-blow of how it
+was cracked: [ota-0x90-investigation.md](ota-0x90-investigation.md) (2026-09-03 SOLVED). Goal
+met: switch the lock's spoken-prompt language autonomously from `aqara_ble` — the user's
+"réplica exacta de la app" ask.
 
 ## 1. Where the voice pack comes from (SOLVED — cloud + public CDN)
 
