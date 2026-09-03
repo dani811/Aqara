@@ -32,7 +32,7 @@ from typing import Any
 from .auth import CloudAuthManager
 from .errors import AmbiguousDeviceError, FlowPhase, NoDeviceFoundError, U200ClientError
 from .gatt import GattClient
-from .kdf import CloudServiceError
+from .kdf import REGION_BASE_URLS, CloudServiceError, cloud_get_public_key
 from .lock_ops import (
     LockOperation,
     LockOperationWrite,
@@ -290,6 +290,7 @@ class U200Client:
         post_manifest_settle_s: float = 4.0,
         keepalive_every_s: float = 8.0,
         precomputed_cloud_pubkey: str | None = None,
+        language_name: str | None = None,
         progress: Any = None,
     ) -> VoicePackResult:
         """Push a language voice-pack OTA FROM SCRATCH (not a replay) inside an
@@ -310,7 +311,8 @@ class U200Client:
                     ctx, blob, filename, arm=arm, data_delay=data_delay, window=window,
                     resume_from=resume_from, skip_manifest=skip_manifest,
                     manifest_wait_s=manifest_wait_s, keepalive_every_s=keepalive_every_s,
-                    post_manifest_settle_s=post_manifest_settle_s, progress=progress
+                    post_manifest_settle_s=post_manifest_settle_s,
+                    language_name=language_name, progress=progress
                 )
             )
 
@@ -334,6 +336,51 @@ class U200Client:
         if not result_box:
             raise U200ClientError(FlowPhase.OPERATION, "voice-pack-ota: el hook no produjo resultado")
         return result_box[0]
+
+    async def change_language(
+        self, language: str, *, verify_md5: bool = True, **ota_kwargs: Any
+    ) -> VoicePackResult:
+        """Switch the lock's spoken-prompt language end-to-end, phone-free: look the
+        pack up in the cloud voice list, download it from the CDN, then stream it to
+        the lock with :meth:`push_voice_pack_ota`.
+
+        ``language`` accepts the cloud code ("13"), the display name ("Español"), or
+        the file-name code ("ES") — see :func:`aqara_ble.voice_ota.select_voice_pack`.
+        Extra keyword args pass straight through to ``push_voice_pack_ota`` (e.g.
+        ``data_delay``, ``window``, ``manifest_wait_s``).
+
+        **Keypad presence is required and is the CALLER's job — not the library's.**
+        A language change is a settings-class op: the lock only ACKs the manifest
+        while a keypad key was pressed within its short presence window. The library
+        does not (and cannot) press the keypad — pressing it is an external, physical
+        act specific to the deployment (e.g. a fingerbot on the keypad, driven by Home
+        Assistant). This call just holds the manifest handshake open for
+        ``manifest_wait_s`` (default 90 s), re-sending it, so a single press landed
+        anywhere in that window authorises the whole ~10-minute transfer. Arrange that
+        press to happen after this coroutine starts and within ``manifest_wait_s``.
+        """
+        from .voice_ota import (  # noqa: PLC0415 - cloud/HTTP, only needed here
+            cloud_get_voice_list,
+            download_voice_pack,
+            select_voice_pack,
+        )
+
+        signer = await asyncio.to_thread(self.auth.build_signer)
+        base_url = self.base_url or REGION_BASE_URLS.get(self.region, REGION_BASE_URLS["EU"])
+        rows = await asyncio.to_thread(cloud_get_voice_list, self.device_id, base_url, signer)
+        pack = select_voice_pack(rows, language)
+        blob = await asyncio.to_thread(download_voice_pack, pack, verify=verify_md5)
+        # Pre-fetch the ephemeral cloud pubkey so the on-lock auth is instant once
+        # connected — the manifest's keypad-presence window is short.
+        pubkey = ota_kwargs.pop("precomputed_cloud_pubkey", None)
+        if pubkey is None:
+            pubkey = await asyncio.to_thread(
+                cloud_get_public_key, self.device_id, None, base_url, signer
+            )
+        return await self.push_voice_pack_ota(
+            blob, pack.file_name, language_name=pack.name or None,
+            precomputed_cloud_pubkey=pubkey, **ota_kwargs
+        )
 
     async def lock(self, *, listen_after: float = 0.0) -> str | None:
         return (await self.operate(LockOperation.LOCK, listen_after=listen_after)).response_hex
