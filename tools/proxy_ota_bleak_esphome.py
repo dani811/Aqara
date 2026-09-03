@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: 2026 dani811 <https://github.com/dani811/Aqara>
+#
+# This file is part of Aqara BLE, licensed under the GNU Affero General Public
+# License v3.0 (AGPL-3.0-only). You may use, study, share and modify it; any
+# distributed or network-served derivative must stay licensed under the AGPL
+# and keep this notice. See the LICENSE file for the full terms.
+
 """Full language OTA over an ESPHome bluetooth_proxy using bleak-esphome's OWN
 client stack (the reference implementation every HA proxy-BLE integration uses).
 

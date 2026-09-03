@@ -1,3 +1,11 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# SPDX-FileCopyrightText: 2026 dani811 <https://github.com/dani811/Aqara>
+#
+# This file is part of Aqara BLE, licensed under the GNU Affero General Public
+# License v3.0 (AGPL-3.0-only). You may use, study, share and modify it; any
+# distributed or network-served derivative must stay licensed under the AGPL
+# and keep this notice. See the LICENSE file for the full terms.
+
 """Transport that drives the lock's BLE through an ESPHome ``bluetooth_proxy``.
 
 Why this exists (2026-09-03, from a working capture): the language OTA is ~2 MB of
