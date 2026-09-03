@@ -1,3 +1,10 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-FileCopyrightText: 2026 dani811 <https://github.com/dani811/Aqara>
+#
+# Aqara BLE. Source-available under the PolyForm Noncommercial License 1.0.0.
+# Noncommercial use only; any commercial or for-profit use requires a separate
+# written license from the copyright holder. See the LICENSE file for the terms.
+
 """GATT identity constants for the U200 — device-specific leaf data.
 
 This module is a **leaf**: it imports nothing else from ``aqara_ble``. It

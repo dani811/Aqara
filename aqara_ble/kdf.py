@@ -1,3 +1,10 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-FileCopyrightText: 2026 dani811 <https://github.com/dani811/Aqara>
+#
+# Aqara BLE. Source-available under the PolyForm Noncommercial License 1.0.0.
+# Noncommercial use only; any commercial or for-profit use requires a separate
+# written license from the copyright holder. See the LICENSE file for the terms.
+
 """Aqara U200 BLE authentication — cloud KDF client.
 
 The Aqara U200 authentication uses a CLOUD-SIDE KDF, not a device-side one.

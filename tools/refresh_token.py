@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# SPDX-FileCopyrightText: 2026 dani811 <https://github.com/dani811/Aqara>
+#
+# Aqara BLE. Source-available under the PolyForm Noncommercial License 1.0.0.
+# Noncommercial use only; any commercial or for-profit use requires a separate
+# written license from the copyright holder. See the LICENSE file for the terms.
+
 """Mint a fresh cloud token from your account password and store it in `.env`.
 
 The Aqara cloud invalidates a token as soon as the account logs in anywhere

@@ -75,4 +75,25 @@ tree. See Constitution Principle I in
 
 ## License
 
-See [LICENSE](LICENSE).
+Copyright (c) 2026 dani811. **All rights reserved except as granted below.**
+
+This project is **source-available, not open source**. It is licensed under the
+[PolyForm Noncommercial License 1.0.0](LICENSE):
+
+- ✅ **Permitted, free of charge:** personal use, study, research, experiment,
+  testing, hobby and amateur projects, and use by charitable, educational,
+  public-research, public-safety/health, environmental and government
+  organizations — any genuinely **noncommercial** purpose.
+- ⛔ **Not permitted without a separate written license:** any **commercial or
+  for-profit** use, including selling, sublicensing, offering it as a paid or
+  ad-supported product or service, or using it to build or run a commercial
+  product. Reusing this work without permission to profit from it is a licensing
+  violation.
+
+You must keep the copyright notice and the `Required Notice:` line from
+[LICENSE](LICENSE) with any copy or derivative you distribute.
+
+**Want to use this commercially?** Commercial licenses are available — open an
+issue or contact the author via [the repository](https://github.com/dani811/Aqara)
+to arrange terms. The full legal text is in [LICENSE](LICENSE); this summary is
+for convenience and does not replace it.

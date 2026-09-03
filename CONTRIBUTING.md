@@ -84,3 +84,25 @@ pytest
 The verified protocol primitives (Article V of the constitution) are
 byte-exact against hardware. Change them only under a spec that re-proves
 fidelity; refactors must keep outputs bit-identical.
+
+## Licensing of contributions
+
+This project is **source-available under the
+[PolyForm Noncommercial License 1.0.0](LICENSE)** — noncommercial use is free,
+commercial use requires a separate written license from the copyright holder
+(dani811).
+
+By submitting a contribution (a pull request, patch, or any other change) you
+agree that:
+
+- Your contribution is licensed to the project and its users under the same
+  PolyForm Noncommercial License 1.0.0.
+- You grant the copyright holder (dani811) a perpetual, worldwide, irrevocable,
+  royalty-free license to use, relicense, and sublicense your contribution,
+  including under separate **commercial** license terms, so the project can be
+  offered commercially by the copyright holder.
+- You have the right to make the contribution (it is your original work, or you
+  otherwise hold the rights to submit it under these terms).
+
+Do not add code under a license incompatible with the above, and do not remove
+or alter the SPDX headers or the `LICENSE` / `NOTICE` files.

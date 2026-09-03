@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+// SPDX-FileCopyrightText: 2026 dani811 <https://github.com/dani811/Aqara>
+//
+// Aqara BLE. Source-available under the PolyForm Noncommercial License 1.0.0.
+// Noncommercial use only; any commercial or for-profit use requires a separate
+// written license from the copyright holder. See the LICENSE file for the terms.
+
 // Native BoringSSL SSL_read/SSL_write hook — FULL HEX dump (not lossy ASCII),
 // tagged by the SSL* connection pointer, for offline HTTP/2+HPACK reassembly.
 // Safe under SecNeo (native only, no Java/ART touch). Writes to a file, not

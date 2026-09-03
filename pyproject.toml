@@ -11,8 +11,11 @@ version = "1.9.0"
 description = "Autonomous BLE control library for the Aqara U200 smart lock — cloud KDF, auth handshake and AES-CCM control channel, reimplemented in pure Python."
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
-license-files = ["LICENSE"]
+# Source-available, NONCOMMERCIAL license. Personal, academic and research use
+# is permitted; any commercial or for-profit use requires a separate written
+# license from the copyright holder. See the LICENSE file for the full terms.
+license = "PolyForm-Noncommercial-1.0.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "dani811" }]
 maintainers = [{ name = "dani811" }]
 keywords = [
