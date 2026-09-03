@@ -230,10 +230,17 @@ async def run_voice_pack_ota(
              "nak": 0, "resends": 0, "blockack": 0}
     t0 = time.monotonic()
 
+    import os as _os  # noqa: PLC0415
+    _dbg = bool(_os.environ.get("U200_OTA_DEBUG"))
+
     async def drain() -> None:
         while True:
             channel, data = await ctx.aux_reports.get()
             if channel != "ff92":
+                if _dbg:
+                    import sys as _s  # noqa: PLC0415
+                    print(f"    [dbg {channel}] @{time.monotonic()-t0:6.2f}s {bytes(data).hex()}",
+                          file=_s.stderr)
                 continue
             raw = bytes(data)
             obj = decode_ack(raw)
