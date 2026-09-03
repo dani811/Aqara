@@ -441,6 +441,7 @@ class TestBackwardCompatibility:
             "follow_up_ops",  # persistent-session follow-up control writes
             "follow_up_out",  # out-param for follow-up responses
             "post_auth",  # optional post-auth hook (out-of-band OTA transfer)
+        "precomputed_cloud_pubkey",  # OTA: pre-fetched cloud pubkey for instant BLE auth
         ]
 
         assert params == expected_params
