@@ -35,7 +35,7 @@ from .transport import ScanCandidate
 
 
 def mac_to_int(mac: str) -> int:
-    """`CA:46:83:E1:13:0E` → the 48-bit int aioesphomeapi expects."""
+    """`AA:BB:CC:DD:EE:FF` → the 48-bit int aioesphomeapi expects."""
     return int(mac.replace(":", "").replace("-", ""), 16)
 
 

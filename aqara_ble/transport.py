@@ -289,10 +289,11 @@ class BumbleTransport:
     """External HCI controller (ESP32-S3 + `tools/esp32s3_hci_usb`) via `bumble`.
 
     `port` is a bumble transport spec, e.g. ``serial:/dev/cu.usbmodemNNNN,115200``.
-    Connection parameters mirror the real phone (interval 45 ms, latency 0,
-    supervision 5000 ms — verified against a live Android HCI capture). The U200
-    does **not** support bonding: sending any SMP request makes it drop the link
-    (observed live 2026-08-11), so this transport never calls ``pair()``.
+    Connection parameters use the 7.5 ms interval floor (see :meth:`connect`): over
+    the raw HCI controller this gives each OTA write-without-response its own
+    connection event, avoiding the lock's RX-buffer overflow that NAKs blocks. The
+    U200 does **not** support bonding: sending any SMP request makes it drop the
+    link (observed live 2026-08-11), so this transport never calls ``pair()``.
     """
 
     name = "bumble"

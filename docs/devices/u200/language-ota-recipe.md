@@ -11,7 +11,7 @@ not prose. For the *why* / dead-ends, see [ota-0x90-investigation.md](ota-0x90-i
 
 ```bash
 # .env must define: AQARA_ACCOUNT, AQARA_PASSWORD (or AQARA_TOKEN), AQARA_REGION=EU,
-#   AQARA_DEVICE_ID, AQARA_LOCK_MAC=CA:46:83:E1:13:0E,
+#   AQARA_DEVICE_ID, AQARA_LOCK_MAC=AA:BB:CC:DD:EE:FF,
 #   AQARA_ESPHOME_HOST=192.168.68.234, AQARA_ESPHOME_NOISE_PSK=<proxy noise psk>
 .venv/bin/python tools/push_language_ota.py \
   --bin captures/U200_ES_audio_burn.bin \
